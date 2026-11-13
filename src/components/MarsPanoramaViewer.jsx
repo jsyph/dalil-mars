@@ -12,6 +12,7 @@ import {
   ZoomOut,
   MapPin,
   Camera,
+  Globe,
   X,
   Navigation,
   RefreshCw,
@@ -20,8 +21,9 @@ import {
 /**
  * MarsPanoramaViewer
  * Supports:
- * 1. True 360° Photosphere (Three.js spherical projection) ONLY when panorama.is360 === true.
- * 2. High-Resolution Normal Image Viewer with zoom & pan when panorama.is360 is false.
+ * 1. Three.js 360 Spherical Photosphere ONLY when panorama.is360 === true.
+ * 2. 2D Surface Imagery Viewport with magnification & pan when panorama.is360 is false.
+ * Strictly follows aerospace neutral dark palette, 1px borders, 4px radii, and zero emojis.
  */
 export default function MarsPanoramaViewer({
   panorama,
@@ -33,17 +35,24 @@ export default function MarsPanoramaViewer({
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
 
-  // Check whether current image is a true 360 photosphere
   const is360 = Boolean(panorama?.is360);
 
-  // 360 Photosphere State
+  // Refs shared with the live Three.js render loop so buttons never recreate the WebGL context
+  const lonRef = useRef(0);
+  const latRef = useRef(0);
+  const fovRef = useRef(65);
+  const autoRotateRef = useRef(true);
+  const cameraRef = useRef(null);
+  const lastTelemetryRef = useRef({ heading: 0, pitch: 0 });
+
+  // 360 UI readout state
   const [autoRotate, setAutoRotate] = useState(true);
   const [headingDeg, setHeadingDeg] = useState(0);
   const [pitchDeg, setPitchDeg] = useState(0);
   const [fov, setFov] = useState(65);
   const [activeHotspot, setActiveHotspot] = useState(null);
 
-  // Normal 2D Image Zoom & Pan State
+  // 2D Surface Image zoom & pan state
   const [imgZoom, setImgZoom] = useState(1);
   const [imgPan, setImgPan] = useState({ x: 0, y: 0 });
   const [isDraggingImg, setIsDraggingImg] = useState(false);
@@ -53,37 +62,67 @@ export default function MarsPanoramaViewer({
   const [imageLoaded, setImageLoaded] = useState(false);
   const [loadError, setLoadError] = useState(false);
 
-  // Reset zoom & pan when panorama changes
+  // ESC shortcut to exit modal
+  useEffect(() => {
+    if (!panorama) return undefined;
+    const handleKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        onClose?.();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [panorama, onClose]);
+
+  // Reset telemetry, zoom, and pan when active image changes
   useEffect(() => {
     setImageLoaded(false);
     setLoadError(false);
     setActiveHotspot(null);
     setImgZoom(1);
     setImgPan({ x: 0, y: 0 });
+    lonRef.current = 0;
+    latRef.current = 0;
+    fovRef.current = 65;
+    autoRotateRef.current = true;
+    lastTelemetryRef.current = { heading: 0, pitch: 0 };
+    setFov(65);
+    setHeadingDeg(0);
+    setPitchDeg(0);
+    setAutoRotate(true);
   }, [panorama]);
 
-  // Three.js 360 Scene setup (ONLY runs if is360 is true)
+  // Sync ref when user toggles Auto-Pan
   useEffect(() => {
-    if (!is360 || !containerRef.current || !canvasRef.current || !panorama) return;
+    autoRotateRef.current = autoRotate;
+  }, [autoRotate]);
 
-    let scene, camera, renderer, sphere;
+  // Three.js 360 Scene setup (depends ONLY on [is360, panorama] so buttons actuate live refs smoothly)
+  useEffect(() => {
+    if (!is360 || !containerRef.current || !canvasRef.current || !panorama) return undefined;
+
+    let scene;
+    let camera;
+    let renderer;
+    let sphere;
+    let textureRef = null;
+    let materialRef = null;
+    let isDisposed = false;
     let isUserInteracting = false;
     let onPointerDownPointerX = 0;
     let onPointerDownPointerY = 0;
     let onPointerDownLon = 0;
     let onPointerDownLat = 0;
-    let lon = 0;
-    let lat = 0;
-    let phi = 0;
-    let theta = 0;
     let animationFrameId;
 
-    const width = containerRef.current.clientWidth || 800;
-    const height = containerRef.current.clientHeight || 500;
+    const viewportEl = canvasRef.current.parentElement || containerRef.current;
+    const width = viewportEl.clientWidth || 800;
+    const height = viewportEl.clientHeight || 500;
 
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(fov, width / height, 1, 1100);
+    camera = new THREE.PerspectiveCamera(fovRef.current, width / height, 1, 1100);
     camera.target = new THREE.Vector3(0, 0, 0);
+    cameraRef.current = camera;
 
     renderer = new THREE.WebGLRenderer({
       canvas: canvasRef.current,
@@ -100,15 +139,21 @@ export default function MarsPanoramaViewer({
     textureLoader.load(
       panorama.image || panorama.url,
       (texture) => {
+        if (isDisposed) {
+          texture.dispose();
+          return;
+        }
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.minFilter = THREE.LinearFilter;
-        const material = new THREE.MeshBasicMaterial({ map: texture });
-        sphere = new THREE.Mesh(geometry, material);
+        textureRef = texture;
+        materialRef = new THREE.MeshBasicMaterial({ map: texture });
+        sphere = new THREE.Mesh(geometry, materialRef);
         scene.add(sphere);
         setImageLoaded(true);
       },
       undefined,
       (err) => {
+        if (isDisposed) return;
         console.error('Error loading Mars 360 texture:', err);
         setLoadError(true);
       }
@@ -116,22 +161,22 @@ export default function MarsPanoramaViewer({
 
     const onPointerDown = (event) => {
       isUserInteracting = true;
-      const clientX = event.clientX || (event.touches && event.touches[0].clientX) || 0;
-      const clientY = event.clientY || (event.touches && event.touches[0].clientY) || 0;
+      const clientX = event.clientX ?? (event.touches && event.touches[0]?.clientX) ?? 0;
+      const clientY = event.clientY ?? (event.touches && event.touches[0]?.clientY) ?? 0;
 
       onPointerDownPointerX = clientX;
       onPointerDownPointerY = clientY;
-      onPointerDownLon = lon;
-      onPointerDownLat = lat;
+      onPointerDownLon = lonRef.current;
+      onPointerDownLat = latRef.current;
     };
 
     const onPointerMove = (event) => {
       if (!isUserInteracting) return;
-      const clientX = event.clientX || (event.touches && event.touches[0].clientX) || 0;
-      const clientY = event.clientY || (event.touches && event.touches[0].clientY) || 0;
+      const clientX = event.clientX ?? (event.touches && event.touches[0]?.clientX) ?? 0;
+      const clientY = event.clientY ?? (event.touches && event.touches[0]?.clientY) ?? 0;
 
-      lon = (onPointerDownPointerX - clientX) * 0.18 + onPointerDownLon;
-      lat = (clientY - onPointerDownPointerY) * 0.18 + onPointerDownLat;
+      lonRef.current = (onPointerDownPointerX - clientX) * 0.18 + onPointerDownLon;
+      latRef.current = (clientY - onPointerDownPointerY) * 0.18 + onPointerDownLat;
     };
 
     const onPointerUp = () => {
@@ -140,24 +185,26 @@ export default function MarsPanoramaViewer({
 
     const onWheel = (event) => {
       event.preventDefault();
-      setFov((prev) => {
-        const next = Math.max(35, Math.min(90, prev + event.deltaY * 0.05));
-        camera.fov = next;
-        camera.updateProjectionMatrix();
-        return next;
-      });
+      const next = Math.max(35, Math.min(90, fovRef.current + event.deltaY * 0.05));
+      fovRef.current = next;
+      if (cameraRef.current) {
+        cameraRef.current.fov = next;
+        cameraRef.current.updateProjectionMatrix();
+      }
+      setFov(Math.round(next));
     };
 
     const onResize = () => {
-      if (!containerRef.current) return;
-      const w = containerRef.current.clientWidth;
-      const h = containerRef.current.clientHeight;
-      camera.aspect = w / h;
-      camera.updateProjectionMatrix();
+      const parentEl = canvasRef.current?.parentElement || containerRef.current;
+      if (!parentEl || !cameraRef.current) return;
+      const w = parentEl.clientWidth || 800;
+      const h = parentEl.clientHeight || 500;
+      cameraRef.current.aspect = w / h;
+      cameraRef.current.updateProjectionMatrix();
       renderer.setSize(w, h);
     };
 
-    const domElement = containerRef.current;
+    const domElement = canvasRef.current;
     domElement.addEventListener('pointerdown', onPointerDown);
     window.addEventListener('pointermove', onPointerMove);
     window.addEventListener('pointerup', onPointerUp);
@@ -167,13 +214,13 @@ export default function MarsPanoramaViewer({
     const animate = () => {
       animationFrameId = requestAnimationFrame(animate);
 
-      if (autoRotate && !isUserInteracting) {
-        lon += 0.08;
+      if (autoRotateRef.current && !isUserInteracting) {
+        lonRef.current += 0.08;
       }
 
-      lat = Math.max(-85, Math.min(85, lat));
-      phi = THREE.MathUtils.degToRad(90 - lat);
-      theta = THREE.MathUtils.degToRad(lon);
+      latRef.current = Math.max(-85, Math.min(85, latRef.current));
+      const phi = THREE.MathUtils.degToRad(90 - latRef.current);
+      const theta = THREE.MathUtils.degToRad(lonRef.current);
 
       const targetX = 500 * Math.sin(phi) * Math.cos(theta);
       const targetY = 500 * Math.cos(phi);
@@ -182,40 +229,69 @@ export default function MarsPanoramaViewer({
       camera.lookAt(targetX, targetY, targetZ);
       renderer.render(scene, camera);
 
-      const curHeading = (Math.round(lon) % 360 + 360) % 360;
-      setHeadingDeg(curHeading);
-      setPitchDeg(Math.round(lat));
+      const curHeading = ((Math.round(lonRef.current) % 360) + 360) % 360;
+      const curPitch = Math.round(latRef.current);
+      if (
+        curHeading !== lastTelemetryRef.current.heading ||
+        curPitch !== lastTelemetryRef.current.pitch
+      ) {
+        lastTelemetryRef.current = { heading: curHeading, pitch: curPitch };
+        setHeadingDeg(curHeading);
+        setPitchDeg(curPitch);
+      }
     };
 
     animate();
 
     return () => {
+      isDisposed = true;
+      cameraRef.current = null;
       cancelAnimationFrame(animationFrameId);
       domElement.removeEventListener('pointerdown', onPointerDown);
       window.removeEventListener('pointermove', onPointerMove);
       window.removeEventListener('pointerup', onPointerUp);
       domElement.removeEventListener('wheel', onWheel);
       window.removeEventListener('resize', onResize);
-      renderer.dispose();
+      if (materialRef) materialRef.dispose();
+      if (textureRef) textureRef.dispose();
       geometry.dispose();
+      renderer.dispose();
     };
-  }, [is360, panorama, autoRotate, fov]);
+  }, [is360, panorama]);
 
-  // Jump camera to hotspot (360 mode only)
+  // Actuate camera directly to hotspot orientation
   const jumpToHotspot = (hotspot) => {
     setActiveHotspot(hotspot);
-    setHeadingDeg(hotspot.yaw);
-    setPitchDeg(hotspot.pitch);
+    lonRef.current = Number(hotspot.yaw) || 0;
+    latRef.current = Number(hotspot.pitch) || 0;
+    autoRotateRef.current = false;
     setAutoRotate(false);
+    const normalizedHeading = ((Math.round(lonRef.current) % 360) + 360) % 360;
+    const roundedPitch = Math.round(latRef.current);
+    lastTelemetryRef.current = { heading: normalizedHeading, pitch: roundedPitch };
+    setHeadingDeg(normalizedHeading);
+    setPitchDeg(roundedPitch);
   };
 
+  // Pan heading manually without destroying WebGL sphere
   const nudgeHeading = (delta) => {
-    setHeadingDeg((prev) => (prev + delta + 360) % 360);
+    lonRef.current = lonRef.current + delta;
+    autoRotateRef.current = false;
     setAutoRotate(false);
+    const normalizedHeading = ((Math.round(lonRef.current) % 360) + 360) % 360;
+    lastTelemetryRef.current = { ...lastTelemetryRef.current, heading: normalizedHeading };
+    setHeadingDeg(normalizedHeading);
   };
 
+  // Adjust FOV zoom directly on the active camera
   const nudgeFov = (delta) => {
-    setFov((prev) => Math.max(35, Math.min(90, prev + delta)));
+    const next = Math.max(35, Math.min(90, fovRef.current + delta));
+    fovRef.current = next;
+    if (cameraRef.current) {
+      cameraRef.current.fov = next;
+      cameraRef.current.updateProjectionMatrix();
+    }
+    setFov(Math.round(next));
   };
 
   // Normal 2D Image handlers
@@ -279,60 +355,57 @@ export default function MarsPanoramaViewer({
   if (!panorama) return null;
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/85 p-2 sm:p-4 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-[#0b0d11]/90 p-2 sm:p-4">
       <div
         ref={containerRef}
-        className="relative flex flex-col w-full max-w-5xl h-[92vh] sm:h-[86vh] rounded-3xl bg-slate-900 border-2 border-cyan-500/70 shadow-2xl overflow-hidden"
+        className="relative flex flex-col w-full max-w-5xl h-[92vh] sm:h-[88vh] rounded-[4px] bg-[#13161c] border border-[#353c4a] overflow-hidden"
       >
-        {/* 1. TOP MARS ASTRONAUT HUD HEADER */}
-        <div className="flex items-center justify-between px-4 py-3 bg-gradient-to-r from-slate-950 via-slate-900 to-cyan-950/80 border-b border-cyan-500/30 text-white z-20">
-          <div className="flex items-center gap-3">
-            <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-cyan-950/90 border border-cyan-400/60 shadow-lg text-cyan-300">
-              <Camera className="h-6 w-6 animate-pulse" />
+        {/* TOP INSTRUMENT HEADER */}
+        <div className="flex items-center justify-between px-4 py-3 bg-[#191d24] border-b border-[#242933] text-[#edf0f5] z-20 gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[4px] bg-[#13161c] border border-[#353c4a] text-[#edf0f5]">
+              {is360 ? <Globe className="h-5 w-5" /> : <Camera className="h-5 w-5" />}
             </div>
-            <div>
-              <div className="flex items-center gap-2">
-                <span className="text-xs font-mono font-black text-cyan-400 uppercase tracking-widest">
-                  SOL {panorama.sol} • {panorama.locationName || 'Jezero Crater'}
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-[11px] font-mono font-bold text-[#9da5b4] uppercase tracking-wider">
+                  {panorama.sol ? `SOL ${panorama.sol}` : 'ORBITAL / SURFACE'} //{' '}
+                  {panorama.locationName || 'JEZERO CRATER'}
                 </span>
-                <span
-                  className={`rounded-full px-2.5 py-0.5 text-[10px] font-mono font-bold border ${
-                    is360
-                      ? 'bg-cyan-500/20 text-cyan-300 border-cyan-400/50'
-                      : 'bg-emerald-500/20 text-emerald-300 border-emerald-400/50'
-                  }`}
-                >
-                  {is360 ? '🌐 360° PHOTOSPHERE' : '📷 SURFACE PHOTO'}
+                <span className="inline-flex items-center gap-1.5 rounded-[4px] px-2 py-0.5 text-[10px] font-mono font-bold border border-[#353c4a] bg-[#13161c] text-[#edf0f5] uppercase">
+                  <span
+                    className={`w-1.5 h-1.5 rounded-full ${
+                      is360 ? 'bg-[#22c55e]' : 'bg-[#9da5b4]'
+                    }`}
+                  />
+                  {is360 ? '360 PHOTOSPHERE' : 'SURFACE IMAGE'}
                 </span>
               </div>
-              <h2 className="text-base sm:text-lg font-black tracking-tight text-white line-clamp-1">
+              <h2 className="text-sm sm:text-base font-bold tracking-tight text-[#edf0f5] truncate uppercase mt-0.5">
                 {panorama.title}
               </h2>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
-            {/* Close Button */}
-            <button
-              onClick={onClose}
-              className="glove-btn p-2.5 rounded-2xl bg-rose-950/80 hover:bg-rose-900 text-rose-300 hover:text-white border border-rose-500/50 cursor-pointer transition-transform active:scale-95 shadow-lg"
-              title="Close View (ESC)"
-            >
-              <X className="h-6 w-6" />
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="glove-btn min-h-[42px] min-w-[42px] px-3 rounded-[4px] bg-[#222731] hover:bg-[#dc2626]/20 text-[#edf0f5] hover:text-[#ef4444] border border-[#353c4a] hover:border-[#ef4444] cursor-pointer flex items-center justify-center gap-1.5 text-[11px] font-mono font-bold uppercase"
+            title="Close Viewer (ESC)"
+          >
+            <X className="h-4 w-4" />
+            <span className="hidden sm:inline">CLOSE</span>
+          </button>
         </div>
 
-        {/* 2. MAIN VIEWER VIEWPORT */}
-        <div className="relative flex-1 bg-black overflow-hidden flex items-center justify-center select-none">
+        {/* MAIN VIEWPORT */}
+        <div className="relative flex-1 bg-[#0b0d11] overflow-hidden flex items-center justify-center select-none">
           {is360 ? (
-            /* THREE.JS 360 PHOTOSPHERE CANVAS */
             <canvas
               ref={canvasRef}
               className="w-full h-full cursor-grab active:cursor-grabbing touch-none"
             />
           ) : (
-            /* NORMAL HIGH-RESOLUTION SURFACE IMAGE VIEW */
             <div
               className={`w-full h-full flex items-center justify-center p-3 sm:p-6 overflow-hidden ${
                 imgZoom > 1 ? 'cursor-grab active:cursor-grabbing' : ''
@@ -340,12 +413,13 @@ export default function MarsPanoramaViewer({
               onPointerDown={onNormalPointerDown}
               onPointerMove={onNormalPointerMove}
               onPointerUp={onNormalPointerUp}
+              onPointerLeave={onNormalPointerUp}
               onWheel={onNormalWheel}
             >
               <img
                 src={panorama.image || panorama.url}
                 alt={panorama.title}
-                className="max-h-full max-w-full object-contain rounded-2xl shadow-2xl transition-transform duration-75 pointer-events-none"
+                className="max-h-full max-w-full object-contain rounded-[4px] border border-[#242933] transition-transform duration-75 pointer-events-none"
                 style={{
                   transform: `translate(${imgPan.x}px, ${imgPan.y}px) scale(${imgZoom})`,
                   transformOrigin: 'center center',
@@ -359,240 +433,268 @@ export default function MarsPanoramaViewer({
             </div>
           )}
 
-          {/* LOADING SPINNER */}
+          {/* LOADING OVERLAY */}
           {!imageLoaded && !loadError && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/85 gap-3 z-10 text-cyan-300 font-mono text-sm">
-              <div className="h-10 w-10 border-3 border-cyan-400 border-t-transparent rounded-full animate-spin" />
-              <span>TRANSMITTING HIGH-RES MARS TELEMETRY...</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0b0d11]/90 gap-3 z-10 text-[#9da5b4] font-mono text-xs uppercase tracking-wider">
+              <div className="h-8 w-8 border-2 border-[#edf0f5] border-t-transparent rounded-full animate-spin" />
+              <span>LOADING SURFACE IMAGERY...</span>
             </div>
           )}
 
           {/* ERROR FALLBACK */}
           {loadError && (
-            <div className="absolute inset-0 flex flex-col items-center justify-center bg-slate-950/90 gap-2 z-10 text-rose-300 font-mono text-sm">
-              <X className="h-8 w-8 text-rose-400" />
-              <span>UNABLE TO LOAD TELEMETRY IMAGE</span>
+            <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0b0d11]/95 gap-2 z-10 text-[#ef4444] font-mono text-xs uppercase tracking-wider">
+              <X className="h-7 w-7 text-[#ef4444]" />
+              <span>IMAGERY TELEMETRY UNAVAILABLE</span>
             </div>
           )}
 
-          {/* OVERLAY COMPASS & PITCH HUD (360 MODE ONLY) */}
+          {/* OVERLAY COMPASS & PITCH HUD (360 MODE) */}
           {is360 && (
-            <div className="absolute top-4 left-4 z-20 flex items-center gap-2 rounded-2xl bg-slate-950/85 border border-cyan-500/50 px-3.5 py-2 font-mono text-xs text-cyan-300 shadow-xl backdrop-blur-md">
+            <div className="absolute top-3 left-3 z-20 flex items-center gap-2.5 rounded-[4px] bg-[#13161c]/95 border border-[#353c4a] px-3 py-2 font-mono text-[11px] text-[#9da5b4]">
               <Compass
-                className="h-5 w-5 text-cyan-400 transition-transform duration-200"
+                className="h-4 w-4 text-[#edf0f5] transition-transform duration-150"
                 style={{ transform: `rotate(${-headingDeg}deg)` }}
               />
-              <span className="font-extrabold text-white">
-                {String(headingDeg).padStart(3, '0')}° {getCardinal(headingDeg)}
+              <span className="font-bold text-[#edf0f5]">
+                HDG {String(headingDeg).padStart(3, '0')} deg {getCardinal(headingDeg)}
               </span>
-              <span className="text-slate-500">|</span>
-              <span className="text-slate-300">
-                PITCH {pitchDeg >= 0 ? `+${pitchDeg}°` : `${pitchDeg}°`}
-              </span>
-              <span className="text-slate-500">|</span>
-              <span className="text-emerald-400">FOV {Math.round(fov)}°</span>
+              <span className="text-[#353c4a]">|</span>
+              <span>PITCH {pitchDeg >= 0 ? `+${pitchDeg}` : pitchDeg} deg</span>
+              <span className="text-[#353c4a]">|</span>
+              <span className="text-[#22c55e] font-bold">FOV {Math.round(fov)} deg</span>
             </div>
           )}
 
           {/* NORMAL IMAGE MAGNIFICATION HUD */}
           {!is360 && (
-            <div className="absolute top-4 left-4 z-20 flex items-center gap-2 rounded-2xl bg-slate-950/85 border border-emerald-500/50 px-3.5 py-2 font-mono text-xs text-emerald-300 shadow-xl backdrop-blur-md">
-              <span className="font-bold text-white">MAGNIFICATION: {Math.round(imgZoom * 100)}%</span>
+            <div className="absolute top-3 left-3 z-20 flex items-center gap-2 rounded-[4px] bg-[#13161c]/95 border border-[#353c4a] px-3 py-2 font-mono text-[11px] text-[#9da5b4]">
+              <span className="font-bold text-[#edf0f5]">
+                MAGNIFICATION: {Math.round(imgZoom * 100)}%
+              </span>
               {imgZoom > 1 && (
                 <>
-                  <span className="text-slate-500">|</span>
-                  <span className="text-slate-300 text-[11px]">Drag to pan details</span>
+                  <span className="text-[#353c4a]">|</span>
+                  <span>DRAG TO PAN</span>
                 </>
               )}
             </div>
           )}
 
-          {/* TACTICAL HUD CONTROLS */}
-          <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-2 p-1.5 rounded-2xl bg-slate-950/85 border border-slate-700/80 shadow-2xl backdrop-blur-md">
+          {/* GLOVE-COMPATIBLE INSTRUMENT CONTROLS */}
+          <div className="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-1.5 p-1.5 rounded-[4px] bg-[#13161c]/95 border border-[#353c4a]">
             {is360 ? (
-              /* 360 CONTROLS */
               <>
                 <button
+                  type="button"
                   onClick={() => nudgeHeading(-20)}
-                  className="glove-btn p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 cursor-pointer shadow-md active:scale-95"
-                  title="Pan Left"
+                  className="glove-btn min-h-[42px] min-w-[42px] flex items-center justify-center rounded-[4px] bg-[#191d24] hover:bg-[#222731] active:bg-[#2c323f] text-[#edf0f5] border border-[#353c4a] cursor-pointer"
+                  title="Pan Left 20 deg"
+                  aria-label="Pan Left"
                 >
-                  <RotateCcw className="h-5 w-5" />
+                  <RotateCcw className="h-4 w-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => nudgeHeading(20)}
-                  className="glove-btn p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 cursor-pointer shadow-md active:scale-95"
-                  title="Pan Right"
+                  className="glove-btn min-h-[42px] min-w-[42px] flex items-center justify-center rounded-[4px] bg-[#191d24] hover:bg-[#222731] active:bg-[#2c323f] text-[#edf0f5] border border-[#353c4a] cursor-pointer"
+                  title="Pan Right 20 deg"
+                  aria-label="Pan Right"
                 >
-                  <RotateCw className="h-5 w-5" />
+                  <RotateCw className="h-4 w-4" />
                 </button>
-                <div className="h-px bg-slate-800 my-0.5" />
+                <div className="h-px bg-[#242933] my-0.5" />
                 <button
+                  type="button"
                   onClick={() => nudgeFov(-8)}
-                  className="glove-btn p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 cursor-pointer shadow-md active:scale-95"
-                  title="Zoom In (FOV)"
+                  className="glove-btn min-h-[42px] min-w-[42px] flex items-center justify-center rounded-[4px] bg-[#191d24] hover:bg-[#222731] active:bg-[#2c323f] text-[#edf0f5] border border-[#353c4a] cursor-pointer"
+                  title="Zoom In (Decrease FOV)"
+                  aria-label="Zoom In"
                 >
-                  <ZoomIn className="h-5 w-5" />
+                  <ZoomIn className="h-4 w-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => nudgeFov(8)}
-                  className="glove-btn p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 cursor-pointer shadow-md active:scale-95"
-                  title="Zoom Out (FOV)"
+                  className="glove-btn min-h-[42px] min-w-[42px] flex items-center justify-center rounded-[4px] bg-[#191d24] hover:bg-[#222731] active:bg-[#2c323f] text-[#edf0f5] border border-[#353c4a] cursor-pointer"
+                  title="Zoom Out (Increase FOV)"
+                  aria-label="Zoom Out"
                 >
-                  <ZoomOut className="h-5 w-5" />
+                  <ZoomOut className="h-4 w-4" />
                 </button>
-                <div className="h-px bg-slate-800 my-0.5" />
+                <div className="h-px bg-[#242933] my-0.5" />
                 <button
-                  onClick={() => setAutoRotate(!autoRotate)}
-                  className={`glove-btn p-3 rounded-xl border cursor-pointer shadow-md active:scale-95 ${
+                  type="button"
+                  onClick={() => setAutoRotate((prev) => !prev)}
+                  className={`glove-btn min-h-[42px] min-w-[42px] flex items-center justify-center rounded-[4px] border cursor-pointer ${
                     autoRotate
-                      ? 'bg-cyan-500 text-slate-950 border-cyan-400 font-bold'
-                      : 'bg-slate-900 text-slate-300 border-slate-700'
+                      ? 'bg-[#22c55e]/20 text-[#22c55e] border-[#22c55e]'
+                      : 'bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] border-[#353c4a]'
                   }`}
-                  title={autoRotate ? 'Pause Auto-Pan' : 'Start Auto-Pan 360°'}
+                  title={autoRotate ? 'Pause Auto-Pan' : 'Resume Auto-Pan'}
+                  aria-label="Toggle Auto-Pan"
                 >
-                  {autoRotate ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                  {autoRotate ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
                 </button>
               </>
             ) : (
-              /* NORMAL IMAGE 2D CONTROLS */
               <>
                 <button
+                  type="button"
                   onClick={() => handleNormalZoom(0.5)}
-                  className="glove-btn p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-slate-700 cursor-pointer shadow-md active:scale-95"
+                  className="glove-btn min-h-[42px] min-w-[42px] flex items-center justify-center rounded-[4px] bg-[#191d24] hover:bg-[#222731] active:bg-[#2c323f] text-[#edf0f5] border border-[#353c4a] cursor-pointer"
                   title="Zoom In"
+                  aria-label="Zoom In"
                 >
-                  <ZoomIn className="h-5 w-5" />
+                  <ZoomIn className="h-4 w-4" />
                 </button>
                 <button
+                  type="button"
                   onClick={() => handleNormalZoom(-0.5)}
-                  className="glove-btn p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-emerald-300 border border-slate-700 cursor-pointer shadow-md active:scale-95"
+                  className="glove-btn min-h-[42px] min-w-[42px] flex items-center justify-center rounded-[4px] bg-[#191d24] hover:bg-[#222731] active:bg-[#2c323f] text-[#edf0f5] border border-[#353c4a] cursor-pointer"
                   title="Zoom Out"
+                  aria-label="Zoom Out"
                 >
-                  <ZoomOut className="h-5 w-5" />
+                  <ZoomOut className="h-4 w-4" />
                 </button>
                 {imgZoom > 1 && (
                   <button
+                    type="button"
                     onClick={handleNormalReset}
-                    className="glove-btn p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 cursor-pointer shadow-md active:scale-95"
-                    title="Reset Zoom to 100%"
+                    className="glove-btn min-h-[42px] min-w-[42px] flex items-center justify-center rounded-[4px] bg-[#191d24] hover:bg-[#222731] active:bg-[#2c323f] text-[#edf0f5] border border-[#353c4a] cursor-pointer"
+                    title="Reset Magnification to 100%"
+                    aria-label="Reset Zoom"
                   >
-                    <RefreshCw className="h-5 w-5" />
+                    <RefreshCw className="h-4 w-4" />
                   </button>
                 )}
               </>
             )}
 
             <button
+              type="button"
               onClick={toggleFullscreen}
-              className="glove-btn p-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-300 border border-slate-700 cursor-pointer shadow-md active:scale-95"
-              title="Fullscreen"
+              className="glove-btn min-h-[42px] min-w-[42px] flex items-center justify-center rounded-[4px] bg-[#191d24] hover:bg-[#222731] active:bg-[#2c323f] text-[#edf0f5] border border-[#353c4a] cursor-pointer"
+              title="Toggle Fullscreen"
+              aria-label="Toggle Fullscreen"
             >
-              {isFullscreen ? <Minimize2 className="h-5 w-5" /> : <Maximize2 className="h-5 w-5" />}
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </button>
           </div>
 
-          {/* ACTIVE HOTSPOT CALLOUT (360 MODE ONLY) */}
+          {/* ACTIVE HOTSPOT CALLOUT (360 MODE) */}
           {is360 && activeHotspot && (
-            <div className="absolute bottom-6 left-1/2 -translate-x-1/2 z-20 max-w-md w-[90%] rounded-2xl bg-cyan-950/95 border-2 border-cyan-400 p-3 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-bottom-2 duration-200">
-              <div className="flex items-center justify-between border-b border-cyan-500/40 pb-1.5 mb-1.5">
-                <span className="text-xs font-mono font-black text-cyan-300 flex items-center gap-1.5">
-                  <MapPin className="h-4 w-4 text-cyan-400" /> {activeHotspot.name}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 max-w-md w-[90%] rounded-[4px] bg-[#13161c]/95 border border-[#4f5767] p-3">
+              <div className="flex items-center justify-between border-b border-[#242933] pb-1.5 mb-1.5">
+                <span className="text-[11px] font-mono font-bold text-[#edf0f5] uppercase flex items-center gap-1.5">
+                  <MapPin className="h-3.5 w-3.5 text-[#22c55e]" />
+                  {activeHotspot.name}
                 </span>
                 <button
+                  type="button"
                   onClick={() => setActiveHotspot(null)}
-                  className="text-cyan-400 hover:text-white p-1 cursor-pointer"
+                  className="text-[#9da5b4] hover:text-[#edf0f5] p-1 cursor-pointer"
+                  aria-label="Close Hotspot"
                 >
-                  <X className="h-4 w-4" />
+                  <X className="h-3.5 w-3.5" />
                 </button>
               </div>
-              <p className="text-xs text-slate-200 font-sans leading-relaxed">
+              <p className="text-xs text-[#9da5b4] font-sans leading-relaxed">
                 {activeHotspot.desc}
               </p>
             </div>
           )}
         </div>
 
-        {/* 3. HOTSPOT JUMP STRIP (360 MODE ONLY) */}
+        {/* HOTSPOT JUMP STRIP (360 MODE) */}
         {is360 && panorama.hotspots && panorama.hotspots.length > 0 && (
-          <div className="flex items-center gap-2 px-4 py-2 bg-slate-950 border-t border-slate-800 overflow-x-auto text-xs z-20">
-            <span className="text-[11px] font-mono uppercase font-bold text-slate-400 whitespace-nowrap flex items-center gap-1">
-              <MapPin className="h-3.5 w-3.5 text-cyan-400" /> HOTSPOTS:
+          <div className="flex items-center gap-2 px-4 py-2 bg-[#13161c] border-t border-[#242933] overflow-x-auto text-xs z-20">
+            <span className="text-[10px] font-mono uppercase font-bold text-[#656d7d] whitespace-nowrap flex items-center gap-1">
+              <MapPin className="h-3.5 w-3.5 text-[#9da5b4]" />
+              BEARING MARKERS:
             </span>
-            {panorama.hotspots.map((hs, i) => (
-              <button
-                key={i}
-                onClick={() => jumpToHotspot(hs)}
-                className={`glove-btn min-h-[36px] px-3 py-1.5 rounded-xl border text-xs font-mono font-bold whitespace-nowrap transition-all cursor-pointer ${
-                  activeHotspot?.name === hs.name
-                    ? 'bg-cyan-500 text-slate-950 border-cyan-400 shadow-lg'
-                    : 'bg-slate-900 hover:bg-slate-800 text-cyan-300 border-slate-700'
-                }`}
-              >
-                📍 {hs.name}
-              </button>
-            ))}
+            {panorama.hotspots.map((hs, i) => {
+              const isHot = activeHotspot?.name === hs.name;
+              return (
+                <button
+                  type="button"
+                  key={`${hs.name}-${i}`}
+                  onClick={() => jumpToHotspot(hs)}
+                  className={`glove-btn min-h-[38px] px-3 py-1.5 rounded-[4px] border text-[11px] font-mono font-bold whitespace-nowrap uppercase flex items-center gap-1.5 cursor-pointer ${
+                    isHot
+                      ? 'bg-[#22c55e]/20 text-[#22c55e] border-[#22c55e]'
+                      : 'bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border-[#353c4a]'
+                  }`}
+                >
+                  <MapPin className="h-3 w-3 shrink-0" />
+                  <span>{hs.name}</span>
+                </button>
+              );
+            })}
           </div>
         )}
 
-        {/* 4. BOTTOM TELEMETRY, GEOLOGIC CAPTION & QUICK LOCATIONS CAROUSEL */}
-        <div className="p-3.5 bg-slate-950 border-t border-slate-800/80 z-20 space-y-3">
+        {/* FOOTER TELEMETRY & VISTA CAROUSEL */}
+        <div className="p-3.5 bg-[#191d24] border-t border-[#242933] z-20 space-y-3">
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-xs">
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 font-mono text-[11px] text-slate-400">
-                <span className="text-cyan-300 font-bold">INSTRUMENT:</span>{' '}
-                {panorama.instrument || (panorama.camera ? `Camera: ${panorama.camera}` : 'NASA Surface Imager')}
+            <div className="space-y-1 min-w-0">
+              <div className="flex flex-wrap items-center gap-2 font-mono text-[11px] text-[#9da5b4]">
+                <span className="text-[#edf0f5] font-bold">INSTRUMENT:</span>
+                <span>
+                  {panorama.instrument || (panorama.camera ? panorama.camera : 'NASA SURFACE IMAGER')}
+                </span>
                 {panorama.attribution && (
                   <>
-                    <span>•</span>
-                    <span className="text-cyan-300 font-bold">ATTRIBUTION:</span> {panorama.attribution}
+                    <span className="text-[#353c4a]">//</span>
+                    <span className="text-[#edf0f5] font-bold">SOURCE:</span>
+                    <span>{panorama.attribution}</span>
                   </>
                 )}
               </div>
-              <p className="text-xs text-slate-300 font-sans leading-relaxed line-clamp-2 max-w-3xl">
-                {panorama.caption}
-              </p>
+              {panorama.caption && (
+                <p className="text-xs text-[#9da5b4] font-sans leading-relaxed line-clamp-2 max-w-3xl">
+                  {panorama.caption}
+                </p>
+              )}
             </div>
 
-            {/* ACTION: NAVIGATE TO LOCATION */}
             {onNavigateToLocation && (
               <button
+                type="button"
                 onClick={() => {
                   onNavigateToLocation(panorama);
                   onClose();
                 }}
-                className="glove-btn whitespace-nowrap w-full sm:w-auto min-h-[46px] px-5 py-2.5 rounded-2xl bg-gradient-to-r from-emerald-500 to-teal-600 hover:from-emerald-400 hover:to-teal-500 text-slate-950 font-black text-xs uppercase flex items-center justify-center gap-2 shadow-xl cursor-pointer transition-transform active:scale-95"
+                className="glove-btn whitespace-nowrap w-full sm:w-auto min-h-[44px] px-4 py-2 rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] text-[#0b0d11] font-mono font-bold text-xs uppercase flex items-center justify-center gap-2 border border-[#22c55e] cursor-pointer"
               >
                 <Navigation className="h-4 w-4" />
-                <span>SET DESTINATION & NAVIGATE</span>
+                <span>ROUTE TO SITE</span>
               </button>
             )}
           </div>
 
-          {/* QUICK LOCATION CAROUSEL */}
           {allPanoramas.length > 1 && (
-            <div className="pt-2 border-t border-slate-800/60 flex items-center gap-2 overflow-x-auto">
-              <span className="text-[10px] font-mono uppercase text-slate-400 whitespace-nowrap">
-                MORE SIGHTS:
+            <div className="pt-2.5 border-t border-[#242933] flex items-center gap-2 overflow-x-auto">
+              <span className="text-[10px] font-mono uppercase font-bold text-[#656d7d] whitespace-nowrap">
+                ARCHIVE VIEWS:
               </span>
               {allPanoramas.map((p) => {
                 const isSelected = p.id === panorama.id;
                 const pIs360 = Boolean(p.is360);
                 return (
                   <button
+                    type="button"
                     key={p.id}
                     onClick={() => onSelectPanorama?.(p)}
-                    className={`glove-btn min-h-[38px] px-3 py-1.5 rounded-xl border text-[11px] font-mono font-bold whitespace-nowrap flex items-center gap-1.5 cursor-pointer transition-all ${
+                    className={`glove-btn min-h-[40px] px-3 py-1.5 rounded-[4px] border text-[11px] font-mono font-bold whitespace-nowrap flex items-center gap-1.5 cursor-pointer ${
                       isSelected
-                        ? pIs360
-                          ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-md scale-102'
-                          : 'bg-emerald-500 text-slate-950 border-emerald-300 shadow-md scale-102'
-                        : 'bg-slate-900 hover:bg-slate-800 text-slate-300 border-slate-700'
+                        ? 'bg-[#22c55e]/20 text-[#22c55e] border-[#22c55e]'
+                        : 'bg-[#13161c] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] border-[#353c4a]'
                     }`}
                   >
-                    <span>{pIs360 ? '🌐' : '📷'}</span>
+                    {pIs360 ? <Globe className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
                     <span>
-                      {p.locationName || p.title} {pIs360 ? '(360°)' : '(Photo)'}
+                      {p.locationName || p.title} {pIs360 ? '[360]' : '[IMG]'}
                     </span>
                   </button>
                 );

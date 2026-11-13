@@ -7,7 +7,6 @@ import {
   BatteryCharging,
   Camera,
   Check,
-  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -15,51 +14,43 @@ import {
   Clock,
   Compass,
   Crosshair,
-  Droplets,
+  Download,
   Eye,
-  EyeOff,
-  Flame,
+  FileText,
   Gauge,
-  Info,
+  Globe,
   Layers,
-  LogOut,
   Map as MapIcon,
   MapPin,
-  Microscope,
-  Minus,
   Navigation,
-  Navigation2,
-  PackageCheck,
   Pause,
   Play,
-  Plus,
   Radio,
   RotateCcw,
-  Shield,
   ShieldAlert,
   Sliders,
+  Square,
   Sun,
   Target,
   Thermometer,
+  Trash2,
   TrendingUp,
-  Truck,
-  User,
   Wind,
   X,
-  Zap,
 } from 'lucide-react';
+import APP_THEME from './theme';
 import JezeroTacticalMap from './components/JezeroTacticalMap';
 import MarsPanoramaViewer from './components/MarsPanoramaViewer';
 import LandmarkDrawer from './components/LandmarkDrawer';
 import waypointsData from './data/jezero_waypoints.json';
 import medaWeatherData from './data/meda_weather.json';
-import povImagesData from './data/pov_images.json';
 import jezeroPanoramas from './data/jezero_panoramas.json';
 import scienceHazardsData from './data/jezero_science_hazards.json';
 import landmarksData from './data/landmarks.json';
 import {
   calculateBearingDegrees,
   computeMarswalkRoute,
+  estimateElev,
   LOADOUT_PROFILES,
   marsDistanceMeters,
   WEATHER_CONDITIONS,
@@ -71,6 +62,33 @@ function formatLst(totalMinutes) {
   const mm = String(wrapped % 60).padStart(2, '0');
   return `${hh}:${mm} LST`;
 }
+
+function normalizeKey(value) {
+  return String(value || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]/g, '');
+}
+
+const BASEMAP_OPTIONS = [
+  { id: 'satellite', label: 'CTX SATELLITE', short: 'SAT', desc: 'NASA CTX 6m/px Orbital Imagery' },
+  { id: 'terrain', label: 'HRSC TERRAIN', short: 'TER', desc: 'ESA HRSC Shaded Topographic Relief' },
+  { id: 'elevation', label: 'ELEVATION DTM', short: 'DTM', desc: 'Hypsometric Altimeter Model' },
+  { id: 'themis', label: 'THEMIS NIGHT IR', short: 'IR', desc: 'Mars Odyssey Thermal Inertia' },
+  { id: 'default', label: 'VECTOR BASE', short: 'VEC', desc: 'Planetary Coordinate Grid' },
+];
+
+const OVERLAY_ITEMS = [
+  { key: 'hirise', label: 'NASA HiRISE 25cm (Corridor)' },
+  { key: 'ellipse', label: 'USGS Landing Ellipse' },
+  { key: 'linear', label: 'Linear Faults & Ridges' },
+  { key: 'surface', label: 'Geomorphic Surface Contacts' },
+  { key: 'nomenclature', label: 'IAU Nomenclature Labels' },
+  { key: 'traverse', label: 'M20 Perseverance Traverse' },
+  { key: 'slope', label: 'Sol Waypoints & Slope Grade' },
+  { key: 'hazards', label: 'Science & Terrain Hazards' },
+  { key: 'science', label: 'ISRU, Relay & Power Nodes' },
+  { key: 'landmarks', label: '11 Regional Science Landmarks' },
+];
 
 export default function App() {
   const { sciencePOIs, hazardZones } = scienceHazardsData;
@@ -84,38 +102,48 @@ export default function App() {
     season: 'late autumn',
   };
 
-  // App Navigation Modes: 'browse' (exploring/planning) vs 'navigating' (active turn-by-turn walking)
+  // Terminal Layout & Overlay State
   const [navMode, setNavMode] = useState('browse');
   const [followAstronaut, setFollowAstronaut] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showLayersSheet, setShowLayersSheet] = useState(false);
-  const [showStreetViewPIP, setShowStreetViewPIP] = useState(false);
-  const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false);
-  const [showRouteOptions, setShowRouteOptions] = useState(false);
   const [showLegendSheet, setShowLegendSheet] = useState(false);
 
-  // Animated Camera Fly-To Zoom & Locating Wave state
+  // Camera & Locating State
   const [locatePulse, setLocatePulse] = useState(null);
-  const [showLocationPinTag, setShowLocationPinTag] = useState(false);
-  const [compassRotation, setCompassRotation] = useState(0);
+  const [flyToTarget, setFlyToTarget] = useState(null);
 
-  // Google Maps Basemap & 3D Relief Blend state
-  const [basemap, setBasemap] = useState('satellite'); // 'satellite' | 'terrain' | 'elevation' | 'themis' | 'default'
-  const [reliefBlend, setReliefBlend] = useState(0.3); // 0.0 to 1.0 (HRSC Hillshade blend over basemap)
+  // Basemap & Hillshade Blend State
+  const [basemap, setBasemap] = useState('satellite');
+  const [reliefBlend, setReliefBlend] = useState(0.35);
   const [activeLandmark, setActiveLandmark] = useState(null);
+  const [selectedQuickLandmarkId, setSelectedQuickLandmarkId] = useState('landing_site');
 
-  // Layer visibility toggles
+  // Cartographic Layer Toggles
   const [layers, setLayers] = useState({
+    hirise: true,
+    ellipse: true,
+    linear: false,
+    surface: false,
+    nomenclature: true,
+    traverse: true,
     slope: true,
     hazards: true,
     science: true,
-    traverse: true,
     landmarks: true,
   });
 
-  // Route endpoints & mobility
+  // Origin / Destination & Custom Vector State
   const [startId, setStartId] = useState('hab-alpha');
   const [endId, setEndId] = useState('three-forks');
-  // Astronaut's verified field position (starts at Hab Alpha, updates continuously upon reaching waypoints)
+  const [customOriginCoord, setCustomOriginCoord] = useState(null);
+  const [customDestCoord, setCustomDestCoord] = useState(null);
+  const [originLatInput, setOriginLatInput] = useState('18.4446');
+  const [originLonInput, setOriginLonInput] = useState('77.4509');
+  const [destLatInput, setDestLatInput] = useState('18.5284');
+  const [destLonInput, setDestLonInput] = useState('77.4042');
+
+  // Astronaut Current Field Position & Suit Parameters
   const [astronautLocId, setAstronautLocId] = useState('hab-alpha');
   const [loadoutKey, setLoadoutKey] = useState('light');
   const [weatherKey, setWeatherKey] = useState('nominal');
@@ -124,84 +152,30 @@ export default function App() {
   const [autoChargingStop, setAutoChargingStop] = useState(true);
   const [showDirectComparison, setShowDirectComparison] = useState(false);
 
-  // Martian Time-of-Day & Sol State
+  // Martian Sol & LST Time Engine
   const [selectedMissionSol] = useState(Number(latestMeda.sol) || 1133);
-  const [startLstMinutes, setStartLstMinutes] = useState(705); // 11:45 LST
+  const [startLstMinutes, setStartLstMinutes] = useState(705);
 
-  // Incoming Dust Storm Radar State
+  // Predictive Dust Squall Alert State
   const [incomingDustAlert, setIncomingDustAlert] = useState(false);
   const [showDustRadarCard, setShowDustRadarCard] = useState(true);
 
-  // Selected Sol for Astronaut POV image
-  const [selectedSol, setSelectedSol] = useState(3);
+  // Interactive Exclusion Zone Polygon Drawing State
+  const [activeDrawMode, setActiveDrawMode] = useState(null);
+  const [drawVertices, setDrawVertices] = useState([]);
+  const [drawnZones, setDrawnZones] = useState([]);
 
-  // Active Interactive 360° Panorama Viewer State
+  // Cursor Live Telemetry Bar State
+  const [cursorTelemetry, setCursorTelemetry] = useState({
+    lat: 18.4446,
+    lon: 77.4509,
+    elevM: -2570,
+    hazardLabel: 'NOMINAL SECTOR',
+    isFault: false,
+  });
+
+  // Active Surface Vista / 360 Photosphere Modal State
   const [activePanorama, setActivePanorama] = useState(null);
-
-  const handleOpenPanorama = (target, coords, poi) => {
-    let match = null;
-
-    // 1. If explicit poi object passed
-    const candidatePOI = poi || (target && typeof target === 'object' && target.id ? target : null);
-    if (candidatePOI) {
-      match = jezeroPanoramas.find(
-        (p) =>
-          p.poiId === candidatePOI.id ||
-          p.associatedPOI === candidatePOI.name ||
-          p.id.includes(candidatePOI.id)
-      );
-    }
-
-    // 2. If target is a string (e.g., 'hawksbill-gap', 'three-forks', 'belva-crater', etc.)
-    if (!match && typeof target === 'string') {
-      match = jezeroPanoramas.find(
-        (p) =>
-          p.poiId === target ||
-          p.id === target ||
-          p.associatedPOI === target ||
-          p.title.toLowerCase().includes(target.toLowerCase())
-      );
-      if (!match) {
-        const matchingScience = sciencePOIs.find(
-          (s) => s.id === target || s.name.toLowerCase().includes(target.toLowerCase())
-        );
-        if (matchingScience) {
-          match = jezeroPanoramas.find(
-            (p) => p.poiId === matchingScience.id || p.associatedPOI === matchingScience.name
-          );
-        }
-      }
-    }
-
-    // 3. If target is a number (Sol)
-    if (!match && typeof target === 'number') {
-      match = jezeroPanoramas.find((p) => p.sol === target);
-      if (!match) {
-        match = jezeroPanoramas.reduce((prev, curr) =>
-          Math.abs(curr.sol - target) < Math.abs(prev.sol - target) ? curr : prev
-        );
-      }
-    }
-
-    // 4. Fallback to active destination or origin POI
-    if (!match) {
-      match =
-        jezeroPanoramas.find((p) => p.poiId === endId) ||
-        jezeroPanoramas.find((p) => p.poiId === startId) ||
-        jezeroPanoramas[0];
-    }
-
-    setActivePanorama(match);
-    showToast({
-      id: `pano-${Date.now()}`,
-      title: match.is360
-        ? `🌐 360° Photosphere: ${match.locationName || match.title.split(' ')[0]}`
-        : `📷 Surface Photo: ${match.locationName || match.title.split(' ')[0]}`,
-      message: `${match.locationName} • Sol ${match.sol} (${match.is360 ? 'Interactive 360° Sphere' : 'High-Res Surface Photo'})`,
-      type: 'info',
-      icon: 'camera',
-    });
-  };
 
   // Live Navigation Simulation State
   const [navPlaying, setNavPlaying] = useState(false);
@@ -210,7 +184,10 @@ export default function App() {
   const [rechargeTicksRemaining, setRechargeTicksRemaining] = useState(0);
   const [hasCompletedPitStop, setHasCompletedPitStop] = useState(false);
 
-  // Live Android Toast Notification Popups
+  // Elevation Canvas Ref
+  const elevationCanvasRef = useRef(null);
+
+  // Toast Notification Queue (single non-intrusive bar)
   const [activeToast, setActiveToast] = useState(null);
   const toastTimerRef = useRef(null);
 
@@ -219,22 +196,46 @@ export default function App() {
     setActiveToast(toast);
     toastTimerRef.current = setTimeout(() => {
       setActiveToast(null);
-    }, toast.duration || 5500);
+    }, toast.duration || 5000);
   };
 
+  // Resolve any POI ID or Landmark ID into a standard routing node
   const findPOIOrLandmark = (id) => {
     if (!id) return null;
+    if (id === 'custom-origin' && customOriginCoord) {
+      return {
+        id: 'custom-origin',
+        name: 'Custom Origin Vector',
+        lat: customOriginCoord[0],
+        lon: customOriginCoord[1],
+        elev: estimateElev(customOriginCoord[0], customOriginCoord[1]),
+        sol: 0,
+        type: 'custom',
+      };
+    }
+    if (id === 'custom-dest' && customDestCoord) {
+      return {
+        id: 'custom-dest',
+        name: 'Custom Target Vector',
+        lat: customDestCoord[0],
+        lon: customDestCoord[1],
+        elev: estimateElev(customDestCoord[0], customDestCoord[1]),
+        sol: 0,
+        type: 'custom',
+      };
+    }
+
     let poi = sciencePOIs.find((p) => p.id === id);
     if (!poi) {
-      poi = sciencePOIs.find(
-        (p) => p.id.replace(/-/g, '_') === id.replace(/-/g, '_')
-      );
+      poi = sciencePOIs.find((p) => p.id.replace(/-/g, '_') === id.replace(/-/g, '_'));
     }
     if (!poi && (id === 'landing_site' || id === 'hab-alpha')) {
       poi = sciencePOIs.find((p) => p.id === 'hab-alpha');
     }
     if (!poi) {
-      const lm = landmarksData.find((l) => l.id === id || l.id.replace(/_/g, '-') === id.replace(/_/g, '-'));
+      const lm = landmarksData.find(
+        (l) => l.id === id || l.id.replace(/_/g, '-') === id.replace(/_/g, '-')
+      );
       if (lm) {
         poi = {
           id: lm.id,
@@ -244,7 +245,7 @@ export default function App() {
           elev: lm.elevation_m,
           sol: 0,
           description: lm.brief,
-          minerals: lm.soil_regolith?.dominant_type || 'Regolith',
+          minerals: lm.soil_regolith?.dominant_type || 'Basaltic Regolith',
           type: 'science',
         };
       }
@@ -254,17 +255,165 @@ export default function App() {
 
   const startPOI = useMemo(
     () => findPOIOrLandmark(startId) || sciencePOIs[0],
-    [sciencePOIs, startId]
+    [sciencePOIs, startId, customOriginCoord]
   );
+
   const endPOI = useMemo(
     () => findPOIOrLandmark(endId) || sciencePOIs[3],
-    [sciencePOIs, endId]
+    [sciencePOIs, endId, customDestCoord]
   );
+
+  // Sync lat/lon input boxes whenever startPOI/endPOI changes
+  useEffect(() => {
+    if (startPOI) {
+      setOriginLatInput(Number(startPOI.lat).toFixed(4));
+      setOriginLonInput(Number(startPOI.lon).toFixed(4));
+    }
+  }, [startPOI?.lat, startPOI?.lon]);
+
+  useEffect(() => {
+    if (endPOI) {
+      setDestLatInput(Number(endPOI.lat).toFixed(4));
+      setDestLonInput(Number(endPOI.lon).toFixed(4));
+    }
+  }, [endPOI?.lat, endPOI?.lon]);
+
+  // Consolidated dropdown options (10 Science POIs + extra landmarks without duplicates)
+  const allSiteOptions = useMemo(() => {
+    const items = [...sciencePOIs];
+    landmarksData.forEach((lm) => {
+      const lmNorm = normalizeKey(lm.id === 'landing_site' ? 'habalpha' : lm.id);
+      const exists = items.some((p) => normalizeKey(p.id) === lmNorm);
+      if (!exists) {
+        items.push({
+          id: lm.id,
+          name: `${lm.name} [Landmark]`,
+          lat: lm.coords[0],
+          lon: lm.coords[1],
+          elev: lm.elevation_m,
+          type: 'landmark',
+        });
+      }
+    });
+    return items;
+  }, [sciencePOIs]);
 
   const weather = WEATHER_CONDITIONS[weatherKey];
   const loadout = LOADOUT_PROFILES[loadoutKey];
 
-  // Compute A* obstacle-avoiding route + charging pit-stop logic
+  // Unified Panorama & Landmark Vista Archive (adds landmarks that have surface imagery)
+  const viewerArchiveList = useMemo(() => {
+    const baseList = [...jezeroPanoramas];
+    landmarksData.forEach((lm) => {
+      const normLm = normalizeKey(lm.id === 'landing_site' ? 'habalpha' : lm.id);
+      const mappedPano = baseList.find((p) => {
+        const pId = normalizeKey(p.poiId);
+        return (
+          pId === normLm ||
+          (lm.id === 'seitah_dunes' && p.poiId === 'seitah-ridge') ||
+          (lm.id === 'wildcat_ridge' && p.id.includes('wildcat'))
+        );
+      });
+      if (!mappedPano && lm.photos?.[0]?.url) {
+        baseList.push({
+          id: `lm_vista_${lm.id}`,
+          poiId: lm.id,
+          title: `${lm.name} Surface Imagery`,
+          locationName: lm.name,
+          sol: lm.sol || null,
+          lat: lm.coords[0],
+          lon: lm.coords[1],
+          elevation: lm.elevation_m,
+          is360: false,
+          instrument: 'HiRISE / Mastcam-Z Archive',
+          caption: lm.photos[0].caption || lm.brief,
+          attribution: 'NASA / JPL-Caltech / ASU',
+          image: lm.photos[0].url,
+        });
+      }
+    });
+    return baseList;
+  }, []);
+
+  // Open either 360 photosphere or exact 2D surface image for a POI, landmark ID, panorama object, or Sol
+  const openPanoramaModal = (target) => {
+    let match = null;
+
+    if (target && typeof target === 'object' && target.image) {
+      match = target;
+    }
+
+    if (!match && typeof target === 'string') {
+      const aliasTarget =
+        target === 'landing_site'
+          ? 'hab-alpha'
+          : target === 'seitah_dunes'
+          ? 'seitah-ridge'
+          : target;
+      const targetNorm = normalizeKey(aliasTarget);
+
+      match =
+        viewerArchiveList.find(
+          (p) =>
+            p.id === target ||
+            p.poiId === target ||
+            p.poiId === aliasTarget ||
+            normalizeKey(p.poiId) === targetNorm ||
+            normalizeKey(p.id) === targetNorm ||
+            p.title.toLowerCase().includes(target.toLowerCase())
+        ) || null;
+
+      if (!match) {
+        const lm = landmarksData.find(
+          (l) => l.id === target || normalizeKey(l.id) === normalizeKey(target)
+        );
+        if (lm) {
+          const fallbackPhoto = lm.photos?.[0]?.url || lm.photo_url;
+          if (fallbackPhoto) {
+            match = {
+              id: `lm_vista_${lm.id}`,
+              poiId: lm.id,
+              title: `${lm.name} Surface View`,
+              locationName: lm.name,
+              lat: lm.coords[0],
+              lon: lm.coords[1],
+              elevation: lm.elevation_m,
+              is360: false,
+              instrument: 'NASA HiRISE / Mastcam-Z',
+              caption: lm.photos?.[0]?.caption || lm.brief,
+              attribution: 'NASA / JPL-Caltech / MRO',
+              image: fallbackPhoto,
+            };
+          }
+        }
+      }
+    }
+
+    if (!match && typeof target === 'number') {
+      match =
+        jezeroPanoramas.find((p) => p.sol === target) ||
+        jezeroPanoramas.reduce((prev, curr) =>
+          Math.abs((curr.sol || 0) - target) < Math.abs((prev.sol || 0) - target) ? curr : prev
+        );
+    }
+
+    if (!match) {
+      match =
+        viewerArchiveList.find((p) => p.poiId === endId) ||
+        viewerArchiveList.find((p) => p.poiId === startId) ||
+        viewerArchiveList[0];
+    }
+
+    setActivePanorama(match);
+    showToast({
+      id: `pano-${Date.now()}`,
+      type: 'info',
+      title: match.is360 ? '360 PHOTOSPHERE LOADED' : 'SURFACE IMAGERY LOADED',
+      message: `${match.locationName || match.title}`,
+    });
+  };
+
+  // Compute A* Safe Route (including custom operator-drawn exclusion polygons)
   const routeResult = useMemo(() => {
     return computeMarswalkRoute({
       start: startPOI,
@@ -277,6 +426,7 @@ export default function App() {
       startBatteryPct,
       startO2Pct,
       useChargingStop: autoChargingStop ? 'auto' : false,
+      customExclusionZones: drawnZones,
     });
   }, [
     startPOI,
@@ -288,9 +438,10 @@ export default function App() {
     startBatteryPct,
     startO2Pct,
     autoChargingStop,
+    drawnZones,
   ]);
 
-  // Reset live navigation state on origin/dest change
+  // Reset live navigation simulation when traverse parameters change
   useEffect(() => {
     setNavPlaying(false);
     setNavStepIdx(0);
@@ -299,11 +450,22 @@ export default function App() {
     if (navMode === 'navigating') {
       setNavMode('browse');
     }
-  }, [startId, endId, loadoutKey, weatherKey, startBatteryPct, startO2Pct, autoChargingStop]);
+  }, [
+    startId,
+    endId,
+    customOriginCoord,
+    customDestCoord,
+    loadoutKey,
+    weatherKey,
+    startBatteryPct,
+    startO2Pct,
+    autoChargingStop,
+    drawnZones,
+  ]);
 
   // Live Navigation Simulation Loop
   useEffect(() => {
-    if (!navPlaying || !routeResult?.pathCoords?.length) return;
+    if (!navPlaying || !routeResult?.pathCoords?.length) return undefined;
 
     const totalPoints = routeResult.pathCoords.length;
     const pitIdx = routeResult.pitStopIndex;
@@ -316,8 +478,8 @@ export default function App() {
             showToast({
               id: 'recharge-done',
               type: 'charge',
-              title: '⚡ Fast-Charge Complete',
-              message: 'Suit/Rover Battery & Oxygen restored to 100% capacity.',
+              title: 'RECHARGE CYCLE COMPLETE',
+              message: 'Suit Battery and O2 restored to 100%. Resuming second leg.',
             });
             return 0;
           }
@@ -329,46 +491,49 @@ export default function App() {
       setNavStepIdx((prev) => {
         const next = Math.min(totalPoints - 1, prev + navSpeed);
 
-        // Approaching Virtual Base Station Pit-Stop
         if (pitIdx !== null && !hasCompletedPitStop && prev < pitIdx && next >= pitIdx) {
           setRechargeTicksRemaining(12);
           showToast({
             id: 'docking',
             type: 'charge',
-            title: `⚡ Docked at ${routeResult.chargingStop?.station?.name || 'Base'}`,
-            message: 'Initiating 25 kW inductive fast-charge & high-pressure O2 refill...',
+            title: `DOCKED: ${routeResult.chargingStop?.station?.name || 'CHARGING NODE'}`,
+            message: 'Inductive power & O2 replenishment initiated.',
           });
           return pitIdx;
         }
 
-        // Mid-route slope hazard notifications
         if (prev < Math.round(totalPoints * 0.45) && next >= Math.round(totalPoints * 0.45)) {
           if (routeResult.maxSlopeAlongPath >= 12) {
             showToast({
               id: 'slope-warn',
               type: 'warning',
-              title: `⚠ Steep Incline Ahead (${routeResult.maxSlopeAlongPath}°)`,
-              message: 'A* corridor holding optimal ridge contour to minimize slip risk.',
+              title: `HIGH GRADE DETECTED (${routeResult.maxSlopeAlongPath} DEG)`,
+              message: 'A* corridor holding optimal contour to limit regolith slip.',
             });
           }
         }
 
-        // Arrival at destination waypoint
         if (next >= totalPoints - 1) {
           setNavPlaying(false);
           setNavMode('arrived');
-          const finalBat = endPOI.isChargingStation ? 100 : Math.max(15, routeResult.finalArrivalBattery);
+          const finalBat = endPOI.isChargingStation
+            ? 100
+            : Math.max(15, routeResult.finalArrivalBattery);
           const finalO2 = endPOI.isChargingStation ? 100 : Math.max(20, routeResult.finalArrivalO2);
           setAstronautLocId(endPOI.id);
           setStartId(endPOI.id);
+          if (endPOI.id === 'custom-dest' && customDestCoord) {
+            setCustomOriginCoord([...customDestCoord]);
+            setStartId('custom-origin');
+          }
           setStartBatteryPct(finalBat);
           setStartO2Pct(finalO2);
           showToast({
             id: 'arrived',
             type: 'success',
-            title: `🏁 Arrived at ${endPOI.name}`,
-            message: `Traverse complete (${routeResult.distKm} km). Position locked at ${endPOI.name}. Ready for next leg!`,
-            duration: 9000,
+            title: `WAYPOINT LOCKED: ${endPOI.name}`,
+            message: `Traverse leg (${routeResult.distKm} km) complete. Origin updated for next leg.`,
+            duration: 7500,
           });
         }
 
@@ -377,9 +542,17 @@ export default function App() {
     }, 120);
 
     return () => clearInterval(timer);
-  }, [navPlaying, navSpeed, routeResult, rechargeTicksRemaining, hasCompletedPitStop, endPOI]);
+  }, [
+    navPlaying,
+    navSpeed,
+    routeResult,
+    rechargeTicksRemaining,
+    hasCompletedPitStop,
+    endPOI,
+    customDestCoord,
+  ]);
 
-  // Compute live astronaut telemetry & exact heading azimuth
+  // Live Astronaut Telemetry & Azimuth Calculation
   const liveNavState = useMemo(() => {
     const coords = routeResult?.pathCoords || [];
     if (!coords.length) return null;
@@ -389,7 +562,6 @@ export default function App() {
     const isRecharging = rechargeTicksRemaining > 0;
     const pitIdx = routeResult.pitStopIndex;
 
-    // Calculate heading azimuth in degrees (0° = North, 90° = East, etc.)
     let heading = 0;
     if (idx < coords.length - 1) {
       heading = calculateBearingDegrees(
@@ -459,7 +631,7 @@ export default function App() {
       estTimeRemainingMin,
       isRecharging,
       arrived,
-      speedKmh: isRecharging ? 0 : effectiveSpeed,
+      speedKmh: isRecharging ? 0 : Number(effectiveSpeed.toFixed(1)),
       heartRateBpm: isRecharging ? 72 : loadoutKey === 'heavy' ? 120 : 96,
     };
   }, [
@@ -476,14 +648,11 @@ export default function App() {
     loadout.speedKmh,
   ]);
 
-  // Keep compass rotation aligned with heading unless manually reoriented
-  useEffect(() => {
-    setCompassRotation(liveNavState?.heading || 0);
-  }, [liveNavState?.heading]);
-
-  // Martian Time-of-Day Engine
+  // Martian Sol Daylight & Thermal Engine
   const martianEnv = useMemo(() => {
-    const elapsedMin = Math.round(((liveNavState?.progressPct || 0) / 100) * (routeResult?.durationMin || 0));
+    const elapsedMin = Math.round(
+      ((liveNavState?.progressPct || 0) / 100) * (routeResult?.durationMin || 0)
+    );
     const currentLstMin = startLstMinutes + elapsedMin;
     const lstText = formatLst(currentLstMin);
 
@@ -493,7 +662,6 @@ export default function App() {
     const solarCurve = Math.max(0, Math.sin(((hourOfDay - 6.3) / 11.2) * Math.PI));
     const dustCooling = weatherKey === 'dust_storm' || incomingDustAlert ? -13.5 : 0;
     const ambientTempC = Number((minT + (maxT - minT) * solarCurve + dustCooling).toFixed(1));
-
     const suitHeaterWatts = Math.round(45 + Math.max(0, (-25 - ambientTempC) * 2.4));
     const sunsetMin = 17 * 60 + 14;
     const daylightRemainingMin = Math.max(0, sunsetMin - (currentLstMin % 1440));
@@ -520,7 +688,7 @@ export default function App() {
     incomingDustAlert,
   ]);
 
-  // Predictive Dust Front Radar
+  // Predictive Dust Squall Front Radar
   const dustFrontState = useMemo(() => {
     const active = incomingDustAlert || weatherKey === 'dust_storm';
     if (!active) return { active: false };
@@ -528,7 +696,9 @@ export default function App() {
     const progress = (liveNavState?.progressPct || 0) / 100;
     const distanceAheadKm = Number(Math.max(0.2, 2.4 - progress * 1.9).toFixed(2));
     const etaMin = Math.max(2, Math.round(distanceAheadKm * 7.5));
-    const pressureDropPa = Number((Number(latestMeda.pressure || 778.9) - (14 + progress * 12)).toFixed(1));
+    const pressureDropPa = Number(
+      (Number(latestMeda.pressure || 778.9) - (14 + progress * 12)).toFixed(1)
+    );
 
     const anchorLat = endPOI?.lat ?? 18.46;
     const anchorLon = endPOI?.lon ?? 77.38;
@@ -546,7 +716,7 @@ export default function App() {
     };
   }, [incomingDustAlert, weatherKey, liveNavState?.progressPct, latestMeda.pressure, endPOI]);
 
-  // Nearest pressurized shelter
+  // Nearest Pressurized Shelter
   const nearestShelter = useMemo(() => {
     const curLat = liveNavState?.currentLatLon?.[0] ?? startPOI.lat;
     const curLon = liveNavState?.currentLatLon?.[1] ?? startPOI.lon;
@@ -566,94 +736,183 @@ export default function App() {
     };
   }, [liveNavState?.currentLatLon, startPOI, sciencePOIs]);
 
-  // Sync closest NASA Mastcam ground POV
+  // Elevation Transect HTML5 Canvas Renderer (matches Ground Control monochrome profile chart)
   useEffect(() => {
-    if (!liveNavState?.active || !liveNavState.currentLatLon || !waypointsData.length) return;
-    const [curLat, curLon] = liveNavState.currentLatLon;
-    let closestWp = waypointsData[0];
-    let bestDist = Infinity;
-    for (let i = 0; i < waypointsData.length; i += 5) {
-      const wp = waypointsData[i];
-      const d = marsDistanceMeters(curLat, curLon, wp.lat, wp.lon);
-      if (d < bestDist) {
-        bestDist = d;
-        closestWp = wp;
-      }
-    }
-    if (closestWp?.sol !== undefined) {
-      setSelectedSol(closestWp.sol);
-    }
-  }, [liveNavState?.idx, liveNavState?.active, liveNavState?.currentLatLon]);
+    const canvas = elevationCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
 
-  const activePOV = useMemo(() => {
-    if (!jezeroPanoramas.length) return null;
-    const targetPOI = endId || startId;
-    const matchByPOI = jezeroPanoramas.find((p) => p.poiId === targetPOI);
-    if (matchByPOI) return matchByPOI;
-    return jezeroPanoramas.reduce((prev, curr) =>
-      Math.abs(curr.sol - selectedSol) < Math.abs(prev.sol - selectedSol) ? curr : prev
-    );
-  }, [selectedSol, endId, startId]);
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth || 320;
+    const h = canvas.clientHeight || 96;
+    canvas.width = w * dpr;
+    canvas.height = h * dpr;
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
 
-  // Active navigation maneuver for Google Maps turn banner
+    ctx.fillStyle = APP_THEME.chart.background;
+    ctx.fillRect(0, 0, w, h);
+
+    const elevs = routeResult?.elevProfile || [];
+    if (elevs.length < 2) {
+      ctx.fillStyle = APP_THEME.colors.textMuted;
+      ctx.font = '10px "JetBrains Mono", monospace';
+      ctx.fillText('NO TRAVERSE PROFILE COMPUTED', 10, h / 2);
+      return;
+    }
+
+    const minE = Math.min(...elevs) - 20;
+    const maxE = Math.max(...elevs) + 20;
+    const range = Math.max(1, maxE - minE);
+    const padX = 8;
+    const padY = 14;
+    const plotW = w - padX * 2;
+    const plotH = h - padY * 2;
+
+    // Horizontal grid lines
+    ctx.strokeStyle = APP_THEME.chart.gridLines;
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 2; i += 1) {
+      const y = padY + (i / 2) * plotH;
+      ctx.beginPath();
+      ctx.moveTo(padX, y);
+      ctx.lineTo(w - padX, y);
+      ctx.stroke();
+    }
+
+    // Area fill under profile
+    const grad = ctx.createLinearGradient(0, padY, 0, h - padY);
+    grad.addColorStop(0, APP_THEME.chart.fillStart);
+    grad.addColorStop(1, APP_THEME.chart.fillEnd);
+
+    ctx.beginPath();
+    elevs.forEach((el, idx) => {
+      const x = padX + (idx / (elevs.length - 1)) * plotW;
+      const y = padY + (1 - (el - minE) / range) * plotH;
+      if (idx === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.lineTo(padX + plotW, h - padY);
+    ctx.lineTo(padX, h - padY);
+    ctx.closePath();
+    ctx.fillStyle = grad;
+    ctx.fill();
+
+    // Crisp monochrome profile line
+    ctx.beginPath();
+    elevs.forEach((el, idx) => {
+      const x = padX + (idx / (elevs.length - 1)) * plotW;
+      const y = padY + (1 - (el - minE) / range) * plotH;
+      if (idx === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+    ctx.strokeStyle = APP_THEME.chart.profileLine;
+    ctx.lineWidth = 1.6;
+    ctx.stroke();
+
+    // Live EVA progress cursor marker on elevation transect
+    if (liveNavState?.progressPct > 0) {
+      const cx = padX + (liveNavState.progressPct / 100) * plotW;
+      ctx.strokeStyle = APP_THEME.colors.ok;
+      ctx.lineWidth = 1.2;
+      ctx.beginPath();
+      ctx.moveTo(cx, padY);
+      ctx.lineTo(cx, h - padY);
+      ctx.stroke();
+    }
+
+    ctx.fillStyle = APP_THEME.chart.text;
+    ctx.font = '9px "JetBrains Mono", monospace';
+    ctx.fillText(`MAX ${Math.round(maxE - 20)}m`, padX + 2, 10);
+    ctx.fillText(`MIN ${Math.round(minE + 20)}m`, padX + 2, h - 3);
+  }, [routeResult, liveNavState?.progressPct, sidebarOpen]);
+
+  // Current maneuver summary for Turn-by-Turn HUD
   const currentManeuver = useMemo(() => {
     const steps = routeResult?.navigationSteps || [];
     if (!steps.length) return null;
 
     if (liveNavState?.isRecharging) {
       return {
-        icon: 'charge',
         distanceText: '0 m',
-        instruction: `Docked at ${routeResult.chargingStop?.station?.name}`,
-        subtitle: '⚡ Recharging battery to 100% & refilling O2...',
+        instruction: `DOCKED: ${routeResult.chargingStop?.station?.name || 'CHARGING NODE'}`,
+        subtitle: 'RECHARGING BATTERY TO 100% AND REFILLING O2',
       };
     }
     if (liveNavState?.arrived) {
       return {
-        icon: 'arrive',
         distanceText: '0 m',
-        instruction: `Arrived at ${endPOI.name}`,
-        subtitle: 'Marswalk objective accomplished.',
+        instruction: `ARRIVED: ${endPOI.name.toUpperCase()}`,
+        subtitle: 'WAYPOINT LOCKED // READY FOR NEXT LEG',
       };
     }
     if (hasCompletedPitStop && steps.length > 3) {
       return {
-        icon: 'turn',
         distanceText: `${liveNavState?.distRemainingKm} km`,
-        instruction: steps[3]?.instruction || `Proceed toward ${endPOI.name}`,
-        subtitle: steps[4]?.instruction || 'Following A* traversability corridor',
+        instruction: steps[3]?.instruction || `PROCEED TO ${endPOI.name}`,
+        subtitle: steps[4]?.instruction || 'A* TRAVERSABILITY CORRIDOR ACTIVE',
       };
     }
 
     return {
-      icon: 'straight',
-      distanceText: `${Math.round((liveNavState?.distRemainingKm || routeResult.distKm) * 1000)} m`,
-      instruction: steps[0]?.instruction || `Head toward ${endPOI.name}`,
-      subtitle: steps[1]?.instruction || 'Safe slope gradient route active',
+      distanceText: `${Math.round((liveNavState?.distRemainingKm ?? routeResult.distKm) * 1000)} m`,
+      instruction: steps[0]?.instruction || `PROCEED TO ${endPOI.name}`,
+      subtitle: steps[1]?.instruction || 'OPTIMAL SLOPE CONTOUR LOCKED',
     };
   }, [routeResult, liveNavState, hasCompletedPitStop, endPOI]);
 
-  // Start Navigation Button Click (Transitions to Android Google Maps Mode!)
+  // Actions
+  const triggerLocateAstronaut = (zoomLevel = 14.5) => {
+    setFollowAstronaut(true);
+    setLocatePulse({
+      timestamp: Date.now(),
+      zoom: zoomLevel,
+      showWave: true,
+    });
+    const lat = liveNavState?.currentLatLon ? liveNavState.currentLatLon[0] : startPOI.lat;
+    const lon = liveNavState?.currentLatLon ? liveNavState.currentLatLon[1] : startPOI.lon;
+    const elev = estimateElev(lat, lon);
+    showToast({
+      id: 'gps-lock',
+      type: 'info',
+      title: 'GPS FIX LOCKED',
+      message: `${lat.toFixed(4)} N, ${lon.toFixed(4)} E // ELEV ${elev} m`,
+    });
+  };
+
+  const handleCompassReset = () => {
+    triggerLocateAstronaut(13.5);
+  };
+
   const startNavigation = () => {
-    if (startId === endId) {
+    if (startId === endId && startId !== 'custom-origin') {
       showToast({
         id: 'select-destination',
         type: 'warning',
-        title: '📍 Already At Destination',
-        message: `You are currently at ${startPOI.name}. Please select a different waypoint on the map to begin your next leg!`,
+        title: 'ORIGIN EQUALS TARGET',
+        message: `Select a different target waypoint from ${startPOI.name}.`,
       });
       return;
+    }
+    if (routeResult?.rangeStatus === 'out_of_range') {
+      showToast({
+        id: 'range-fault',
+        type: 'warning',
+        title: 'RESERVE FAULT WARNING',
+        message: 'Projected reserves below safe threshold. Starting monitored EVA walk.',
+      });
+    } else {
+      showToast({
+        id: 'nav-started',
+        type: 'info',
+        title: 'EVA TRAVERSE INITIATED',
+        message: `${startPOI.name} -> ${endPOI.name} (${routeResult.distKm} km) // HDG ${liveNavState?.heading || 0} deg`,
+      });
     }
     setNavMode('navigating');
     setNavPlaying(true);
     setFollowAstronaut(true);
     triggerLocateAstronaut(14.5);
-    showToast({
-      id: 'nav-started',
-      type: 'info',
-      title: '🚀 Marswalk Navigation Started',
-      message: `Navigating from ${startPOI.name} to ${endPOI.name} (${routeResult.distKm} km). Heading ${liveNavState?.heading || 0}°.`,
-    });
   };
 
   const stopNavigation = () => {
@@ -666,24 +925,35 @@ export default function App() {
 
   const triggerShelterDivert = () => {
     const shelterId = nearestShelter?.station?.id || 'hab-alpha';
-    if (endId === shelterId) {
-      setStartId(startId === shelterId ? 'three-forks' : startId);
-    } else {
-      setStartId(endId);
-      setEndId(shelterId);
+    setCustomOriginCoord(null);
+    setCustomDestCoord(null);
+    if (astronautLocId === shelterId) {
+      showToast({
+        id: 'at-shelter',
+        type: 'success',
+        title: 'SHELTER OCCUPANCY CONFIRMED',
+        message: `Already stationed at pressurized habitat ${nearestShelter.station.name}.`,
+      });
+      return;
     }
+    setStartId(astronautLocId);
+    setEndId(shelterId);
     setLoadoutKey('light');
     setAutoChargingStop(true);
+    setNavMode('browse');
+    setNavStepIdx(0);
+    setNavPlaying(false);
     showToast({
       id: 'shelter-divert',
       type: 'warning',
-      title: '⚡ Route Diverted to Shelter',
-      message: `Emergency evacuation plotted to ${nearestShelter.station.name} (${nearestShelter.distKm} km).`,
+      title: 'DIVERT PLOTTED TO SHELTER',
+      message: `Course laid to ${nearestShelter.station.name} (${nearestShelter.distKm} km).`,
     });
   };
 
-  // Quick Preset Simulator Mode Applier
-  const applyPreset = (sId, eId, lKey, wKey, batPct, o2Pct, solPreview, lstMin = 705) => {
+  const applyPreset = (sId, eId, lKey, wKey, batPct, o2Pct, lstMin = 705) => {
+    setCustomOriginCoord(null);
+    setCustomDestCoord(null);
     setAstronautLocId(sId);
     setStartId(sId);
     setEndId(eId);
@@ -692,7 +962,6 @@ export default function App() {
     setStartBatteryPct(batPct);
     setStartO2Pct(o2Pct);
     setAutoChargingStop(true);
-    setSelectedSol(solPreview);
     setStartLstMinutes(lstMin);
     setNavStepIdx(0);
     setNavPlaying(false);
@@ -701,1578 +970,1484 @@ export default function App() {
     setShowDustRadarCard(true);
     showToast({
       id: 'preset-applied',
-      type: 'info',
-      title: `Scenario Applied`,
-      message: `${wKey === 'dust_storm' ? '🌪 Regional Dust Storm' : wKey === 'solar_storm' ? '⚡ Solar Flare' : '☀️ Nominal Sol'} • ${batPct}% Battery.`,
+      type: wKey === 'nominal' ? 'info' : 'warning',
+      title: `SCENARIO: ${WEATHER_CONDITIONS[wKey].label.toUpperCase()}`,
+      message: `BAT ${batPct}% // O2 ${o2Pct}% // ${LOADOUT_PROFILES[lKey].name.toUpperCase()}`,
     });
   };
 
-  // Navigate directly to a target POI starting from current astronaut position!
   const handleNavigateToPOI = (targetId) => {
     const targetPOI = findPOIOrLandmark(targetId);
     if (!targetPOI) return;
 
-    if (targetPOI.id === astronautLocId || (astronautLocId === 'hab-alpha' && targetPOI.id === 'landing_site')) {
+    if (
+      targetPOI.id === astronautLocId ||
+      (astronautLocId === 'hab-alpha' && targetPOI.id === 'landing_site')
+    ) {
       showToast({
         id: 'already-here',
         type: 'info',
-        title: `📍 Current Position: ${targetPOI.name}`,
-        message: `You are already here. Tap another waypoint on the map to navigate from ${targetPOI.name}.`,
+        title: `CURRENT SITE: ${targetPOI.name.toUpperCase()}`,
+        message: 'Select a different waypoint to plot next leg.',
       });
       return;
     }
 
-    // Always start from where the astronaut currently is!
+    setCustomOriginCoord(null);
+    setCustomDestCoord(null);
     setStartId(astronautLocId);
     setEndId(targetPOI.id);
-    setSelectedSol(targetPOI.sol || 3);
     setNavMode('browse');
     setNavStepIdx(0);
     setNavPlaying(false);
+    setFlyToTarget({ latLon: [targetPOI.lat, targetPOI.lon], zoom: 13.5, timestamp: Date.now() });
     showToast({
       id: 'route-set',
       type: 'info',
-      title: `🧭 Route Plotted: Next Leg`,
-      message: `Starting from ${findPOIOrLandmark(astronautLocId)?.name || 'Current Position'} ➔ ${targetPOI.name}`,
+      title: 'TRAVERSE LEG PLOTTED',
+      message: `${findPOIOrLandmark(astronautLocId)?.name || 'Origin'} -> ${targetPOI.name}`,
     });
   };
 
-  // Set any POI as the new starting origin / current location
   const handleSetOrigin = (poiId) => {
     const target = findPOIOrLandmark(poiId);
     const resolvedId = target?.id || poiId;
+    setCustomOriginCoord(null);
     setAstronautLocId(resolvedId);
     setStartId(resolvedId);
     setNavStepIdx(0);
     setNavPlaying(false);
     setNavMode('browse');
+    if (target) {
+      setFlyToTarget({ latLon: [target.lat, target.lon], zoom: 13.8, timestamp: Date.now() });
+    }
     showToast({
       id: 'origin-updated',
       type: 'info',
-      title: `📍 Origin Updated`,
-      message: `Current location set to ${target?.name || resolvedId}.`,
+      title: 'ORIGIN BASE UPDATED',
+      message: `Origin locked to ${target?.name || resolvedId}.`,
     });
   };
 
-  // Swap starting origin and destination
   const handleSwapEndpoints = () => {
     const prevStart = startId;
     const prevEnd = endId;
-    setStartId(prevEnd);
-    setEndId(prevStart);
+    const prevOrigCoord = customOriginCoord;
+    const prevDestCoord = customDestCoord;
+
+    setCustomOriginCoord(prevDestCoord);
+    setCustomDestCoord(prevOrigCoord);
+    setStartId(prevEnd === 'custom-dest' ? 'custom-origin' : prevEnd);
+    setEndId(prevStart === 'custom-origin' ? 'custom-dest' : prevStart);
     setAstronautLocId(prevEnd);
     setNavStepIdx(0);
     setNavPlaying(false);
     setNavMode('browse');
+
+    const startLabel = findPOIOrLandmark(prevEnd)?.name || 'Origin';
+    const endLabel = findPOIOrLandmark(prevStart)?.name || 'Target';
     showToast({
       id: 'endpoints-swapped',
       type: 'info',
-      title: `⇄ Direction Inverted`,
-      message: `Routing from ${sciencePOIs.find((p) => p.id === prevEnd)?.name} to ${sciencePOIs.find((p) => p.id === prevStart)?.name}.`,
+      title: 'VECTORS INVERTED',
+      message: `${startLabel} -> ${endLabel}`,
     });
   };
 
-  // High-Impact Animated Locate & Fly-To Zoom Action!
-  const triggerLocateAstronaut = (zoomLevel = 15) => {
-    setFollowAstronaut(true);
-    setLocatePulse({
-      timestamp: Date.now(),
-      zoom: zoomLevel,
-      showWave: true,
-    });
-    setShowLocationPinTag(true);
-    setTimeout(() => setShowLocationPinTag(false), 4200);
-
-    const lat = liveNavState?.currentLatLon ? liveNavState.currentLatLon[0] : startPOI.lat;
-    const lon = liveNavState?.currentLatLon ? liveNavState.currentLatLon[1] : startPOI.lon;
-
+  const handleApplyCoordinateVectors = () => {
+    const oLat = parseFloat(originLatInput);
+    const oLon = parseFloat(originLonInput);
+    const dLat = parseFloat(destLatInput);
+    const dLon = parseFloat(destLonInput);
+    if ([oLat, oLon, dLat, dLon].some((n) => Number.isNaN(n))) {
+      showToast({
+        id: 'coord-err',
+        type: 'warning',
+        title: 'COORDINATE PARSE FAULT',
+        message: 'Enter valid decimal degrees for origin and target.',
+      });
+      return;
+    }
+    setCustomOriginCoord([oLat, oLon]);
+    setCustomDestCoord([dLat, dLon]);
+    setStartId('custom-origin');
+    setEndId('custom-dest');
+    setAstronautLocId('custom-origin');
+    setFlyToTarget({ latLon: [(oLat + dLat) / 2, (oLon + dLon) / 2], zoom: 12.5, timestamp: Date.now() });
     showToast({
-      id: 'gps-lock',
+      id: 'coord-applied',
       type: 'info',
-      title: '🎯 GPS Location Locked & Zoomed In',
-      message: `Astronaut position: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E (Elev ${endPOI.elev}m).`,
+      title: 'CUSTOM COORDINATE TRAVERSE',
+      message: `${oLat.toFixed(4)}, ${oLon.toFixed(4)} -> ${dLat.toFixed(4)}, ${dLon.toFixed(4)}`,
     });
   };
 
-  // Interactive Compass Button Click (Re-aligns North + Centers Camera + Locates)
-  const handleCompassClick = () => {
-    setCompassRotation((r) => r + 360);
-    triggerLocateAstronaut(14.5);
+  const handleQuickLandmarkClick = (lm) => {
+    setSelectedQuickLandmarkId(lm.id);
+    setFlyToTarget({ latLon: lm.coords, zoom: 14, timestamp: Date.now() });
     showToast({
-      id: 'compass-realign',
+      id: `lm-${lm.id}`,
       type: 'info',
-      title: '🧭 Compass Re-aligned to North',
-      message: `Camera locked to true Martian North (0° azimuth).`,
+      title: `SECTOR FOCUS: ${lm.name.toUpperCase()}`,
+      message: `${lm.coords[0].toFixed(4)} N, ${lm.coords[1].toFixed(4)} E // ELEV ${lm.elevation_m} m`,
     });
   };
 
-  const toggleLayer = (key) => {
-    setLayers((prev) => ({ ...prev, [key]: !prev[key] }));
+  // Polygon Exclusion Draw Actions
+  const activateDrawMode = (type) => {
+    setActiveDrawMode((prev) => {
+      const next = prev === type ? null : type;
+      setDrawVertices([]);
+      if (next) {
+        showToast({
+          id: 'draw-start',
+          type: 'info',
+          title: `DRAW MODE: ${APP_THEME.hazards[next].label}`,
+          message: 'Click map to place 3 or more polygon vertices, then press FINISH ZONE.',
+        });
+      }
+      return next;
+    });
   };
+
+  const handleAddDrawVertex = (latlng) => {
+    setDrawVertices((prev) => [...prev, latlng]);
+  };
+
+  const handleFinishPolygon = () => {
+    if (!activeDrawMode || drawVertices.length < 3) {
+      showToast({
+        id: 'draw-min',
+        type: 'warning',
+        title: 'INSUFFICIENT VERTICES',
+        message: 'Place at least 3 vertices on the map before closing the polygon.',
+      });
+      return;
+    }
+    const newZone = {
+      id: `ZONE-${String(drawnZones.length + 1).padStart(2, '0')}-${Date.now().toString().slice(-3)}`,
+      type: activeDrawMode,
+      latlngs: drawVertices,
+    };
+    setDrawnZones((prev) => [...prev, newZone]);
+    setDrawVertices([]);
+    setActiveDrawMode(null);
+    showToast({
+      id: 'draw-done',
+      type: newZone.type === 'safe' ? 'success' : 'warning',
+      title: `${APP_THEME.hazards[newZone.type].label} COMMITTED`,
+      message: 'A* cost grid recalculated around updated geometry.',
+    });
+  };
+
+  const handleCancelPolygon = () => {
+    setActiveDrawMode(null);
+    setDrawVertices([]);
+  };
+
+  const handleDeleteZone = (zoneId) => {
+    setDrawnZones((prev) => prev.filter((z) => z.id !== zoneId));
+    showToast({
+      id: 'zone-removed',
+      type: 'info',
+      title: 'EXCLUSION ZONE REMOVED',
+      message: `Zone ${zoneId} purged from cost grid.`,
+    });
+  };
+
+  const handleClearAllZones = () => {
+    setDrawnZones([]);
+    setDrawVertices([]);
+    setActiveDrawMode(null);
+    showToast({
+      id: 'zones-cleared',
+      type: 'info',
+      title: 'ALL EXCLUSION ZONES PURGED',
+      message: 'Cost grid restored to baseline orbital hazard layers.',
+    });
+  };
+
+  // Mission Exports (GeoJSON + TXT Telemetry Report)
+  const exportTraverseGeoJSON = () => {
+    const features = [];
+    if (routeResult?.pathCoords?.length) {
+      features.push({
+        type: 'Feature',
+        properties: {
+          name: `${startPOI.name} -> ${endPOI.name}`,
+          distance_km: routeResult.distKm,
+          eta_min: routeResult.durationMin,
+          loadout: loadout.name,
+          weather: weather.label,
+          viability: routeResult.viabilityScore,
+        },
+        geometry: {
+          type: 'LineString',
+          coordinates: routeResult.pathCoords.map(([lat, lon]) => [lon, lat]),
+        },
+      });
+    }
+    drawnZones.forEach((z) => {
+      features.push({
+        type: 'Feature',
+        properties: { id: z.id, zoneType: z.type, label: APP_THEME.hazards[z.type]?.label },
+        geometry: {
+          type: 'Polygon',
+          coordinates: [[...z.latlngs, z.latlngs[0]].map(([lat, lon]) => [lon, lat])],
+        },
+      });
+    });
+
+    const blob = new Blob([JSON.stringify({ type: 'FeatureCollection', features }, null, 2)], {
+      type: 'application/geo+json',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `jezero_traverse_sol${selectedMissionSol}.geojson`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast({
+      id: 'export-geojson',
+      type: 'success',
+      title: 'GEOJSON EXPORTED',
+      message: `Exported traverse and ${drawnZones.length} custom zone(s).`,
+    });
+  };
+
+  const exportMissionReport = () => {
+    const lines = [
+      '============================================================',
+      'DALIL MARS // JEZERO-NILI SURFACE NAVIGATION TELEMETRY REPORT',
+      '============================================================',
+      `MISSION SOL       : ${selectedMissionSol}`,
+      `LOCAL SOLAR TIME  : ${martianEnv.lstText}`,
+      `ORIGIN            : ${startPOI.name} (${startPOI.lat.toFixed(5)} N, ${startPOI.lon.toFixed(5)} E)`,
+      `TARGET            : ${endPOI.name} (${endPOI.lat.toFixed(5)} N, ${endPOI.lon.toFixed(5)} E)`,
+      `LOADOUT PROFILE   : ${loadout.name} (${loadout.speedKmh} km/h)`,
+      `WEATHER STATE     : ${weather.label}`,
+      `TRAVERSE DISTANCE : ${routeResult.distKm} km`,
+      `ESTIMATED ETA     : ${routeResult.durationMin} min`,
+      `ELEVATION RANGE   : ${routeResult.minElevationM} m to ${routeResult.maxElevationM} m (+${routeResult.elevGainM} m gain)`,
+      `MAX GRADE SLOPE   : ${routeResult.maxSlopeAlongPath} deg`,
+      `HAZARD CROSSINGS  : ${routeResult.hazardCrossings}`,
+      `VIABILITY INDEX   : ${routeResult.viabilityScore}%`,
+      `PROJECTED BAT END : ${routeResult.finalArrivalBattery}%`,
+      `PROJECTED O2 END  : ${routeResult.finalArrivalO2}%`,
+      `CUSTOM ZONES      : ${drawnZones.length}`,
+      '============================================================',
+    ].join('\n');
+
+    const blob = new Blob([lines], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `jezero_telemetry_sol${selectedMissionSol}.txt`;
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast({
+      id: 'export-txt',
+      type: 'success',
+      title: 'TELEMETRY LOG EXPORTED',
+      message: `Saved jezero_telemetry_sol${selectedMissionSol}.txt.`,
+    });
+  };
+
+  // Derived Telemetry Readouts for Bottom Bar
+  const curBat = Math.round(liveNavState?.currentBattery ?? startBatteryPct);
+  const curO2 = Math.round(liveNavState?.currentO2 ?? startO2Pct);
+  const curSlope = routeResult?.maxSlopeAlongPath ?? 0;
+  const gcrFlux = weatherKey === 'solar_storm' ? '2.40 mSv/d' : '0.67 mSv/d';
+  const clo4Pct = cursorTelemetry.hazardLabel.includes('CHEMICAL') ? '0.84 wt%' : '0.21 wt%';
+  const isNavFault = routeResult?.rangeStatus === 'out_of_range' || weatherKey !== 'nominal';
 
   return (
-    <div className="relative h-screen w-screen overflow-hidden bg-slate-950 font-sans text-slate-100 select-none">
-      {/* 1. FULL-BLEED MARTIAN LEAFLET MAP CANVAS */}
-      <div className="absolute inset-0 z-0">
-        <JezeroTacticalMap
-          waypoints={waypointsData}
-          sciencePOIs={sciencePOIs}
-          hazardZones={hazardZones}
-          layers={layers}
-          routeResult={routeResult}
-          startPOI={startPOI}
-          endPOI={endPOI}
-          showDirectComparison={showDirectComparison}
-          weatherCondition={weatherKey}
-          liveNavState={liveNavState}
-          followAstronaut={followAstronaut}
-          locatePulse={locatePulse}
-          dustFrontState={dustFrontState}
-          solarPhase={martianEnv.solarPhase}
-          astronautLocId={astronautLocId}
-          basemap={basemap}
-          reliefBlend={reliefBlend}
-          landmarks={landmarksData}
-          onSelectPOI={(poi) => {
-            handleNavigateToPOI(poi.id);
-            handleOpenPanorama(poi.id);
-          }}
-          onSelectWaypointSol={(sol) => {
-            setSelectedSol(sol);
-          }}
-          onOpenPanorama={handleOpenPanorama}
-          onNavigateToPOI={handleNavigateToPOI}
-          onSetOrigin={handleSetOrigin}
-          onSelectLandmark={(lm) => {
-            const match = typeof lm === 'object' ? lm : landmarksData.find((l) => l.id === lm);
-            setActiveLandmark(match || null);
-          }}
-        />
-      </div>
-
-      {/* 2. LIVE ANDROID HEADS-UP NOTIFICATION POPUP */}
-      {activeToast && (
-        <div className="android-toast-slide absolute top-4 left-1/2 z-[1000] w-[92%] max-w-md -translate-x-1/2">
-          <div
-            className={`flex items-start justify-between gap-3 rounded-2xl border p-3.5 shadow-2xl backdrop-blur-xl ${
-              activeToast.type === 'warning'
-                ? 'bg-amber-950/95 border-amber-400 text-amber-100 shadow-amber-900/50'
-                : activeToast.type === 'charge'
-                ? 'bg-emerald-950/95 border-emerald-400 text-emerald-100 shadow-emerald-900/50'
-                : activeToast.type === 'success'
-                ? 'bg-cyan-950/95 border-cyan-400 text-cyan-100 shadow-cyan-900/50'
-                : 'bg-slate-900/95 border-slate-700 text-slate-100 shadow-black/60'
-            }`}
-          >
-            <div className="flex items-start gap-3">
-              <div className="mt-0.5 rounded-xl bg-white/10 p-2">
-                {activeToast.type === 'warning' ? (
-                  <AlertTriangle className="h-5 w-5 text-amber-400 animate-pulse" />
-                ) : activeToast.type === 'charge' ? (
-                  <Zap className="h-5 w-5 text-yellow-400 animate-bounce" />
-                ) : (
-                  <CheckCircle2 className="h-5 w-5 text-cyan-400" />
-                )}
-              </div>
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider">{activeToast.title}</div>
-                <div className="text-[11px] leading-relaxed opacity-90 mt-0.5">{activeToast.message}</div>
-              </div>
-            </div>
-            <button
-              onClick={() => setActiveToast(null)}
-              className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-            </button>
+    <div className="h-screen w-screen flex flex-col overflow-hidden bg-[#0b0d11] text-[#edf0f5] font-sans select-none">
+      {/* 1. TOP SYSTEM STATUS & COMMAND BAR */}
+      <header className="shrink-0 min-h-[46px] bg-[#13161c] border-b border-[#242933] px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 z-30">
+        {/* System Identity & Solid Status Indicators */}
+        <div className="flex items-center gap-3 flex-wrap">
+          <div className="flex items-center gap-2 font-mono text-xs font-bold tracking-wider text-[#edf0f5]">
+            <span className="w-2 h-2 rounded-full bg-[#22c55e] shrink-0" />
+            <span>DALIL MARS // JEZERO TERMINAL</span>
           </div>
-        </div>
-      )}
 
-      {/* 3. FLOATING ANIMATED "YOU ARE HERE" LOCATION TAG POPUP (Triggered on Pin/Compass Click) */}
-      {showLocationPinTag && (
-        <div className="location-tag-popup absolute bottom-32 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 rounded-2xl bg-cyan-950/95 border-2 border-cyan-400 px-4 py-2.5 text-xs font-mono font-bold text-cyan-200 shadow-2xl backdrop-blur-xl">
-          <div className="h-3 w-3 rounded-full bg-cyan-400 animate-ping" />
-          <MapPin className="h-4 w-4 text-cyan-300" />
-          <span>
-            📍 ASTRONAUT GPS LOCKED: {liveNavState?.currentLatLon ? `${liveNavState.currentLatLon[0].toFixed(4)}°N, ${liveNavState.currentLatLon[1].toFixed(4)}°E` : '18.4446°N, 77.4509°E'}
-          </span>
-          <span className="text-slate-400">•</span>
-          <span className="text-emerald-300 font-extrabold">ZOOM 15X</span>
-        </div>
-      )}
-
-      {/* 4. PREDICTIVE DUST STORM RADAR & CLOSING METRIC CARD */}
-      {dustFrontState.active && showDustRadarCard && (
-        <div className="squall-card-slide absolute top-36 left-3.5 z-30 w-84 sm:w-92 rounded-2xl bg-slate-900/95 border-2 border-orange-500/80 p-3.5 shadow-2xl backdrop-blur-xl space-y-2.5">
-          <div className="flex items-center justify-between border-b border-orange-500/40 pb-2">
-            <span className="text-xs font-black uppercase text-orange-400 flex items-center gap-1.5 font-mono">
-              <Wind className="h-4 w-4 animate-spin text-orange-400" /> PREDICTIVE SQUALL RADAR
+          <div className="hidden lg:flex items-center gap-3 pl-3 border-l border-[#242933] font-mono text-[11px] text-[#9da5b4]">
+            <span className="inline-flex items-center gap-1.5">
+              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
+              <span>SYS: NOMINAL</span>
             </span>
-            <button
-              onClick={() => setShowDustRadarCard(false)}
-              className="p-1 rounded-md text-orange-400 hover:text-white cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <span className="inline-flex items-center gap-1.5">
+              <span className={`w-1.5 h-1.5 rounded-full ${isNavFault ? 'bg-[#ef4444]' : 'bg-[#22c55e]'}`} />
+              <span>NAV: {navPlaying ? 'EVA ACTIVE' : isNavFault ? 'ALERT' : 'FIX 3D'}</span>
+            </span>
+            <span>SOL {selectedMissionSol}</span>
+            <span>{martianEnv.lstText}</span>
+            <span className={curBat < 25 ? 'text-[#ef4444] font-bold' : 'text-[#22c55e] font-bold'}>
+              BAT {curBat}%
+            </span>
+            <span className={curO2 < 25 ? 'text-[#ef4444] font-bold' : 'text-[#edf0f5] font-bold'}>
+              O2 {curO2}%
+            </span>
           </div>
+        </div>
 
-          <div className="flex items-baseline justify-between bg-gradient-to-r from-orange-950/80 to-amber-950/80 p-3 rounded-xl border border-orange-500/40">
-            <div>
-              <div className="text-[10px] text-orange-300 uppercase font-mono font-bold">Squall Front Impact In</div>
-              <div className="text-3xl font-black text-amber-300 font-mono flex items-baseline gap-1 mt-0.5">
-                <span>~{dustFrontState.etaMin}</span>
-                <span className="text-xs font-sans font-bold text-orange-200">min</span>
-              </div>
-            </div>
-            <div className="text-right">
-              <div className="text-[10px] text-orange-300 uppercase font-mono">Closing Distance</div>
-              <div className="text-xl font-black text-white font-mono mt-0.5">{dustFrontState.distanceAheadKm} km</div>
-              <div className="text-[9px] text-orange-300 font-mono">ahead on route</div>
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
-            <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800">
-              <span className="text-slate-400 block font-bold">BAROMETER RATE</span>
-              <span className="text-red-400 font-bold text-[11px]">▼ -2.8 Pa/min (Falling)</span>
-            </div>
-            <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800">
-              <span className="text-slate-400 block font-bold">SAFE EVAC WINDOW</span>
-              <span className="text-emerald-400 font-bold text-[11px]">{Math.max(2, dustFrontState.etaMin - 5)} min remaining</span>
-            </div>
+        {/* Weather Simulation Modes & Global Quick Tools */}
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center bg-[#0b0d11] border border-[#242933] rounded-[4px] p-0.5 gap-0.5">
+            {[
+              { key: 'nominal', label: 'NOMINAL SOL', icon: Sun },
+              { key: 'dust_storm', label: 'DUST SQUALL', icon: Wind },
+              { key: 'solar_storm', label: 'SOLAR SPE', icon: ShieldAlert },
+            ].map((item) => {
+              const Icon = item.icon;
+              const isSelected = weatherKey === item.key;
+              return (
+                <button
+                  type="button"
+                  key={item.key}
+                  onClick={() => {
+                    setWeatherKey(item.key);
+                    setIncomingDustAlert(item.key === 'dust_storm');
+                    if (item.key === 'dust_storm') setShowDustRadarCard(true);
+                  }}
+                  className={`min-h-[34px] px-2.5 py-1 rounded-[4px] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer border ${
+                    isSelected
+                      ? item.key === 'nominal'
+                        ? 'bg-[#22c55e]/15 text-[#22c55e] border-[#22c55e]'
+                        : 'bg-[#ef4444]/15 text-[#ef4444] border-[#ef4444]'
+                      : 'bg-transparent text-[#9da5b4] hover:text-[#edf0f5] hover:bg-[#191d24] border-transparent'
+                  }`}
+                >
+                  <Icon className="h-3.5 w-3.5 shrink-0" />
+                  <span className="hidden sm:inline">{item.label}</span>
+                </button>
+              );
+            })}
           </div>
 
           <button
-            onClick={triggerShelterDivert}
-            className="glove-btn w-full min-h-[46px] rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black text-xs uppercase flex items-center justify-center gap-1.5 shadow-lg cursor-pointer"
+            type="button"
+            onClick={() => triggerLocateAstronaut(15)}
+            className="glove-btn min-h-[36px] px-2.5 rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer"
+            title="Lock GPS and Zoom to EVA Position"
           >
-            <Zap className="h-4 w-4" />
-            <span>DIVERT TO SHELTER ({nearestShelter.station.name.split(' ')[0]} • {nearestShelter.distKm} km)</span>
+            <Crosshair className="h-3.5 w-3.5 text-[#22c55e]" />
+            <span>LOCATE EVA</span>
           </button>
-        </div>
-      )}
-
-      {/* 5. TOP NAVIGATION HEADER (Google Maps Android Turn Card or Search Header) */}
-      <div className="absolute top-3 left-3 right-3 z-30 flex flex-col items-center pointer-events-none">
-        {navMode === 'navigating' ? (
-          /* GOOGLE MAPS ACTIVE NAVIGATION MANEUVER BANNER */
-          <div className="pointer-events-auto w-full max-w-xl rounded-2xl bg-emerald-900/95 border-2 border-emerald-400/80 p-3.5 shadow-2xl backdrop-blur-md text-slate-100 transition-all">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3">
-                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-950 border border-emerald-400/60 shadow-inner">
-                  {currentManeuver?.icon === 'charge' ? (
-                    <Zap className="h-7 w-7 text-yellow-400 animate-pulse" />
-                  ) : currentManeuver?.icon === 'arrive' ? (
-                    <MapPin className="h-7 w-7 text-emerald-400" />
-                  ) : (
-                    <Navigation2
-                      className="h-7 w-7 text-emerald-300"
-                      style={{ transform: `rotate(${liveNavState?.heading || 0}deg)` }}
-                    />
-                  )}
-                </div>
-                <div>
-                  <div className="text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
-                    <span>{currentManeuver?.distanceText}</span>
-                    <span className="text-xs font-mono font-normal text-emerald-200 uppercase bg-emerald-950/70 px-2 py-0.5 rounded-full border border-emerald-700/50">
-                      {liveNavState?.heading}° {martianEnv.lstText}
-                    </span>
-                  </div>
-                  <div className="text-xs font-semibold text-emerald-100 leading-snug line-clamp-1">
-                    {currentManeuver?.instruction}
-                  </div>
-                </div>
-              </div>
-
-              {/* Speedometer & Live Elevation */}
-              <div className="text-right font-mono shrink-0">
-                <div className="text-sm font-black text-cyan-300">
-                  {liveNavState?.speedKmh} <span className="text-[10px] font-normal text-slate-300">km/h</span>
-                </div>
-                <div className="text-[10px] text-emerald-200">{martianEnv.ambientTempC}°C</div>
-              </div>
-            </div>
-
-            {/* Next maneuver preview subtitle & Live Battery/O2 status */}
-            <div className="mt-2 pt-2 border-t border-emerald-800/80 text-[11px] text-emerald-200/90 flex items-center justify-between">
-              <span className="truncate">{currentManeuver?.subtitle}</span>
-              <div className="flex items-center gap-3 ml-2 shrink-0 font-mono text-[11px] font-bold">
-                <span className="flex items-center gap-1 text-cyan-300">
-                  <Battery className="h-3.5 w-3.5" /> {liveNavState?.currentBattery}%
-                </span>
-                <span className="flex items-center gap-1 text-emerald-300">
-                  <Droplets className="h-3.5 w-3.5" /> {liveNavState?.currentO2}%
-                </span>
-              </div>
-            </div>
-          </div>
-        ) : (
-          /* GOOGLE MAPS EXPLORE & SEARCH BAR */
-          <div className="pointer-events-auto w-full max-w-xl space-y-2">
-            <div className="flex items-center justify-between gap-2 rounded-2xl bg-[#13161c]/95 border border-[#353c4a] px-3.5 py-2.5 shadow-2xl backdrop-blur-md">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#191d24] border border-[#353c4a] text-[#22c55e] font-bold">
-                  <Compass className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-black tracking-wider uppercase text-[#edf0f5] font-mono">
-                      Dalil Mars
-                    </span>
-                    <span className="rounded bg-[#22c55e]/15 px-1.5 py-0.5 text-[9px] font-mono text-[#22c55e] border border-[#22c55e]/30">
-                      JEZERO TERMINAL
-                    </span>
-                  </div>
-                  <div className="text-[10px] font-mono text-[#9da5b4] flex items-center gap-1.5">
-                    <span>SOL {selectedMissionSol}</span>
-                    <span>•</span>
-                    <span className="text-[#22c55e] font-bold">{martianEnv.lstText}</span>
-                    <span>•</span>
-                    <span>{martianEnv.ambientTempC}°C</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Quick Trip Selector & Settings toggle */}
-              <div className="flex items-center gap-1">
-                <button
-                  onClick={() => setShowRouteOptions((v) => !v)}
-                  className={`glove-btn min-h-[40px] px-3 py-1.5 rounded-xl border text-xs font-mono font-semibold flex items-center gap-1.5 cursor-pointer ${
-                    showRouteOptions
-                      ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e] font-bold'
-                      : 'bg-[#191d24] text-[#edf0f5] border-[#353c4a] hover:bg-[#222731]'
-                  }`}
-                >
-                  <Sliders className="h-3.5 w-3.5" />
-                  <span>Route Setup</span>
-                </button>
-              </div>
-            </div>
-
-            {/* Simulation Environment Mode Selector (☀️ Nominal | 🌪 Dust Storm | ⚡ Solar Flare) */}
-            <div className="flex items-center gap-1 bg-[#13161c]/90 p-1 rounded-2xl border border-[#242933] backdrop-blur-md font-mono">
-              <button
-                onClick={() => {
-                  setWeatherKey('nominal');
-                  setIncomingDustAlert(false);
-                }}
-                className={`glove-btn flex-1 min-h-[36px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
-                  weatherKey === 'nominal'
-                    ? 'bg-[#22c55e]/20 text-[#22c55e] border border-[#22c55e]/60'
-                    : 'text-[#9da5b4] hover:text-[#edf0f5]'
-                }`}
-              >
-                <Sun className="h-3.5 w-3.5 text-[#22c55e]" />
-                <span>Nominal Sol</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setWeatherKey('dust_storm');
-                  setIncomingDustAlert(true);
-                  setShowDustRadarCard(true);
-                }}
-                className={`glove-btn flex-1 min-h-[36px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
-                  weatherKey === 'dust_storm'
-                    ? 'bg-[#ef4444]/25 text-[#ef4444] border border-[#ef4444]/60'
-                    : 'text-[#9da5b4] hover:text-[#edf0f5]'
-                }`}
-              >
-                <Wind className="h-3.5 w-3.5 text-[#ef4444]" />
-                <span>Dust Storm</span>
-              </button>
-
-              <button
-                onClick={() => {
-                  setWeatherKey('solar_storm');
-                  setIncomingDustAlert(false);
-                }}
-                className={`glove-btn flex-1 min-h-[36px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
-                  weatherKey === 'solar_storm'
-                    ? 'bg-[#ef4444]/25 text-[#ef4444] border border-[#ef4444]/60'
-                    : 'text-[#9da5b4] hover:text-[#edf0f5]'
-                }`}
-              >
-                <Zap className="h-3.5 w-3.5 text-red-400" />
-                <span>Solar Flare</span>
-              </button>
-            </div>
-
-            {/* Quick Demo Scenario Presets (All with Icons) */}
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-              <button
-                onClick={() => applyPreset('hab-alpha', 'three-forks', 'light', 'nominal', 85, 90, 680, 705)}
-                className="glove-btn whitespace-nowrap min-h-[34px] px-3 py-1 rounded-full text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-cyan-300 border border-cyan-500/40 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Target className="h-3.5 w-3.5" />
-                <span>1. Direct Sample</span>
-              </button>
-
-              <button
-                onClick={() => applyPreset('hab-alpha', 'belva-crater', 'light', 'nominal', 45, 75, 900, 720)}
-                className="glove-btn whitespace-nowrap min-h-[34px] px-3 py-1 rounded-full text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 cursor-pointer"
-              >
-                <BatteryCharging className="h-3.5 w-3.5" />
-                <span>2. Recharge Pit-Stop</span>
-              </button>
-
-              <button
-                onClick={() => applyPreset('belva-crater', 'western-rim', 'light', 'dust_storm', 85, 90, 2000, 940)}
-                className="glove-btn whitespace-nowrap min-h-[34px] px-3 py-1 rounded-full text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-orange-300 border border-orange-500/40 flex items-center gap-1.5 cursor-pointer"
-              >
-                <Wind className="h-3.5 w-3.5" />
-                <span>3. Dusk & Dust Front</span>
-              </button>
-
-              <button
-                onClick={() => applyPreset('belva-crater', 'hab-alpha', 'light', 'solar_storm', 85, 90, 2022, 705)}
-                className="glove-btn whitespace-nowrap min-h-[34px] px-3 py-1 rounded-full text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-red-300 border border-red-500/40 flex items-center gap-1.5 cursor-pointer"
-              >
-                <ShieldAlert className="h-3.5 w-3.5" />
-                <span>4. Solar Flare Abort</span>
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-
-      {/* 6. EXPANDABLE ROUTE OPTIONS MODAL */}
-      {showRouteOptions && (
-        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-lg rounded-2xl bg-slate-900/95 border-2 border-slate-700 p-4 shadow-2xl backdrop-blur-xl space-y-3.5">
-          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
-            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
-              <Sliders className="h-4 w-4" /> Trip Settings & Mobility
-            </span>
-            <button
-              onClick={() => setShowRouteOptions(false)}
-              className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer"
-            >
-              <X className="h-5 w-5" />
-            </button>
-          </div>
-
-          <div className="flex items-center gap-2 text-xs">
-            <div className="flex-1">
-              <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1">
-                Origin {startId === astronautLocId ? '📍 (Field Pos)' : ''}
-              </label>
-              <select
-                value={startId}
-                onChange={(e) => {
-                  setStartId(e.target.value);
-                  setAstronautLocId(e.target.value);
-                }}
-                className="w-full min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-slate-100"
-              >
-                {sciencePOIs.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.id === astronautLocId ? '📍 ' : ''}{p.isChargingStation ? '⚡ ' : ''}{p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-
-            <button
-              onClick={handleSwapEndpoints}
-              title="Swap Origin and Destination"
-              className="glove-btn mt-4 h-11 w-11 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-300 flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition-transform"
-            >
-              <ArrowLeftRight className="h-4 w-4" />
-            </button>
-
-            <div className="flex-1">
-              <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1">Destination</label>
-              <select
-                value={endId}
-                onChange={(e) => {
-                  setEndId(e.target.value);
-                  const p = sciencePOIs.find((item) => item.id === e.target.value);
-                  if (p) setSelectedSol(p.sol);
-                }}
-                className="w-full min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-slate-100"
-              >
-                {sciencePOIs.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.isChargingStation ? '⚡ ' : ''}{p.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          </div>
-
-          <div>
-            <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1.5">Astronaut Mobility Mode</label>
-            <div className="grid grid-cols-3 gap-1.5">
-              {Object.values(LOADOUT_PROFILES).map((prof) => (
-                <button
-                  key={prof.id}
-                  onClick={() => setLoadoutKey(prof.id)}
-                  className={`glove-btn min-h-[44px] px-2 py-1.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer ${
-                    loadoutKey === prof.id
-                      ? 'bg-cyan-500 text-slate-950 border-cyan-300 font-bold'
-                      : 'bg-slate-950 border-slate-800 text-slate-300'
-                  }`}
-                >
-                  {prof.id === 'light' ? (
-                    <User className="h-4 w-4" />
-                  ) : prof.id === 'heavy' ? (
-                    <PackageCheck className="h-4 w-4" />
-                  ) : (
-                    <Truck className="h-4 w-4" />
-                  )}
-                  <span>{prof.id === 'light' ? 'Solo Suit' : prof.id === 'heavy' ? 'Heavy Kit' : 'Rover Mule'}</span>
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div className="rounded-xl bg-slate-950/80 border border-slate-800 p-3 space-y-2.5">
-            <div className="flex justify-between text-xs text-slate-300">
-              <span className="flex items-center gap-1.5">
-                <BatteryCharging className="h-4 w-4 text-cyan-400" /> Starting Battery
-              </span>
-              <span className="font-mono font-bold text-cyan-300">{startBatteryPct}%</span>
-            </div>
-            <input
-              type="range"
-              min={15}
-              max={100}
-              value={startBatteryPct}
-              onChange={(e) => setStartBatteryPct(Number(e.target.value))}
-              className="glove-slider w-full"
-            />
-
-            <div className="flex justify-between text-xs text-slate-300 pt-1">
-              <span className="flex items-center gap-1.5">
-                <Droplets className="h-4 w-4 text-emerald-400" /> Starting PLSS Tank
-              </span>
-              <span className="font-mono font-bold text-emerald-300">{startO2Pct}%</span>
-            </div>
-            <input
-              type="range"
-              min={15}
-              max={100}
-              value={startO2Pct}
-              onChange={(e) => setStartO2Pct(Number(e.target.value))}
-              className="glove-slider w-full"
-            />
-
-            <div className="flex justify-between text-xs text-slate-300 pt-1">
-              <span className="flex items-center gap-1.5">
-                <Clock className="h-4 w-4 text-amber-400" /> Martian Departure Time
-              </span>
-              <span className="font-mono font-bold text-amber-300">{formatLst(startLstMinutes)}</span>
-            </div>
-            <input
-              type="range"
-              min={360}
-              max={1140}
-              step={15}
-              value={startLstMinutes}
-              onChange={(e) => setStartLstMinutes(Number(e.target.value))}
-              className="glove-slider w-full"
-            />
-          </div>
 
           <button
-            onClick={() => setShowRouteOptions(false)}
-            className="glove-btn w-full min-h-[46px] rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
+            type="button"
+            onClick={handleCompassReset}
+            className="glove-btn min-h-[36px] px-2.5 rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer"
+            title="Align North & Re-Center Map"
           >
-            <Check className="h-4 w-4" />
-            <span>Apply Route Settings</span>
+            <Compass className="h-3.5 w-3.5" />
+            <span className="hidden md:inline">NORTH 000</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openPanoramaModal(selectedQuickLandmarkId || endId)}
+            className="glove-btn min-h-[36px] px-2.5 rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer"
+            title="Open 360 Photosphere / Surface Imagery"
+          >
+            <Camera className="h-3.5 w-3.5" />
+            <span>VISTA / 360</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowLegendSheet(true)}
+            className="glove-btn min-h-[36px] px-2.5 rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] border border-[#353c4a] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer"
+            title="Map Symbology Legend"
+          >
+            <MapIcon className="h-3.5 w-3.5" />
+            <span className="hidden sm:inline">LEGEND</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setSidebarOpen((v) => !v)}
+            className="glove-btn min-h-[36px] px-2.5 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] text-[#edf0f5] border border-[#4f5767] font-mono text-[10px] font-bold flex items-center gap-1 cursor-pointer"
+            title="Toggle Control Side Panel"
+          >
+            {sidebarOpen ? (
+              <>
+                <ChevronRight className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">HIDE PANEL</span>
+              </>
+            ) : (
+              <>
+                <ChevronLeft className="h-3.5 w-3.5" />
+                <span className="hidden sm:inline">CONSOLE</span>
+              </>
+            )}
           </button>
         </div>
-      )}
+      </header>
 
-      {/* 7. FLOATING ACTION BUTTONS (ANDROID GOOGLE MAPS FABs ON RIGHT) */}
-      <div className="absolute right-3.5 top-36 z-20 flex flex-col items-center gap-2.5">
-        {/* Interactive Functional Compass Button (Re-aligns North + Centers + Zooms!) */}
-        <button
-          onClick={handleCompassClick}
-          title="Compass: Tap to Re-align North & Zoom in to Location"
-          className="glove-btn flex h-12 w-12 items-center justify-center rounded-2xl bg-[#13161c]/95 hover:bg-[#222731] border-2 border-[#353c4a] hover:border-[#4f5767] shadow-xl backdrop-blur-md text-[#edf0f5] font-mono text-[11px] font-bold cursor-pointer transition-all active:scale-90"
-        >
-          <Compass
-            className="h-6 w-6 transition-transform duration-500 text-[#22c55e]"
-            style={{ transform: `rotate(${compassRotation}deg)` }}
+      {/* 2. MAIN WORKSPACE (TACTICAL MAP + COLLAPSIBLE INSTRUMENT SIDEBAR) */}
+      <div className="flex-1 flex flex-col lg:flex-row relative overflow-hidden">
+        {/* LEFT/CENTER: PRIMARY MAP VIEWPORT */}
+        <main className="relative flex-1 min-h-[340px] bg-[#0b0d11] overflow-hidden">
+          <JezeroTacticalMap
+            waypoints={waypointsData}
+            sciencePOIs={sciencePOIs}
+            hazardZones={hazardZones}
+            layers={layers}
+            routeResult={routeResult}
+            startPOI={startPOI}
+            endPOI={endPOI}
+            showDirectComparison={showDirectComparison}
+            weatherCondition={weatherKey}
+            liveNavState={liveNavState}
+            followAstronaut={followAstronaut}
+            locatePulse={locatePulse}
+            flyToTarget={flyToTarget}
+            dustFrontState={dustFrontState}
+            solarPhase={martianEnv.solarPhase}
+            astronautLocId={astronautLocId}
+            basemap={basemap}
+            reliefBlend={reliefBlend}
+            landmarks={landmarksData}
+            activeDrawMode={activeDrawMode}
+            drawVertices={drawVertices}
+            drawnZones={drawnZones}
+            onOpenPanorama={(sol) => openPanoramaModal(sol)}
+            onOpenLandmarkVista={(id) => openPanoramaModal(id)}
+            onNavigateToPOI={(id) => handleNavigateToPOI(id)}
+            onSetOrigin={(id) => handleSetOrigin(id)}
+            onSelectLandmark={(lm) => {
+              if (typeof lm === 'string') {
+                const found = landmarksData.find((l) => l.id === lm);
+                if (found) setActiveLandmark(found);
+              } else {
+                setActiveLandmark(lm);
+              }
+            }}
+            onAddDrawVertex={handleAddDrawVertex}
+            onDeleteZone={handleDeleteZone}
+            onCursorMove={setCursorTelemetry}
           />
-        </button>
 
-        {/* Recenter & Animated GPS Zoom-In FAB */}
-        <button
-          onClick={() => triggerLocateAstronaut(15)}
-          title="Find My Location: Smooth Zoom-In with Radar Wave"
-          className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border-2 shadow-xl backdrop-blur-md cursor-pointer transition-all active:scale-90 ${
-            followAstronaut
-              ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e] shadow-[#22c55e]/40'
-              : 'bg-[#13161c]/95 text-[#edf0f5] border-[#353c4a] hover:bg-[#222731]'
-          }`}
-        >
-          <Crosshair className="h-6 w-6" />
-        </button>
-
-        {/* Martian "Street View" 360° POV Panorama Launcher FAB */}
-        <button
-          onClick={() => handleOpenPanorama(endId || startId)}
-          title="Open Location Photo / 360° Panorama"
-          className="glove-btn relative flex h-12 w-12 items-center justify-center rounded-2xl border-2 shadow-xl backdrop-blur-md cursor-pointer transition-all bg-[#13161c]/95 text-[#22c55e] hover:text-white border-[#353c4a] hover:border-[#22c55e] hover:bg-[#222731] active:scale-90"
-        >
-          <Camera className="h-6 w-6" />
-          <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-[#22c55e] border-2 border-[#0b0d11] animate-pulse" />
-        </button>
-
-        {/* Storm Radar Alert FAB (Toggles Predictive Metric Card) */}
-        <button
-          onClick={() => {
-            setIncomingDustAlert((v) => !v);
-            setShowDustRadarCard(true);
-          }}
-          title="Toggle Predictive Storm Radar Card"
-          className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border-2 shadow-xl backdrop-blur-md cursor-pointer transition-all ${
-            incomingDustAlert || weatherKey === 'dust_storm'
-              ? 'bg-[#ef4444] text-[#0b0d11] border-[#ef4444] animate-pulse shadow-[#ef4444]/40'
-              : 'bg-[#13161c]/95 text-[#edf0f5] border-[#353c4a] hover:bg-[#222731]'
-          }`}
-        >
-          <Wind className="h-6 w-6" />
-        </button>
-
-        {/* Map Layers Switcher FAB */}
-        <button
-          onClick={() => setShowLayersSheet((v) => !v)}
-          title="Map Types & Layers (Google Maps style)"
-          className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border-2 shadow-xl backdrop-blur-md cursor-pointer transition-all ${
-            showLayersSheet
-              ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e]'
-              : 'bg-[#13161c]/95 text-[#edf0f5] border-[#353c4a] hover:bg-[#222731]'
-          }`}
-        >
-          <Layers className="h-6 w-6" />
-        </button>
-
-        {/* Map Legend & Symbology Guide FAB */}
-        <button
-          onClick={() => setShowLegendSheet((v) => !v)}
-          title="Map Legend: What do the icons & colored dots mean?"
-          className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border-2 shadow-xl backdrop-blur-md cursor-pointer transition-all active:scale-90 ${
-            showLegendSheet
-              ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e] shadow-[#22c55e]/40'
-              : 'bg-[#13161c]/95 text-[#edf0f5] border-[#353c4a] hover:bg-[#222731]'
-          }`}
-        >
-          <Info className="h-6 w-6" />
-        </button>
-      </div>
-
-      {/* 8. FLOATING MARTIAN "STREET VIEW" PICTURE-IN-PICTURE (PIP) CARD */}
-      {showStreetViewPIP && activePOV && (
-        <div className="absolute top-28 left-4 z-40 w-72 sm:w-84 overflow-hidden rounded-2xl bg-slate-950/95 border-2 border-cyan-500/70 shadow-2xl backdrop-blur-xl transition-all">
-          <div className="flex items-center justify-between p-2.5 bg-slate-900/90 border-b border-slate-800">
-            <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5 uppercase font-mono">
-              <Camera className="h-4 w-4" /> Sol {activePOV.sol} • {activePOV.is360 ? '360° POV' : 'Vista'}
-            </span>
-            <button
-              onClick={() => setShowStreetViewPIP(false)}
-              className="p-1 rounded-md text-slate-400 hover:text-white cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-          <div
-            onClick={() => handleOpenPanorama(activePOV.poiId || activePOV.id)}
-            className="relative cursor-pointer group"
-          >
-            <img
-              src={activePOV.image || activePOV.url}
-              alt={activePOV.title}
-              className="w-full h-44 object-cover transition-transform group-hover:scale-105"
-              loading="lazy"
-            />
-            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent flex items-end p-2.5">
-              <span className="text-[11px] font-mono font-bold text-white bg-cyan-600/90 px-2 py-1 rounded-lg border border-cyan-400/50 shadow flex items-center gap-1">
-                {activePOV.is360 ? '🌐 TAP TO OPEN 360° SPHERE' : '📷 TAP TO VIEW HIGH-RES PHOTO'}
-              </span>
+          {/* HUD TOP-LEFT: QUICK 11-SITE LANDMARK SELECTOR */}
+          <div className="absolute top-2.5 left-2.5 z-[450] max-w-[260px] sm:max-w-[360px] bg-[#13161c]/95 border border-[#242933] rounded-[4px] p-1.5">
+            <div className="flex items-center justify-between px-1 pb-1 mb-1 border-b border-[#242933] font-mono text-[9.5px] font-bold text-[#656d7d] tracking-wider uppercase">
+              <span>QUICK SECTOR JUMP [11]</span>
+              {selectedQuickLandmarkId && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const found = landmarksData.find((l) => l.id === selectedQuickLandmarkId);
+                    if (found) setActiveLandmark(found);
+                  }}
+                  className="text-[#22c55e] hover:underline cursor-pointer"
+                >
+                  DOSSIER
+                </button>
+              )}
             </div>
-          </div>
-          <div className="p-2.5 text-[11px] bg-slate-950 space-y-1.5">
-            <div className="font-semibold text-slate-200 line-clamp-1">{activePOV.locationName || activePOV.title}</div>
-            <div className="text-[10px] font-mono text-cyan-400 uppercase">{activePOV.instrument || `Camera: ${activePOV.camera}`}</div>
-            <button
-              onClick={() => handleOpenPanorama(activePOV.poiId || activePOV.id)}
-              className="glove-btn w-full py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
-            >
-              <Eye className="h-3.5 w-3.5" />
-              <span>{activePOV.is360 ? 'Launch 360° Photosphere' : 'View High-Res Surface Photo'}</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 9. GOOGLE MAPS STYLE BOTTOM-LEFT BASEMAP QUICK-TOGGLE THUMBNAIL */}
-      <div className="absolute bottom-24 left-4 z-30 flex flex-col items-center gap-2">
-        <button
-          onClick={() => setBasemap((b) => (b === 'satellite' ? 'terrain' : 'satellite'))}
-          title={`Active: ${basemap.toUpperCase()} — Tap to toggle Terrain/Satellite or tap Layers button`}
-          className="group glove-btn relative flex h-14 w-14 flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-[#353c4a] bg-[#13161c] shadow-2xl transition-all hover:border-[#22c55e] active:scale-95 cursor-pointer"
-        >
-          <img
-            src={basemap === 'satellite' ? '/data/hrsc_hillshade.png' : '/data/ctx_mosaic_regional.png'}
-            alt="Basemap preview"
-            className="absolute inset-0 h-full w-full object-cover opacity-75 group-hover:scale-110 transition-transform"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-[#0b0d11]/90 via-transparent to-black/20" />
-          <span className="relative z-10 text-[9px] font-mono font-bold uppercase tracking-wider text-[#edf0f5] bg-[#13161c]/90 px-1.5 py-0.5 rounded border border-[#242933]">
-            {basemap === 'satellite' ? 'Terrain' : 'Satellite'}
-          </span>
-        </button>
-      </div>
-
-      {/* 10. GOOGLE MAPS STYLE MAP TYPES & LAYERS SHEET (When FAB or Switcher is Tapped) */}
-      {showLayersSheet && (
-        <div className="absolute right-16 top-36 z-40 w-80 max-w-[92vw] rounded-2xl bg-[#13161c]/95 border-2 border-[#353c4a] p-4 shadow-2xl backdrop-blur-xl space-y-3.5 text-[#edf0f5]">
-          <div className="flex items-center justify-between pb-2 border-b border-[#242933] text-xs font-mono font-bold uppercase tracking-wider text-[#22c55e]">
-            <span className="flex items-center gap-2">
-              <Layers className="h-4 w-4 text-[#22c55e]" /> Map Type & Layers
-            </span>
-            <button
-              onClick={() => setShowLayersSheet(false)}
-              className="p-1 rounded-md text-[#9da5b4] hover:text-white hover:bg-[#222731] cursor-pointer"
-            >
-              <X className="h-4 w-4" />
-            </button>
-          </div>
-
-          {/* Section A: Google Maps Visual Map Type Cards */}
-          <div>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-[#9da5b4] mb-2 font-bold">
-              Map Type (Jezero Regional GIS)
-            </div>
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                {
-                  id: 'satellite',
-                  name: 'Satellite',
-                  desc: 'MRO CTX 5m',
-                  img: '/data/ctx_mosaic_regional.png',
-                },
-                {
-                  id: 'terrain',
-                  name: 'Terrain',
-                  desc: 'HRSC Hillshade',
-                  img: '/data/hrsc_hillshade.png',
-                },
-                {
-                  id: 'elevation',
-                  name: 'Elevation',
-                  desc: 'Hypsometric DTM',
-                  img: '/data/hrsc_elevation_color.png',
-                },
-                {
-                  id: 'themis',
-                  name: 'Thermal IR',
-                  desc: 'THEMIS Night',
-                  img: '/data/themis_night_ir.png',
-                },
-                {
-                  id: 'default',
-                  name: 'Vector',
-                  desc: 'Carto Mars',
-                  img: null,
-                },
-              ].map((m) => {
-                const isActive = basemap === m.id;
+            <div className="flex flex-wrap gap-1 max-h-[82px] overflow-y-auto aerospace-scroll">
+              {landmarksData.map((lm) => {
+                const isSel = selectedQuickLandmarkId === lm.id;
                 return (
                   <button
-                    key={m.id}
-                    onClick={() => setBasemap(m.id)}
-                    className={`glove-btn relative flex flex-col items-center justify-between p-1.5 rounded-xl border text-center transition-all cursor-pointer ${
-                      isActive
-                        ? 'border-[#22c55e] bg-[#191d24] ring-2 ring-[#22c55e]/40 shadow-md'
-                        : 'border-[#242933] bg-[#191d24]/70 hover:border-[#353c4a] hover:bg-[#222731]'
+                    type="button"
+                    key={lm.id}
+                    onClick={() => handleQuickLandmarkClick(lm)}
+                    className={`min-h-[30px] px-2 py-0.5 rounded-[4px] border font-mono text-[10px] font-semibold cursor-pointer truncate max-w-[130px] ${
+                      isSel
+                        ? 'bg-[#2c323f] text-[#edf0f5] border-[#4f5767]'
+                        : 'bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] border-[#242933]'
                     }`}
+                    title={`${lm.name} (${lm.coords[0].toFixed(3)}N, ${lm.coords[1].toFixed(3)}E)`}
                   >
-                    <div className="w-full h-11 rounded-lg overflow-hidden relative bg-[#0b0d11] mb-1">
-                      {m.img ? (
-                        <img
-                          src={m.img}
-                          alt={m.name}
-                          className="w-full h-full object-cover"
-                        />
-                      ) : (
-                        <div className="w-full h-full flex items-center justify-center bg-[#13161c] text-[#9da5b4]">
-                          <MapIcon className="h-5 w-5" />
-                        </div>
-                      )}
-                      {isActive && (
-                        <div className="absolute top-1 right-1 h-3.5 w-3.5 rounded-full bg-[#22c55e] flex items-center justify-center text-[#0b0d11]">
-                          <Check className="h-2.5 w-2.5 stroke-[3]" />
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-[11px] font-mono font-bold leading-tight text-[#edf0f5]">
-                      {m.name}
-                    </div>
-                    <div className="text-[9px] font-mono text-[#656d7d] leading-none mt-0.5">
-                      {m.desc}
-                    </div>
+                    {lm.name.toUpperCase()}
                   </button>
                 );
               })}
             </div>
           </div>
 
-          {/* Section B: 3D Hillshade Relief Blend Slider */}
-          <div className="p-2.5 rounded-xl bg-[#191d24] border border-[#242933] space-y-1.5">
-            <div className="flex items-center justify-between text-xs font-mono">
-              <span className="text-[#9da5b4] flex items-center gap-1.5">
-                <TrendingUp className="h-3.5 w-3.5 text-[#22c55e]" />
-                <span>3D Relief Hillshade Blend</span>
-              </span>
-              <span className="text-[#22c55e] font-bold">{Math.round(reliefBlend * 100)}%</span>
+          {/* HUD TOP-RIGHT: EXCLUSION POLYGON DRAWING TOOLSET */}
+          <div className="absolute top-2.5 right-2.5 z-[450] w-[195px] bg-[#13161c]/95 border border-[#242933] rounded-[4px] p-1.5 flex flex-col gap-1">
+            <div className="px-1 pb-1 border-b border-[#242933] font-mono text-[9.5px] font-bold text-[#656d7d] tracking-wider uppercase">
+              EXCLUSION DRAW TOOLS
             </div>
-            <input
-              type="range"
-              min="0"
-              max="1"
-              step="0.05"
-              value={reliefBlend}
-              onChange={(e) => setReliefBlend(parseFloat(e.target.value))}
-              className="w-full accent-[#22c55e] cursor-pointer h-2 bg-[#0b0d11] rounded-lg"
-            />
-            <div className="flex justify-between text-[9px] font-mono text-[#656d7d]">
-              <span>Pure Imagery (0%)</span>
-              <span>50% Relief</span>
-              <span>Full Relief (100%)</span>
-            </div>
-          </div>
-
-          {/* Section C: Map Details & Overlays */}
-          <div>
-            <div className="text-[10px] font-mono uppercase tracking-wider text-[#9da5b4] mb-1.5 font-bold">
-              Map Details & Overlays
-            </div>
-            <div className="space-y-1 text-xs font-mono">
-              {[
-                { key: 'landmarks', label: 'Landmarks & Science Sites (11 Sites)', icon: <Target className="h-3.5 w-3.5 text-[#22c55e]" /> },
-                { key: 'slope', label: 'Slope Safety Heatmap', icon: <TrendingUp className="h-3.5 w-3.5 text-emerald-400" /> },
-                { key: 'hazards', label: 'Terrain Hazards (Sand/Cliffs)', icon: <AlertTriangle className="h-3.5 w-3.5 text-[#ef4444]" /> },
-                { key: 'science', label: 'Bases & Virtual Chargers', icon: <Zap className="h-3.5 w-3.5 text-amber-400" /> },
-                { key: 'traverse', label: 'Perseverance Rover Track', icon: <Navigation className="h-3.5 w-3.5 text-[#edf0f5]" /> },
-              ].map((item) => (
-                <label
-                  key={item.key}
-                  className="flex items-center justify-between min-h-[38px] px-2.5 py-1 rounded-xl bg-[#191d24] border border-[#242933] hover:bg-[#222731] cursor-pointer"
-                >
-                  <span className="flex items-center gap-2 text-[#edf0f5]">
-                    {item.icon}
-                    <span className="text-[11px]">{item.label}</span>
-                  </span>
-                  <input
-                    type="checkbox"
-                    checked={Boolean(layers[item.key])}
-                    onChange={() => toggleLayer(item.key)}
-                    className="w-4 h-4 accent-[#22c55e] rounded cursor-pointer"
-                  />
-                </label>
-              ))}
-            </div>
-          </div>
-
-          {/* Section D: Map Legend & Symbology Link */}
-          <div className="pt-2 border-t border-[#242933]">
-            <button
-              onClick={() => {
-                setShowLayersSheet(false);
-                setShowLegendSheet(true);
-              }}
-              className="glove-btn w-full min-h-[40px] py-1.5 rounded-xl bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#edf0f5] font-mono font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
-            >
-              <Info className="h-4 w-4 text-[#22c55e]" />
-              <span>Map Legend & Symbology Guide</span>
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* 11. BOTTOM GOOGLE MAPS NAVIGATION & TRIP BAR */}
-      <div className="absolute bottom-3 left-3 right-3 z-30 flex flex-col items-center">
-        {/* Quick Map Legend Pill on Canvas */}
-        <div className="w-full max-w-xl flex items-center justify-between mb-1.5 px-1 pointer-events-auto">
-          <button
-            onClick={() => setShowLegendSheet((v) => !v)}
-            className="glove-btn px-3 py-1.5 rounded-xl bg-[#13161c]/90 hover:bg-[#222731] border border-[#353c4a] text-[11px] font-mono text-[#edf0f5] flex items-center gap-1.5 shadow-lg backdrop-blur-md cursor-pointer active:scale-95 transition-transform"
-          >
-            <Info className="h-3.5 w-3.5 text-[#22c55e]" />
-            <span>Map Legend ({showLegendSheet ? 'Close' : 'Icons & Dots Guide'})</span>
-          </button>
-        </div>
-
-        <div className="w-full max-w-xl rounded-2xl bg-[#13161c]/95 border border-[#353c4a] shadow-2xl backdrop-blur-xl overflow-hidden transition-all text-[#edf0f5]">
-          {navMode === 'navigating' ? (
-            /* ACTIVE NAVIGATION CONTROLS (Google Maps Android Drive Bar) */
-            <div className="p-3.5 space-y-3">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-2xl font-black text-[#22c55e] font-mono flex items-baseline gap-1.5">
-                    <span>{liveNavState?.estTimeRemainingMin}</span>
-                    <span className="text-xs font-sans font-bold text-[#9da5b4]">min</span>
-                  </div>
-                  <div className="text-xs text-[#9da5b4] flex items-center gap-2 font-mono">
-                    <span>{liveNavState?.distRemainingKm} km remaining</span>
-                    <span>•</span>
-                    <span className="text-[#22c55e] font-bold">Sol {selectedMissionSol}</span>
-                  </div>
-                </div>
-
-                {/* Big Live Suit/Rover Battery & O2 Status Gauges */}
-                <div className="flex items-center gap-3">
-                  <div className="rounded-xl bg-[#0b0d11] p-2 border border-[#242933] text-right min-w-[95px]">
-                    <div className="flex items-center justify-end gap-1 text-[10px] text-[#9da5b4] font-mono">
-                      <Battery className={`h-3.5 w-3.5 ${liveNavState?.currentBattery < 25 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`} />
-                      <span>BATTERY</span>
-                    </div>
-                    <div className={`text-sm font-black font-mono ${liveNavState?.currentBattery < 25 ? 'text-[#ef4444]' : 'text-[#edf0f5]'}`}>
-                      {liveNavState?.currentBattery}%
-                    </div>
-                    <div className="w-full h-1.5 bg-[#191d24] rounded-full overflow-hidden mt-0.5">
-                      <div
-                        className={`h-full ${liveNavState?.currentBattery < 25 ? 'bg-[#ef4444]' : 'bg-[#22c55e]'}`}
-                        style={{ width: `${liveNavState?.currentBattery}%` }}
-                      />
-                    </div>
-                  </div>
-
-                  <div className="rounded-xl bg-[#0b0d11] p-2 border border-[#242933] text-right min-w-[95px]">
-                    <div className="flex items-center justify-end gap-1 text-[10px] text-[#9da5b4] font-mono">
-                      <Droplets className="h-3.5 w-3.5 text-[#22c55e]" />
-                      <span>PLSS TANK</span>
-                    </div>
-                    <div className="text-sm font-black font-mono text-[#edf0f5]">
-                      {liveNavState?.currentO2}%
-                    </div>
-                    <div className="w-full h-1.5 bg-[#191d24] rounded-full overflow-hidden mt-0.5">
-                      <div
-                        className="h-full bg-[#22c55e]"
-                        style={{ width: `${liveNavState?.currentO2}%` }}
-                      />
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Big Glove-Friendly Android Action Buttons (All with Icons) */}
-              <div className="grid grid-cols-4 gap-2 pt-1 font-mono">
+            {Object.entries(APP_THEME.hazards).map(([zoneKey, cfg]) => {
+              const isDrawingThis = activeDrawMode === zoneKey;
+              const isSafe = zoneKey === 'safe';
+              return (
                 <button
-                  onClick={() => setNavPlaying((p) => !p)}
-                  className={`glove-btn col-span-2 min-h-[52px] rounded-xl text-[#0b0d11] font-black text-sm uppercase flex items-center justify-center gap-2 cursor-pointer shadow-lg transition-colors ${
-                    navPlaying ? 'bg-amber-400 hover:bg-amber-300' : 'bg-[#22c55e] hover:bg-[#16a34a]'
+                  type="button"
+                  key={zoneKey}
+                  onClick={() => activateDrawMode(zoneKey)}
+                  className={`min-h-[32px] px-2 py-1 rounded-[4px] border font-mono text-[10px] font-bold flex items-center gap-2 cursor-pointer text-left ${
+                    isDrawingThis
+                      ? 'bg-[#2c323f] text-[#edf0f5] border-[#edf0f5]'
+                      : 'bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] border-[#242933]'
                   }`}
                 >
-                  {navPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-                  <span>{navPlaying ? 'Pause Walk' : 'Resume Walk'}</span>
+                  <span
+                    className={`w-2 h-2 rounded-full shrink-0 ${
+                      isSafe ? 'bg-[#22c55e]' : 'bg-[#ef4444]'
+                    }`}
+                  />
+                  <span className="truncate">{cfg.label}</span>
                 </button>
+              );
+            })}
 
-                <button
-                  onClick={() => setNavSpeed((s) => (s === 1 ? 3 : 1))}
-                  className="glove-btn min-h-[52px] rounded-xl bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] font-mono font-bold text-xs border border-[#353c4a] flex flex-col items-center justify-center cursor-pointer"
-                >
-                  <Gauge className="h-4 w-4 mb-0.5 text-[#22c55e]" />
-                  <span>{navSpeed}x Speed</span>
-                </button>
-
-                <button
-                  onClick={stopNavigation}
-                  className="glove-btn min-h-[52px] rounded-xl bg-[#191d24] hover:bg-[#ef4444]/20 border border-[#ef4444]/50 text-[#ef4444] font-bold text-xs flex flex-col items-center justify-center cursor-pointer"
-                >
-                  <LogOut className="h-4 w-4 mb-0.5 text-[#ef4444]" />
-                  <span>Exit</span>
-                </button>
+            {activeDrawMode && (
+              <div className="mt-1 pt-1 border-t border-[#242933] space-y-1">
+                <div className="font-mono text-[9.5px] text-[#edf0f5] px-1">
+                  VERTICES PLACED: {drawVertices.length}
+                </div>
+                <div className="grid grid-cols-2 gap-1">
+                  <button
+                    type="button"
+                    onClick={handleFinishPolygon}
+                    disabled={drawVertices.length < 3}
+                    className="min-h-[32px] rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] disabled:bg-[#222731] disabled:text-[#656d7d] text-[#0b0d11] font-mono text-[10px] font-bold cursor-pointer border border-[#22c55e] disabled:border-[#353c4a]"
+                  >
+                    FINISH
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleCancelPolygon}
+                    className="min-h-[32px] rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#ef4444] font-mono text-[10px] font-bold cursor-pointer border border-[#353c4a]"
+                  >
+                    CANCEL
+                  </button>
+                </div>
               </div>
+            )}
 
-              {/* Emergency Divert to Nearest Shelter Option */}
-              {(incomingDustAlert || weatherKey === 'dust_storm' || liveNavState?.currentBattery < 25) && (
-                <button
-                  onClick={triggerShelterDivert}
-                  className="glove-btn w-full min-h-[46px] rounded-xl bg-[#ef4444] hover:bg-red-600 text-[#0b0d11] font-black text-xs uppercase flex items-center justify-center gap-2 shadow-lg cursor-pointer animate-pulse font-mono"
-                >
-                  <ShieldAlert className="h-4 w-4" />
-                  <span>Divert to {nearestShelter.station.name} ({nearestShelter.distKm} km)</span>
-                </button>
-              )}
-            </div>
-          ) : (navMode === 'arrived' || startId === endId) ? (
-            /* TRAVERSE LEG COMPLETE / SELECT NEXT WAYPOINT */
-            <div className="p-4 space-y-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2.5">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#22c55e]/20 text-[#22c55e] border border-[#22c55e]/40">
-                    <CheckCircle2 className="h-6 w-6" />
-                  </span>
-                  <div>
-                    <div className="text-[10px] font-mono uppercase text-[#22c55e] font-bold tracking-wider">
-                      Traverse Leg Complete
-                    </div>
-                    <div className="text-base font-black text-[#edf0f5] flex items-center gap-1.5 font-mono">
-                      <span>{startPOI.name}</span>
-                      {startPOI.isChargingStation && (
-                        <span className="rounded-full bg-[#22c55e]/20 text-[#22c55e] border border-[#22c55e]/40 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
-                          <Zap className="h-3 w-3" /> Recharged 100%
-                        </span>
-                      )}
-                      <button
-                        onClick={() => handleOpenPanorama(startPOI.id)}
-                        title="View Photo / 360° Panorama of this Location"
-                        className="glove-btn px-2 py-0.5 rounded-lg bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#22c55e] text-[10px] font-bold flex items-center gap-1 cursor-pointer shrink-0 ml-1"
-                      >
-                        <Camera className="h-3 w-3 text-[#22c55e]" />
-                        <span>{startPOI.id === 'hab-alpha' || startPOI.id === 'seitah-ridge' ? '360°' : 'Photo'}</span>
-                      </button>
-                    </div>
+            {drawnZones.length > 0 && (
+              <button
+                type="button"
+                onClick={handleClearAllZones}
+                className="min-h-[30px] px-2 rounded-[4px] bg-[#191d24] hover:bg-[#dc2626]/20 text-[#ef4444] border border-[#353c4a] font-mono text-[10px] font-bold cursor-pointer flex items-center justify-center gap-1"
+              >
+                <Trash2 className="h-3 w-3" />
+                <span>CLEAR ZONES ({drawnZones.length})</span>
+              </button>
+            )}
+          </div>
+
+          {/* ACTIVE TURN-BY-TURN EVA NAVIGATION BANNER */}
+          {(navMode === 'navigating' || liveNavState?.active) && currentManeuver && (
+            <div className="absolute top-[115px] sm:top-2.5 left-1/2 -translate-x-1/2 z-[460] w-[92%] max-w-md bg-[#13161c]/95 border border-[#353c4a] rounded-[4px] p-2.5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 font-mono text-[10px] font-bold uppercase text-[#22c55e]">
+                    <Navigation className="h-3.5 w-3.5 shrink-0" />
+                    <span>{currentManeuver.distanceText} REMAINING // HDG {liveNavState?.heading || 0} DEG</span>
+                  </div>
+                  <div className="text-xs font-bold text-[#edf0f5] truncate mt-0.5 uppercase">
+                    {currentManeuver.instruction}
+                  </div>
+                  <div className="text-[10px] font-mono text-[#9da5b4] truncate">
+                    {currentManeuver.subtitle}
                   </div>
                 </div>
-
-                <div className="text-right font-mono">
-                  <div className="text-[10px] text-[#656d7d]">ELEVATION</div>
-                  <div className="text-xs font-bold text-[#edf0f5]">{startPOI.elev} m</div>
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => setNavPlaying((p) => !p)}
+                    className="glove-btn min-h-[38px] min-w-[38px] rounded-[4px] bg-[#222731] hover:bg-[#2c323f] text-[#edf0f5] border border-[#353c4a] flex items-center justify-center cursor-pointer"
+                    title={navPlaying ? 'Pause EVA Sim' : 'Resume EVA Sim'}
+                  >
+                    {navPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNavSpeed((s) => (s === 1 ? 3 : 1))}
+                    className="glove-btn min-h-[38px] px-2 rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] font-mono text-[10px] font-bold cursor-pointer"
+                  >
+                    {navSpeed}X
+                  </button>
+                  <button
+                    type="button"
+                    onClick={stopNavigation}
+                    className="glove-btn min-h-[38px] min-w-[38px] rounded-[4px] bg-[#191d24] hover:bg-[#dc2626]/20 text-[#ef4444] border border-[#353c4a] flex items-center justify-center cursor-pointer"
+                    title="Exit Active Navigation"
+                  >
+                    <Square className="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </div>
-
-              {/* Current Field Telemetry Reserve */}
-              <div className="grid grid-cols-2 gap-2 bg-[#0b0d11] p-2.5 rounded-xl border border-[#242933] text-xs">
-                <div className="flex items-center justify-between font-mono">
-                  <span className="flex items-center gap-1.5 text-[#9da5b4]">
-                    <Battery className="h-3.5 w-3.5 text-[#22c55e]" /> Suit Battery
-                  </span>
-                  <span className="font-bold text-[#edf0f5]">{startBatteryPct}%</span>
+              <div className="mt-2 pt-1.5 border-t border-[#242933] grid grid-cols-4 gap-2 font-mono text-[10px] text-[#9da5b4]">
+                <div>SPD {liveNavState?.speedKmh} KM/H</div>
+                <div>ETA {liveNavState?.estTimeRemainingMin} MIN</div>
+                <div className={curBat < 25 ? 'text-[#ef4444]' : 'text-[#22c55e]'}>
+                  BAT {curBat}%
                 </div>
-                <div className="flex items-center justify-between font-mono">
-                  <span className="flex items-center gap-1.5 text-[#9da5b4]">
-                    <Droplets className="h-3.5 w-3.5 text-[#22c55e]" /> PLSS O2 Tank
-                  </span>
-                  <span className="font-bold text-[#edf0f5]">{startO2Pct}%</span>
+                <div>HR {liveNavState?.heartRateBpm} BPM</div>
+              </div>
+            </div>
+          )}
+
+          {/* PREDICTIVE DUST SQUALL RADAR ALERT HUD (CRIMSON FAULT ONLY) */}
+          {dustFrontState.active && showDustRadarCard && (
+            <div className="absolute bottom-24 right-2.5 z-[460] w-[280px] sm:w-[310px] bg-[#13161c]/95 border border-[#ef4444] rounded-[4px] p-2.5">
+              <div className="flex items-center justify-between border-b border-[#242933] pb-1.5 mb-2">
+                <div className="flex items-center gap-1.5 font-mono text-[10.5px] font-bold text-[#ef4444] uppercase">
+                  <Wind className="h-3.5 w-3.5" />
+                  <span>SQUALL INTERCEPT ALERT</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDustRadarCard(false)}
+                  className="text-[#9da5b4] hover:text-[#edf0f5] p-0.5 cursor-pointer"
+                  aria-label="Dismiss Storm Card"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+              <div className="grid grid-cols-3 gap-1.5 font-mono text-[10px] mb-2">
+                <div className="bg-[#191d24] border border-[#242933] rounded-[4px] p-1.5">
+                  <div className="text-[#656d7d] text-[9px]">RANGE</div>
+                  <div className="text-[#edf0f5] font-bold">{dustFrontState.distanceAheadKm} KM</div>
+                </div>
+                <div className="bg-[#191d24] border border-[#242933] rounded-[4px] p-1.5">
+                  <div className="text-[#656d7d] text-[9px]">IMPACT</div>
+                  <div className="text-[#ef4444] font-bold">T-{dustFrontState.etaMin} MIN</div>
+                </div>
+                <div className="bg-[#191d24] border border-[#242933] rounded-[4px] p-1.5">
+                  <div className="text-[#656d7d] text-[9px]">BARO</div>
+                  <div className="text-[#edf0f5] font-bold">{dustFrontState.pressureDropPa} Pa</div>
                 </div>
               </div>
+              <button
+                type="button"
+                onClick={triggerShelterDivert}
+                className="glove-btn w-full min-h-[38px] px-2.5 rounded-[4px] bg-[#dc2626] hover:bg-[#ef4444] text-[#edf0f5] font-mono text-[10px] font-bold uppercase cursor-pointer flex items-center justify-center gap-1.5"
+              >
+                <ShieldAlert className="h-3.5 w-3.5" />
+                <span>DIVERT TO {nearestShelter.station?.name.toUpperCase()} ({nearestShelter.distKm} KM)</span>
+              </button>
+            </div>
+          )}
 
-              {/* One-Tap Next Waypoint Selector */}
-              <div className="space-y-1.5 font-mono">
-                <div className="text-[11px] text-[#9da5b4] uppercase tracking-wide flex items-center justify-between">
-                  <span>Select Next Waypoint to Continue:</span>
-                  <span className="text-[10px] text-[#22c55e]">From {startPOI.name.split(' ')[0]}</span>
+          {/* GOOGLE MAPS-STYLE BOTTOM-LEFT BASEMAP THUMBNAIL + MAP LAYERS POPOVER */}
+          <div className="absolute bottom-3 left-2.5 z-[460] flex items-end gap-2">
+            {/* 1-Tap Quick Switch Card (Satellite <-> Terrain) */}
+            <button
+              type="button"
+              onClick={() => setBasemap((b) => (b === 'satellite' ? 'terrain' : 'satellite'))}
+              className="glove-btn min-h-[54px] min-w-[116px] bg-[#13161c]/95 hover:bg-[#191d24] border border-[#353c4a] rounded-[4px] p-2 flex items-center gap-2 cursor-pointer text-left"
+              title="Toggle Satellite vs Terrain Basemap"
+            >
+              <div className="h-9 w-9 rounded-[4px] border border-[#4f5767] bg-[#191d24] flex items-center justify-center shrink-0">
+                <MapIcon className="h-4 w-4 text-[#edf0f5]" />
+              </div>
+              <div className="font-mono leading-tight">
+                <div className="text-[9px] text-[#656d7d] uppercase">BASEMAP</div>
+                <div className="text-[11px] font-bold text-[#edf0f5] uppercase">
+                  {BASEMAP_OPTIONS.find((m) => m.id === basemap)?.short || 'SAT'}
                 </div>
-                <div className="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-0.5">
-                  {sciencePOIs
-                    .filter((p) => p.id !== astronautLocId)
-                    .map((dest) => {
-                      const dist = Number(
-                        (marsDistanceMeters(startPOI.lat, startPOI.lon, dest.lat, dest.lon) / 1000).toFixed(1)
-                      );
+              </div>
+            </button>
+
+            {/* Map Types & Layers Popover Trigger */}
+            <button
+              type="button"
+              onClick={() => setShowLayersSheet((s) => !s)}
+              className={`glove-btn min-h-[54px] px-3 rounded-[4px] border font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer ${
+                showLayersSheet
+                  ? 'bg-[#2c323f] text-[#edf0f5] border-[#edf0f5]'
+                  : 'bg-[#13161c]/95 hover:bg-[#191d24] text-[#9da5b4] hover:text-[#edf0f5] border-[#353c4a]'
+              }`}
+            >
+              <Layers className="h-4 w-4" />
+              <span>MAP LAYERS</span>
+            </button>
+
+            {/* Google Maps-Style Expanded Map Type & Relief Sheet */}
+            {showLayersSheet && (
+              <div className="absolute bottom-[62px] left-0 w-[300px] sm:w-[340px] bg-[#13161c] border border-[#353c4a] rounded-[4px] p-3 space-y-3 z-[500]">
+                <div className="flex items-center justify-between border-b border-[#242933] pb-2">
+                  <span className="font-mono text-[11px] font-bold text-[#edf0f5] uppercase">
+                    MAP TYPES & OVERLAYS
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setShowLayersSheet(false)}
+                    className="text-[#9da5b4] hover:text-[#edf0f5] p-1 cursor-pointer"
+                    aria-label="Close Map Layers"
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+
+                <div>
+                  <div className="font-mono text-[9.5px] font-bold text-[#656d7d] uppercase mb-1.5">
+                    MAP TYPE
+                  </div>
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {BASEMAP_OPTIONS.map((opt) => {
+                      const active = basemap === opt.id;
                       return (
                         <button
-                          key={dest.id}
-                          onClick={() => {
-                            handleNavigateToPOI(dest.id);
-                            handleOpenPanorama(dest.id);
-                          }}
-                          className="glove-btn p-2.5 rounded-xl bg-[#191d24] hover:bg-[#222731] border border-[#242933] hover:border-[#22c55e] text-left transition-all cursor-pointer flex flex-col justify-between group active:scale-95"
+                          type="button"
+                          key={opt.id}
+                          onClick={() => setBasemap(opt.id)}
+                          className={`glove-btn min-h-[42px] px-2 py-1.5 rounded-[4px] border font-mono text-[10px] font-bold cursor-pointer ${
+                            active
+                              ? 'bg-[#22c55e]/15 text-[#22c55e] border-[#22c55e]'
+                              : 'bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] border-[#242933]'
+                          }`}
                         >
-                          <div className="flex items-start justify-between gap-1">
-                            <span className="text-xs font-bold text-[#edf0f5] group-hover:text-[#22c55e] line-clamp-1">
-                              {dest.isChargingStation ? '⚡ ' : ''}{dest.name}
-                            </span>
-                            <span className="text-[10px] font-mono text-[#22c55e] shrink-0 font-semibold">{dist} km</span>
-                          </div>
-                          <div className="mt-1 flex items-center justify-between text-[10px] text-[#9da5b4]">
-                            <span className="line-clamp-1">{dest.minerals || 'Scientific Site'}</span>
-                            <span className="text-[#22c55e] font-bold group-hover:translate-x-0.5 transition-transform">➔</span>
-                          </div>
+                          {opt.short}
                         </button>
                       );
                     })}
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between font-mono text-[10px] text-[#9da5b4] mb-1">
+                    <span>RELIEF HILLSHADE BLEND</span>
+                    <span className="text-[#edf0f5] font-bold">{Math.round(reliefBlend * 100)}%</span>
+                  </div>
+                  <input
+                    type="range"
+                    min="0"
+                    max="100"
+                    value={Math.round(reliefBlend * 100)}
+                    onChange={(e) => setReliefBlend(Number(e.target.value) / 100)}
+                    className="glove-slider"
+                  />
+                </div>
+
+                <div className="pt-1 border-t border-[#242933] grid grid-cols-2 gap-1.5 max-h-[160px] overflow-y-auto aerospace-scroll">
+                  {OVERLAY_ITEMS.map((ov) => (
+                    <label
+                      key={ov.key}
+                      className="flex items-center justify-between gap-2 px-2 py-1.5 bg-[#191d24] border border-[#242933] rounded-[4px] font-mono text-[10px] text-[#9da5b4] cursor-pointer hover:border-[#353c4a]"
+                    >
+                      <span className="truncate">{ov.label.split(' ')[0]} {ov.label.split(' ')[1] || ''}</span>
+                      <input
+                        type="checkbox"
+                        checked={Boolean(layers[ov.key])}
+                        onChange={(e) =>
+                          setLayers((prev) => ({ ...prev, [ov.key]: e.target.checked }))
+                        }
+                        className="accent-[#22c55e] h-3.5 w-3.5 cursor-pointer"
+                      />
+                    </label>
+                  ))}
                 </div>
               </div>
+            )}
+          </div>
+
+          {/* LIVE NON-INTRUSIVE TELEMETRY TOAST */}
+          {activeToast && (
+            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[490] w-[92%] max-w-md bg-[#13161c]/95 border border-[#353c4a] rounded-[4px] px-3 py-2 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span
+                  className={`w-2 h-2 rounded-full shrink-0 ${
+                    activeToast.type === 'warning' ? 'bg-[#ef4444]' : 'bg-[#22c55e]'
+                  }`}
+                />
+                <div className="min-w-0 font-mono">
+                  <div className="text-[10.5px] font-bold text-[#edf0f5] uppercase truncate">
+                    {activeToast.title}
+                  </div>
+                  <div className="text-[10px] text-[#9da5b4] truncate">{activeToast.message}</div>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActiveToast(null)}
+                className="text-[#9da5b4] hover:text-[#edf0f5] p-1 cursor-pointer shrink-0"
+                aria-label="Dismiss Notification"
+              >
+                <X className="h-3.5 w-3.5" />
+              </button>
             </div>
-          ) : (
-            /* EXPLORE & ROUTE PLANNING TRIP SHEET */
-            <div className="p-3.5 space-y-3 font-mono">
-              {/* Origin and Destination header with Swap button */}
-              <div className="flex items-center justify-between gap-2 bg-[#0b0d11] p-2.5 rounded-xl border border-[#242933]">
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 text-[10px] text-[#9da5b4] uppercase">
-                    <span className="h-2 w-2 rounded-full bg-[#22c55e]"></span>
-                    <span>Origin {startId === astronautLocId ? '(Field Pos)' : ''}</span>
-                  </div>
-                  <div className="text-xs font-bold text-[#edf0f5] truncate">{startPOI.name}</div>
-                </div>
+          )}
 
+          {/* SLIDE-IN SCIENTIFIC LANDMARK DOSSIER DRAWER */}
+          {activeLandmark && (
+            <LandmarkDrawer
+              landmark={activeLandmark}
+              isCurrentLocation={
+                activeLandmark.id === astronautLocId ||
+                (astronautLocId === 'hab-alpha' && activeLandmark.id === 'landing_site')
+              }
+              onClose={() => setActiveLandmark(null)}
+              onNavigateToLandmark={(lm) => handleNavigateToPOI(lm.id)}
+              onSetOriginLandmark={(lm) => handleSetOrigin(lm.id)}
+              onSetTargetLandmark={(lm) => handleNavigateToPOI(lm.id)}
+              onOpenPanorama={(lm) => openPanoramaModal(lm.id)}
+            />
+          )}
+        </main>
+
+        {/* RIGHT: COLLAPSIBLE AEROSPACE INSTRUMENT CONSOLE */}
+        {sidebarOpen && (
+          <aside className="w-full lg:w-[390px] xl:w-[410px] shrink-0 bg-[#13161c] border-t lg:border-t-0 lg:border-l border-[#242933] flex flex-col max-h-[48vh] lg:max-h-full overflow-y-auto aerospace-scroll z-20">
+            {/* PANEL 1: NAVIGATION VECTORS & SIMULATION */}
+            <section className="p-3 border-b border-[#242933] space-y-2.5">
+              <div className="flex items-center justify-between">
+                <h3 className="font-mono text-[10px] font-bold tracking-wider uppercase text-[#656d7d]">
+                  NAVIGATION VECTORS & EVA DRIVE
+                </h3>
                 <button
+                  type="button"
                   onClick={handleSwapEndpoints}
-                  title="Swap Origin and Destination"
-                  className="glove-btn h-9 w-9 rounded-xl bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#edf0f5] flex items-center justify-center shrink-0 cursor-pointer active:scale-90 transition-transform"
+                  className="px-2 py-1 rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] font-mono text-[10px] font-bold text-[#9da5b4] hover:text-[#edf0f5] flex items-center gap-1 cursor-pointer"
                 >
-                  <ArrowLeftRight className="h-4 w-4" />
+                  <ArrowLeftRight className="h-3 w-3" />
+                  <span>SWAP</span>
                 </button>
-
-                <div className="flex-1 min-w-0 text-right">
-                  <div className="flex items-center justify-end gap-1.5 text-[10px] text-[#9da5b4] uppercase">
-                    <span>Destination</span>
-                    <span className="h-2 w-2 rounded-full bg-[#22c55e]"></span>
-                  </div>
-                  <div className="text-xs font-bold text-[#edf0f5] truncate">{endPOI.name}</div>
-                </div>
               </div>
 
-              <div className="flex items-start justify-between gap-3">
-                <div className="flex-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-base font-bold text-[#edf0f5] line-clamp-1">{endPOI.name}</span>
-                    {endPOI.isChargingStation && (
-                      <span className="rounded-full bg-[#22c55e]/20 text-[#22c55e] border border-[#22c55e]/40 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
-                        <Zap className="h-3 w-3" /> Virtual Base
-                      </span>
-                    )}
-                    <button
-                      onClick={() => handleOpenPanorama(endPOI.id)}
-                      title="View Photo / 360° Panorama of this Location"
-                      className="glove-btn px-2.5 py-1 rounded-xl bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#22c55e] text-[10px] font-bold flex items-center gap-1 cursor-pointer shrink-0 ml-auto"
-                    >
-                      <Camera className="h-3.5 w-3.5 text-[#22c55e]" />
-                      <span>{endPOI.id === 'hab-alpha' || endPOI.id === 'seitah-ridge' ? '360° Sphere' : 'Photo'}</span>
-                    </button>
-                  </div>
-                  <div className="text-xs text-[#9da5b4] mt-0.5 flex items-center gap-2 font-mono">
-                    <span className="text-[#22c55e] font-bold">{routeResult.distKm} km</span>
-                    <span>•</span>
-                    <span>{routeResult.durationMin} min walk</span>
-                    <span>•</span>
-                    <span>Elev {endPOI.elev}m</span>
-                  </div>
-                </div>
-
-                {/* Range Status Pill */}
-                <div className="shrink-0 text-right">
-                  {routeResult.rangeStatus === 'direct_clear' && (
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-[#22c55e]/15 border border-[#22c55e]/30 px-2.5 py-1 text-[11px] font-bold text-[#22c55e]">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Direct Safe
-                    </span>
-                  )}
-                  {routeResult.rangeStatus === 'recharged_ok' && (
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 text-[11px] font-bold text-amber-300">
-                      <Zap className="h-3.5 w-3.5" /> +15m Recharge
-                    </span>
-                  )}
-                  {routeResult.rangeStatus === 'out_of_range' && (
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-[#ef4444]/15 border border-[#ef4444]/30 px-2.5 py-1 text-[11px] font-bold text-[#ef4444]">
-                      <AlertTriangle className="h-3.5 w-3.5" /> Low Reserve
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Prominent Starting Battery & Tank Percentage Gauge Cards */}
-              <div className="grid grid-cols-2 gap-2 bg-[#0b0d11] p-2.5 rounded-xl border border-[#242933]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-2">
                 <div>
-                  <div className="flex items-center justify-between text-xs text-[#edf0f5] mb-1">
-                    <span className="flex items-center gap-1.5 font-semibold">
-                      <BatteryCharging className="h-4 w-4 text-[#22c55e]" /> Battery
-                    </span>
-                    <span className="font-mono font-bold text-[#edf0f5]">
-                      {startBatteryPct}% <span className="text-[10px] text-[#656d7d] font-normal">➔ {routeResult.finalArrivalBattery}%</span>
-                    </span>
-                  </div>
-                  <div className="w-full h-2 bg-[#191d24] rounded-full overflow-hidden">
-                    <div
-                      className={`h-full ${startBatteryPct < 30 ? 'bg-[#ef4444]' : 'bg-[#22c55e]'}`}
-                      style={{ width: `${startBatteryPct}%` }}
-                    />
-                  </div>
-                  <div className="flex items-center justify-between mt-1 text-[10px]">
-                    <button
-                      onClick={() => setStartBatteryPct((b) => Math.max(15, b - 15))}
-                      className="glove-btn px-1.5 py-0.5 rounded bg-[#191d24] hover:bg-[#222731] border border-[#242933] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
-                    >
-                      <Minus className="h-3 w-3" /> 15%
-                    </button>
-                    <span className="text-[#656d7d] font-mono">Simulate</span>
-                    <button
-                      onClick={() => setStartBatteryPct((b) => Math.min(100, b + 15))}
-                      className="glove-btn px-1.5 py-0.5 rounded bg-[#191d24] hover:bg-[#222731] border border-[#242933] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
-                    >
-                      <Plus className="h-3 w-3" /> 15%
-                    </button>
-                  </div>
+                  <label className="block font-mono text-[9.5px] text-[#9da5b4] uppercase mb-1">
+                    ORIGIN BASE
+                  </label>
+                  <select
+                    value={startId === 'custom-origin' ? '' : startId}
+                    onChange={(e) => e.target.value && handleSetOrigin(e.target.value)}
+                    className="w-full min-h-[38px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-xs text-[#edf0f5] outline-none focus:border-[#edf0f5]"
+                  >
+                    {startId === 'custom-origin' && <option value="">CUSTOM VECTOR</option>}
+                    {allSiteOptions.map((s) => (
+                      <option key={`orig-${s.id}`} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between text-xs text-[#edf0f5] mb-1">
-                    <span className="flex items-center gap-1.5 font-semibold">
-                      <Droplets className="h-4 w-4 text-[#22c55e]" /> PLSS O2 Tank
-                    </span>
-                    <span className="font-mono font-bold text-[#edf0f5]">
-                      {startO2Pct}% <span className="text-[10px] text-[#656d7d] font-normal">➔ {routeResult.finalArrivalO2}%</span>
+                  <label className="block font-mono text-[9.5px] text-[#9da5b4] uppercase mb-1">
+                    TARGET WAYPOINT
+                  </label>
+                  <select
+                    value={endId === 'custom-dest' ? '' : endId}
+                    onChange={(e) => e.target.value && handleNavigateToPOI(e.target.value)}
+                    className="w-full min-h-[38px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-xs text-[#edf0f5] outline-none focus:border-[#edf0f5]"
+                  >
+                    {endId === 'custom-dest' && <option value="">CUSTOM VECTOR</option>}
+                    {allSiteOptions.map((s) => (
+                      <option key={`dest-${s.id}`} value={s.id}>
+                        {s.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+
+              {/* Raw Coordinate Input Vector Solver (Ground Control Feature) */}
+              <div className="bg-[#191d24] border border-[#242933] rounded-[4px] p-2 space-y-1.5">
+                <div className="font-mono text-[9.5px] text-[#656d7d] uppercase">
+                  COORDINATE VECTOR INPUTS (LAT / LON DEG)
+                </div>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <input
+                    type="text"
+                    value={originLatInput}
+                    onChange={(e) => setOriginLatInput(e.target.value)}
+                    className="min-h-[34px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-[11px] text-[#edf0f5]"
+                    aria-label="Origin Latitude"
+                  />
+                  <input
+                    type="text"
+                    value={originLonInput}
+                    onChange={(e) => setOriginLonInput(e.target.value)}
+                    className="min-h-[34px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-[11px] text-[#edf0f5]"
+                    aria-label="Origin Longitude"
+                  />
+                  <input
+                    type="text"
+                    value={destLatInput}
+                    onChange={(e) => setDestLatInput(e.target.value)}
+                    className="min-h-[34px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-[11px] text-[#edf0f5]"
+                    aria-label="Target Latitude"
+                  />
+                  <input
+                    type="text"
+                    value={destLonInput}
+                    onChange={(e) => setDestLonInput(e.target.value)}
+                    className="min-h-[34px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-[11px] text-[#edf0f5]"
+                    aria-label="Target Longitude"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleApplyCoordinateVectors}
+                  className="w-full min-h-[36px] rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#4f5767] font-mono text-[10.5px] font-bold text-[#edf0f5] uppercase cursor-pointer"
+                >
+                  CALC VECTOR TRAVERSE
+                </button>
+              </div>
+
+              {/* Mobility Profile Selector */}
+              <div>
+                <div className="font-mono text-[9.5px] text-[#656d7d] uppercase mb-1">
+                  MOBILITY PROFILE
+                </div>
+                <div className="grid grid-cols-3 gap-1">
+                  {Object.values(LOADOUT_PROFILES).map((prof) => {
+                    const active = loadoutKey === prof.id;
+                    return (
+                      <button
+                        type="button"
+                        key={prof.id}
+                        onClick={() => setLoadoutKey(prof.id)}
+                        className={`min-h-[42px] px-1.5 py-1 rounded-[4px] border font-mono text-[10px] leading-tight cursor-pointer ${
+                          active
+                            ? 'bg-[#2c323f] text-[#edf0f5] border-[#edf0f5]'
+                            : 'bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] border-[#242933]'
+                        }`}
+                      >
+                        <div className="font-bold truncate">{prof.id.toUpperCase()}</div>
+                        <div className="text-[9px] text-[#9da5b4]">{prof.speedKmh} KM/H</div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Scenario Presets */}
+              <div>
+                <div className="font-mono text-[9.5px] text-[#656d7d] uppercase mb-1">
+                  MISSION SCENARIO PRESETS
+                </div>
+                <div className="grid grid-cols-2 gap-1">
+                  <button
+                    type="button"
+                    onClick={() => applyPreset('hab-alpha', 'three-forks', 'light', 'nominal', 85, 90, 705)}
+                    className="min-h-[36px] px-2 rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] font-mono text-[10px] font-bold text-[#edf0f5] cursor-pointer"
+                  >
+                    NOMINAL EVA
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPreset('hab-alpha', 'hawksbill-gap', 'heavy', 'nominal', 24, 34, 760)}
+                    className="min-h-[36px] px-2 rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] font-mono text-[10px] font-bold text-[#edf0f5] cursor-pointer"
+                  >
+                    LOW BAT + PIT STOP
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPreset('kodiak-butte', 'belva-crater', 'light', 'dust_storm', 62, 70, 955)}
+                    className="min-h-[36px] px-2 rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#ef4444]/60 font-mono text-[10px] font-bold text-[#ef4444] cursor-pointer"
+                  >
+                    DUST SQUALL ALERT
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => applyPreset('seitah-ridge', 'western-rim', 'rover', 'solar_storm', 90, 95, 840)}
+                    className="min-h-[36px] px-2 rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#ef4444]/60 font-mono text-[10px] font-bold text-[#ef4444] cursor-pointer"
+                  >
+                    SOLAR SPE STORM
+                  </button>
+                </div>
+              </div>
+
+              {/* Primary EVA Simulation Drive Controls (Glove-Sized >= 44px) */}
+              <div className="flex items-center gap-1.5 pt-1">
+                {!navPlaying ? (
+                  <button
+                    type="button"
+                    onClick={startNavigation}
+                    className="glove-btn flex-1 min-h-[44px] px-3 rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] text-[#0b0d11] font-mono text-xs font-bold uppercase flex items-center justify-center gap-2 border border-[#22c55e] cursor-pointer"
+                  >
+                    <Play className="h-4 w-4" />
+                    <span>{liveNavState?.idx > 0 && !liveNavState?.arrived ? 'RESUME EVA' : 'START EVA WALK'}</span>
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setNavPlaying(false)}
+                    className="glove-btn flex-1 min-h-[44px] px-3 rounded-[4px] bg-[#2c323f] hover:bg-[#353c4a] text-[#edf0f5] font-mono text-xs font-bold uppercase flex items-center justify-center gap-2 border border-[#4f5767] cursor-pointer"
+                  >
+                    <Pause className="h-4 w-4" />
+                    <span>PAUSE EVA</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={() => setNavSpeed((s) => (s === 1 ? 3 : 1))}
+                  className="glove-btn min-h-[44px] px-3 rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] font-mono text-xs font-bold border border-[#353c4a] cursor-pointer"
+                  title="Toggle Simulation Rate (1x / 3x)"
+                >
+                  {navSpeed}X
+                </button>
+
+                <button
+                  type="button"
+                  onClick={stopNavigation}
+                  className="glove-btn min-h-[44px] px-3 rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] font-mono text-xs font-bold border border-[#353c4a] cursor-pointer"
+                  title="Reset Navigation Leg"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="flex items-center justify-between gap-2 pt-1 font-mono text-[10px] text-[#9da5b4]">
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={autoChargingStop}
+                    onChange={(e) => setAutoChargingStop(e.target.checked)}
+                    className="accent-[#22c55e] h-3.5 w-3.5"
+                  />
+                  <span>AUTO RECHARGE STOP</span>
+                </label>
+                <label className="flex items-center gap-1.5 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={showDirectComparison}
+                    onChange={(e) => setShowDirectComparison(e.target.checked)}
+                    className="accent-[#22c55e] h-3.5 w-3.5"
+                  />
+                  <span>DIRECT COMPARE</span>
+                </label>
+              </div>
+            </section>
+
+            {/* PANEL 2: LIFE SUPPORT RESERVES & LST SOLAR TIME */}
+            <section className="p-3 border-b border-[#242933] space-y-2.5">
+              <h3 className="font-mono text-[10px] font-bold tracking-wider uppercase text-[#656d7d]">
+                LIFE SUPPORT RESERVES & SOL TIME
+              </h3>
+
+              <div className="space-y-2 font-mono text-[10.5px]">
+                <div>
+                  <div className="flex justify-between text-[#9da5b4] mb-1">
+                    <span>BATTERY RESERVE</span>
+                    <span className={startBatteryPct < 25 ? 'text-[#ef4444] font-bold' : 'text-[#22c55e] font-bold'}>
+                      {startBatteryPct}%
                     </span>
                   </div>
-                  <div className="w-full h-2 bg-[#191d24] rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-[#22c55e]"
-                      style={{ width: `${startO2Pct}%` }}
-                    />
+                  <input
+                    type="range"
+                    min="10"
+                    max="100"
+                    value={startBatteryPct}
+                    onChange={(e) => setStartBatteryPct(Number(e.target.value))}
+                    className="glove-slider"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[#9da5b4] mb-1">
+                    <span>O2 TANK PRESSURE</span>
+                    <span className={startO2Pct < 25 ? 'text-[#ef4444] font-bold' : 'text-[#edf0f5] font-bold'}>
+                      {startO2Pct}%
+                    </span>
                   </div>
-                  <div className="flex items-center justify-between mt-1 text-[10px]">
-                    <button
-                      onClick={() => setStartO2Pct((o) => Math.max(15, o - 15))}
-                      className="glove-btn px-1.5 py-0.5 rounded bg-[#191d24] hover:bg-[#222731] border border-[#242933] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
-                    >
-                      <Minus className="h-3 w-3" /> 15%
-                    </button>
-                    <span className="text-[#656d7d] font-mono">Simulate</span>
-                    <button
-                      onClick={() => setStartO2Pct((o) => Math.min(100, o + 15))}
-                      className="glove-btn px-1.5 py-0.5 rounded bg-[#191d24] hover:bg-[#222731] border border-[#242933] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
-                    >
-                      <Plus className="h-3 w-3" /> 15%
-                    </button>
+                  <input
+                    type="range"
+                    min="15"
+                    max="100"
+                    value={startO2Pct}
+                    onChange={(e) => setStartO2Pct(Number(e.target.value))}
+                    className="glove-slider"
+                  />
+                </div>
+
+                <div>
+                  <div className="flex justify-between text-[#9da5b4] mb-1">
+                    <span>MARTIAN LST / TEMP</span>
+                    <span className="text-[#edf0f5]">
+                      {martianEnv.lstText} ({martianEnv.ambientTempC} C)
+                    </span>
+                  </div>
+                  <input
+                    type="range"
+                    min="360"
+                    max="1200"
+                    value={startLstMinutes}
+                    onChange={(e) => setStartLstMinutes(Number(e.target.value))}
+                    className="glove-slider"
+                  />
+                </div>
+              </div>
+            </section>
+
+            {/* PANEL 3: ROUTE METRICS & ELEVATION TRANSECT CANVAS */}
+            <section className="p-3 border-b border-[#242933] space-y-2.5">
+              <div className="flex items-center justify-between">
+                <h3 className="font-mono text-[10px] font-bold tracking-wider uppercase text-[#656d7d]">
+                  TRAVERSE METRICS & PROFILE
+                </h3>
+                <span
+                  className={`px-2 py-0.5 rounded-[4px] border font-mono text-[9.5px] font-bold uppercase ${
+                    routeResult.rangeStatus === 'out_of_range'
+                      ? 'bg-[#ef4444]/10 text-[#ef4444] border-[#ef4444]/40'
+                      : 'bg-[#22c55e]/10 text-[#22c55e] border-[#22c55e]/40'
+                  }`}
+                >
+                  {routeResult.rangeStatus === 'out_of_range'
+                    ? 'RANGE FAULT'
+                    : routeResult.chargingStop
+                    ? 'PIT-STOP REQ'
+                    : 'VIABLE'}
+                </span>
+              </div>
+
+              <div className="grid grid-cols-2 gap-1.5 font-mono text-[10.5px]">
+                <div className="bg-[#191d24] border border-[#242933] rounded-[4px] p-2">
+                  <div className="text-[#656d7d] text-[9px]">DISTANCE / ETA</div>
+                  <div className="text-[#edf0f5] font-bold">
+                    {routeResult.distKm} KM // {routeResult.durationMin} MIN
+                  </div>
+                </div>
+                <div className="bg-[#191d24] border border-[#242933] rounded-[4px] p-2">
+                  <div className="text-[#656d7d] text-[9px]">PEAK GRADE / VIABILITY</div>
+                  <div className="text-[#edf0f5] font-bold">
+                    {routeResult.maxSlopeAlongPath} DEG // {routeResult.viabilityScore}%
+                  </div>
+                </div>
+                <div className="bg-[#191d24] border border-[#242933] rounded-[4px] p-2">
+                  <div className="text-[#656d7d] text-[9px]">ELEV GAIN / HAZ CROSS</div>
+                  <div className="text-[#edf0f5] font-bold">
+                    +{routeResult.elevGainM} M // {routeResult.hazardCrossings}
+                  </div>
+                </div>
+                <div className="bg-[#191d24] border border-[#242933] rounded-[4px] p-2">
+                  <div className="text-[#656d7d] text-[9px]">EST END BAT / O2</div>
+                  <div
+                    className={`font-bold ${
+                      routeResult.finalArrivalBattery < 15 ? 'text-[#ef4444]' : 'text-[#22c55e]'
+                    }`}
+                  >
+                    {routeResult.finalArrivalBattery}% // {routeResult.finalArrivalO2}%
                   </div>
                 </div>
               </div>
 
-              {/* Big Google Maps Emerald "START NAVIGATION" Button */}
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={startNavigation}
-                  className="glove-btn flex-1 min-h-[56px] rounded-2xl bg-[#22c55e] hover:bg-[#16a34a] text-[#0b0d11] font-black text-base uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-xl shadow-[#22c55e]/20 cursor-pointer"
-                >
-                  <Navigation className="h-6 w-6 fill-[#0b0d11]" />
-                  <span>Start Navigation</span>
-                </button>
-
-                <button
-                  onClick={() => setBottomSheetExpanded((v) => !v)}
-                  title="Expand Route Details"
-                  className="glove-btn flex h-[56px] w-[56px] items-center justify-center rounded-2xl bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] cursor-pointer shrink-0"
-                >
-                  {bottomSheetExpanded ? <ChevronDown className="h-6 w-6" /> : <ChevronUp className="h-6 w-6" />}
-                </button>
+              <div className="border border-[#242933] rounded-[4px] overflow-hidden bg-[#0b0d11]">
+                <div className="px-2 py-1 border-b border-[#242933] font-mono text-[9.5px] text-[#656d7d] uppercase flex justify-between">
+                  <span>HRSC ELEVATION TRANSECT</span>
+                  <span className="text-[#9da5b4]">
+                    {routeResult.minElevationM}m .. {routeResult.maxElevationM}m
+                  </span>
+                </div>
+                <canvas ref={elevationCanvasRef} className="w-full h-[96px] block" />
               </div>
 
-              {/* Expandable Route Details & Step list */}
-              {bottomSheetExpanded && (
-                <div className="pt-2 border-t border-[#242933] space-y-2.5 text-xs max-h-48 overflow-y-auto pr-1">
-                  <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-mono">
-                    <div className="p-2 rounded-xl bg-[#0b0d11] border border-[#242933]">
-                      <div className="text-[9px] text-[#656d7d]">ARRIVAL BATTERY</div>
-                      <div className="font-bold text-[#22c55e]">{routeResult.finalArrivalBattery}%</div>
+              {routeResult.navigationSteps?.length > 0 && (
+                <div className="bg-[#191d24] border border-[#242933] rounded-[4px] p-2 space-y-1 max-h-[110px] overflow-y-auto aerospace-scroll font-mono text-[10px]">
+                  {routeResult.navigationSteps.slice(0, 5).map((st, idx) => (
+                    <div key={idx} className="flex items-start gap-2 text-[#9da5b4]">
+                      <span className="text-[#656d7d] shrink-0">[{idx + 1}]</span>
+                      <span className="text-[#edf0f5] leading-snug">{st.instruction}</span>
                     </div>
-                    <div className="p-2 rounded-xl bg-[#0b0d11] border border-[#242933]">
-                      <div className="text-[9px] text-[#656d7d]">PEAK INCLINE</div>
-                      <div className="font-bold text-amber-300">{routeResult.maxSlopeAlongPath}°</div>
-                    </div>
-                    <div className="p-2 rounded-xl bg-[#0b0d11] border border-[#242933]">
-                      <div className="text-[9px] text-[#656d7d]">HAZARDS BYPASSED</div>
-                      <div className="font-bold text-[#22c55e]">{routeResult.hazardsAvoided} zones</div>
+                  ))}
+                </div>
+              )}
+            </section>
+
+            {/* PANEL 4: BASEMAP & CARTOGRAPHIC OVERLAYS */}
+            <section className="p-3 border-b border-[#242933] space-y-2.5">
+              <h3 className="font-mono text-[10px] font-bold tracking-wider uppercase text-[#656d7d]">
+                BASEMAP & CARTOGRAPHIC OVERLAYS
+              </h3>
+
+              <div className="grid grid-cols-5 gap-1">
+                {BASEMAP_OPTIONS.map((opt) => (
+                  <button
+                    type="button"
+                    key={`sb-${opt.id}`}
+                    onClick={() => setBasemap(opt.id)}
+                    className={`min-h-[34px] rounded-[4px] border font-mono text-[10px] font-bold cursor-pointer ${
+                      basemap === opt.id
+                        ? 'bg-[#22c55e]/15 text-[#22c55e] border-[#22c55e]'
+                        : 'bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] border-[#242933]'
+                    }`}
+                  >
+                    {opt.short}
+                  </button>
+                ))}
+              </div>
+
+              <div className="space-y-1">
+                {OVERLAY_ITEMS.map((ov) => (
+                  <label
+                    key={`sb-ov-${ov.key}`}
+                    className="flex items-center justify-between px-2 py-1.5 bg-[#191d24] border border-[#242933] hover:border-[#353c4a] rounded-[4px] font-mono text-[10.5px] text-[#9da5b4] cursor-pointer"
+                  >
+                    <span>{ov.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={Boolean(layers[ov.key])}
+                      onChange={(e) =>
+                        setLayers((prev) => ({ ...prev, [ov.key]: e.target.checked }))
+                      }
+                      className="accent-[#22c55e] h-3.5 w-3.5 cursor-pointer"
+                    />
+                  </label>
+                ))}
+              </div>
+            </section>
+
+            {/* PANEL 5: 11 REGIONAL LANDMARKS DIRECTORY */}
+            <section className="p-3 border-b border-[#242933] space-y-2">
+              <h3 className="font-mono text-[10px] font-bold tracking-wider uppercase text-[#656d7d]">
+                JEZERO-NILI LANDMARK DIRECTORY [11]
+              </h3>
+              <div className="space-y-1 max-h-[175px] overflow-y-auto aerospace-scroll">
+                {landmarksData.map((lm) => (
+                  <div
+                    key={`dir-${lm.id}`}
+                    className="flex items-center justify-between gap-2 px-2 py-1.5 bg-[#191d24] border border-[#242933] rounded-[4px]"
+                  >
+                    <button
+                      type="button"
+                      onClick={() => handleQuickLandmarkClick(lm)}
+                      className="text-left min-w-0 flex-1 cursor-pointer"
+                    >
+                      <div className="text-[11px] font-semibold text-[#edf0f5] truncate">
+                        {lm.name}
+                      </div>
+                      <div className="font-mono text-[9.5px] text-[#656d7d]">
+                        {lm.coords[0].toFixed(3)}N, {lm.coords[1].toFixed(3)}E // {lm.elevation_m}m
+                      </div>
+                    </button>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => setActiveLandmark(lm)}
+                        className="px-2 py-1 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] font-mono text-[9.5px] font-bold text-[#edf0f5] cursor-pointer"
+                      >
+                        DOSSIER
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleNavigateToPOI(lm.id)}
+                        className="px-2 py-1 rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] border border-[#22c55e] font-mono text-[9.5px] font-bold text-[#0b0d11] cursor-pointer"
+                      >
+                        GO
+                      </button>
                     </div>
                   </div>
+                ))}
+              </div>
+            </section>
 
-                  <div className="space-y-1.5 pt-1">
-                    <div className="text-[10px] font-mono uppercase text-[#656d7d]">Turn-by-Turn Preview</div>
-                    {routeResult.navigationSteps?.slice(0, 4).map((step, idx) => (
-                      <div key={step.id} className="p-2 rounded-lg bg-[#0b0d11] border border-[#242933] text-[11px]">
-                        <span className="font-bold text-[#edf0f5]">{idx + 1}. {step.instruction}</span>
-                        {step.detail && <div className="text-[10px] text-slate-400">{step.detail}</div>}
+            {/* PANEL 6: ACTIVE EXCLUSION ZONES & MISSION EXPORT */}
+            <section className="p-3 space-y-2.5">
+              <div>
+                <div className="flex items-center justify-between mb-1.5">
+                  <h3 className="font-mono text-[10px] font-bold tracking-wider uppercase text-[#656d7d]">
+                    CUSTOM EXCLUSION ZONES [{drawnZones.length}]
+                  </h3>
+                </div>
+                {drawnZones.length === 0 ? (
+                  <div className="p-2 bg-[#191d24] border border-[#242933] rounded-[4px] font-mono text-[10px] text-[#656d7d]">
+                    NO CUSTOM POLYGONS DEFINED. USE TOP-RIGHT DRAW TOOLS.
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    {drawnZones.map((z) => (
+                      <div
+                        key={z.id}
+                        className="flex items-center justify-between px-2 py-1.5 bg-[#191d24] border border-[#242933] rounded-[4px] font-mono text-[10px]"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${
+                              z.type === 'safe' ? 'bg-[#22c55e]' : 'bg-[#ef4444]'
+                            }`}
+                          />
+                          <span className="text-[#edf0f5] truncate">
+                            {APP_THEME.hazards[z.type]?.label || z.type}
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteZone(z.id)}
+                          className="text-[#ef4444] hover:underline font-bold cursor-pointer shrink-0 ml-2"
+                        >
+                          DEL
+                        </button>
                       </div>
                     ))}
                   </div>
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-      </div>
-
-      {/* 10B. MARTIAN MAP SYMBOLOGY & ICONS LEGEND MODAL */}
-      {showLegendSheet && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md">
-          <div className="relative w-full max-w-xl max-h-[88vh] flex flex-col rounded-3xl bg-slate-900/95 border-2 border-cyan-500/80 shadow-2xl overflow-hidden text-slate-100">
-            {/* Legend Header */}
-            <div className="flex items-center justify-between p-4 bg-slate-950 border-b border-slate-800">
-              <div className="flex items-center gap-2.5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/40">
-                  <Info className="h-5 w-5" />
-                </div>
-                <div>
-                  <div className="text-sm font-black uppercase tracking-wider text-white">
-                    Map Symbology & Legend
-                  </div>
-                  <div className="text-[11px] font-mono text-cyan-400">
-                    What the Icons, Colored Dots & Route Overlays Mean
-                  </div>
-                </div>
+                )}
               </div>
 
+              <div className="pt-2 border-t border-[#242933] space-y-1.5">
+                <h3 className="font-mono text-[10px] font-bold tracking-wider uppercase text-[#656d7d]">
+                  MISSION TELEMETRY EXPORT
+                </h3>
+                <button
+                  type="button"
+                  onClick={exportTraverseGeoJSON}
+                  className="glove-btn w-full min-h-[38px] px-3 rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] font-mono text-[10.5px] font-bold text-[#edf0f5] flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <Download className="h-3.5 w-3.5" />
+                  <span>EXPORT TRAVERSE GEOJSON</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={exportMissionReport}
+                  className="glove-btn w-full min-h-[38px] px-3 rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] font-mono text-[10.5px] font-bold text-[#9da5b4] hover:text-[#edf0f5] flex items-center justify-center gap-2 cursor-pointer"
+                >
+                  <FileText className="h-3.5 w-3.5" />
+                  <span>EXPORT TELEMETRY REPORT</span>
+                </button>
+              </div>
+            </section>
+          </aside>
+        )}
+      </div>
+
+      {/* 3. BOTTOM LIVE TELEMETRY & SENSOR BAR (8 CELLS) */}
+      <footer className="shrink-0 bg-[#13161c] border-t border-[#242933] grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 divide-x divide-y lg:divide-y-0 divide-[#242933] font-mono text-[10px] z-30">
+        <div className="px-2.5 py-1.5">
+          <div className="text-[9px] text-[#656d7d]">CURSOR COORD</div>
+          <div className="text-[#edf0f5] font-semibold truncate">
+            {cursorTelemetry.lat.toFixed(4)} N, {cursorTelemetry.lon.toFixed(4)} E
+          </div>
+        </div>
+        <div className="px-2.5 py-1.5">
+          <div className="text-[9px] text-[#656d7d]">ELEV (HRSC DTM)</div>
+          <div className="text-[#edf0f5] font-semibold">{cursorTelemetry.elevM} m</div>
+        </div>
+        <div className="px-2.5 py-1.5">
+          <div className="text-[9px] text-[#656d7d]">MAX ROUTE GRADE</div>
+          <div className="text-[#edf0f5] font-semibold">{curSlope} deg</div>
+        </div>
+        <div className="px-2.5 py-1.5">
+          <div className="text-[9px] text-[#656d7d]">SURF TEMP (MEDA)</div>
+          <div className="text-[#edf0f5] font-semibold">{martianEnv.ambientTempC} C</div>
+        </div>
+        <div className="px-2.5 py-1.5">
+          <div className="text-[9px] text-[#656d7d]">GCR RAD FLUX</div>
+          <div className={weatherKey === 'solar_storm' ? 'text-[#ef4444] font-bold' : 'text-[#edf0f5] font-semibold'}>
+            {gcrFlux}
+          </div>
+        </div>
+        <div className="px-2.5 py-1.5">
+          <div className="text-[9px] text-[#656d7d]">CLO4 SOIL CONC</div>
+          <div className="text-[#edf0f5] font-semibold">{clo4Pct}</div>
+        </div>
+        <div className="px-2.5 py-1.5">
+          <div className="text-[9px] text-[#656d7d]">SECTOR STATUS</div>
+          <div className={`font-bold truncate ${cursorTelemetry.isFault ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
+            {cursorTelemetry.hazardLabel}
+          </div>
+        </div>
+        <div className="px-2.5 py-1.5">
+          <div className="text-[9px] text-[#656d7d]">DATA FEED</div>
+          <div className="text-[#9da5b4] font-semibold">NASA M20 // USGS</div>
+        </div>
+      </footer>
+
+      {/* TECHNICAL MAP SYMBOLOGY LEGEND MODAL (MONOCHROME + GREEN/CRIMSON ONLY) */}
+      {showLegendSheet && (
+        <div className="fixed inset-0 z-[1400] flex items-center justify-center bg-[#0b0d11]/85 p-4">
+          <div className="w-full max-w-lg bg-[#13161c] border border-[#353c4a] rounded-[4px] overflow-hidden">
+            <div className="flex items-center justify-between px-4 py-3 bg-[#191d24] border-b border-[#242933]">
+              <div className="font-mono text-xs font-bold text-[#edf0f5] uppercase">
+                TACTICAL MAP SYMBOLOGY & LEGEND
+              </div>
               <button
+                type="button"
                 onClick={() => setShowLegendSheet(false)}
-                className="glove-btn p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+                className="text-[#9da5b4] hover:text-[#edf0f5] p-1 cursor-pointer"
+                aria-label="Close Legend"
               >
-                <X className="h-6 w-6" />
+                <X className="h-4 w-4" />
               </button>
             </div>
 
-            {/* Scrollable Legend Content */}
-            <div className="p-4 overflow-y-auto space-y-4 text-xs font-sans">
-              {/* Category 1: Waypoint Dots & Virtual Bases */}
-              <div className="space-y-2">
-                <div className="text-[11px] font-mono uppercase font-bold text-cyan-300 tracking-wider flex items-center gap-1.5 pb-1 border-b border-slate-800">
-                  <span>1. Waypoint Dots & Ground Facilities</span>
+            <div className="p-4 space-y-3 text-xs font-mono text-[#9da5b4]">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                <div className="p-2.5 bg-[#191d24] border border-[#242933] rounded-[4px] space-y-1.5">
+                  <div className="text-[10px] font-bold text-[#edf0f5] uppercase border-b border-[#242933] pb-1">
+                    STATION & LANDMARK NODES
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-1.5 py-0.5 rounded-[4px] border border-[#22c55e] text-[9px] text-[#edf0f5] bg-[#13161c]">
+                      PWR / HAB
+                    </span>
+                    <span>Charging & Shelter Base</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="px-1.5 py-0.5 rounded-[4px] border border-[#4f5767] text-[9px] text-[#edf0f5] bg-[#13161c]">
+                      H2O / SCI
+                    </span>
+                    <span>ISRU / Sample Waypoint</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-3.5 h-3.5 rounded-[4px] border border-[#edf0f5] inline-block" />
+                    <span>Regional Landmark Reticle</span>
+                  </div>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
-                    <div className="h-8 w-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-black text-sm shrink-0 border-2 border-white shadow-lg shadow-emerald-500/30">
-                      ⚡
-                    </div>
-                    <div>
-                      <div className="font-bold text-emerald-300 text-xs">Virtual Base Charging Station</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                        Solar/reactor fast-charge depot. Fully restores suit battery & PLSS O2 to 100% in 15 min. Safe habitat.
-                      </div>
-                    </div>
-                  </div>
 
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
-                    <div className="h-8 w-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-black text-sm shrink-0 border-2 border-white shadow-lg shadow-emerald-500/30">
-                      💧
-                    </div>
-                    <div>
-                      <div className="font-bold text-emerald-300 text-xs">ISRU Resource Target</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                        In-Situ Resource Utilization site (e.g. hydrated smectite clays 4-7% H2O, water extraction, propellant synthesis).
-                      </div>
-                    </div>
+                <div className="p-2.5 bg-[#191d24] border border-[#242933] rounded-[4px] space-y-1.5">
+                  <div className="text-[10px] font-bold text-[#edf0f5] uppercase border-b border-[#242933] pb-1">
+                    TRAVERSE & SLOPE TELEMETRY
                   </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
-                    <div className="h-8 w-8 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center font-black text-sm shrink-0 border-2 border-white shadow-lg shadow-amber-500/30">
-                      ★
-                    </div>
-                    <div>
-                      <div className="font-bold text-amber-300 text-xs">Science Exploration Target</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                        Key geological outcrops (e.g. Mount Kodiak delta foreset beds, Séítah olivine magma chamber, Belva impact rim).
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-0.5 bg-[#edf0f5] inline-block" />
+                    <span>A* Primary Safe Path (Leg 1)</span>
                   </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
-                    <div className="h-8 w-8 rounded-full bg-purple-500 text-slate-950 flex items-center justify-center font-black text-sm shrink-0 border-2 border-white shadow-lg shadow-purple-500/30">
-                      ⬡
-                    </div>
-                    <div>
-                      <div className="font-bold text-purple-300 text-xs">Sample Depot & Minerals</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                        Mars Sample Return depot (e.g. Three Forks 10 cached titanium rock & regolith core tubes ready for retrieval).
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-0.5 bg-[#22c55e] inline-block" />
+                    <span>Post-Recharge Leg 2 Vector</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-6 h-0.5 bg-[#ef4444] inline-block" />
+                    <span>Out-of-Range / Hazard Fault</span>
                   </div>
                 </div>
               </div>
 
-              {/* Category 2: Live Navigation & Position Badges */}
-              <div className="space-y-2">
-                <div className="text-[11px] font-mono uppercase font-bold text-cyan-300 tracking-wider flex items-center gap-1.5 pb-1 border-b border-slate-800">
-                  <span>2. Navigation Rings & Position Indicators</span>
+              <div className="p-2.5 bg-[#191d24] border border-[#242933] rounded-[4px] space-y-1.5">
+                <div className="text-[10px] font-bold text-[#edf0f5] uppercase border-b border-[#242933] pb-1">
+                  SLOPE GRADE & EXCLUSION POLYGONS
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
-                    <div className="relative flex items-center justify-center shrink-0">
-                      <div className="h-8 w-8 rounded-full bg-cyan-500 text-slate-950 flex items-center justify-center font-bold text-xs border-2 border-cyan-300 shadow-[0_0_12px_#22d3ee]">
-                        📍
-                      </div>
-                      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-cyan-400 animate-ping" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-cyan-300 text-xs flex items-center gap-1">
-                        <span>Current Field Position</span>
-                        <span className="text-[9px] bg-cyan-900/80 text-cyan-300 px-1.5 py-0.2 rounded border border-cyan-500/50">YOU ARE HERE</span>
-                      </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                        Your locked physical position on Mars. Any newly selected waypoint will automatically route departing from here.
-                      </div>
-                    </div>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10.5px]">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#22c55e]" />
+                    <span>&lt; 7 deg Nominal</span>
                   </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
-                    <div className="h-8 w-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-xs shrink-0 border-2 border-emerald-300 shadow-[0_0_12px_#34d399]">
-                      🎯
-                    </div>
-                    <div>
-                      <div className="font-bold text-emerald-300 text-xs">Navigation Destination</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                        Target waypoint chosen for active traverse. Turn-by-turn guidance and battery predictions calculate toward this site.
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#9da5b4]" />
+                    <span>7-13 deg Caution</span>
                   </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
-                    <div className="relative flex items-center justify-center shrink-0">
-                      <div className="h-8 w-8 rounded-full bg-yellow-400 text-slate-950 flex items-center justify-center font-bold text-xs border-2 border-yellow-200 shadow-[0_0_14px_#facc15]">
-                        ⚡
-                      </div>
-                      <span className="absolute -bottom-1 text-[8px] font-mono font-black bg-yellow-400 text-slate-950 px-1 rounded">100%</span>
-                    </div>
-                    <div>
-                      <div className="font-bold text-yellow-300 text-xs flex items-center gap-1">
-                        <span>Virtual Base Pit-Stop</span>
-                        <span className="text-[9px] bg-yellow-900/80 text-yellow-300 px-1.5 py-0.2 rounded border border-yellow-500/50">RECHARGE</span>
-                      </div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                        Automatically inserted intermediate charging stop when a direct route exceeds your suit/rover battery or oxygen limits.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
-                    <div className="h-8 w-8 rounded-full bg-slate-900 text-cyan-400 border-2 border-cyan-400 flex items-center justify-center font-bold text-xs shrink-0 shadow-lg">
-                      <Navigation2 className="h-4 w-4" />
-                    </div>
-                    <div>
-                      <div className="font-bold text-cyan-300 text-xs">Live Astronaut Telemetry</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                        Animated marker representing the walking astronaut/rover in real time, rotating to match live heading azimuth (0°-360°).
-                      </div>
-                    </div>
+                  <div className="flex items-center gap-2">
+                    <span className="w-2.5 h-2.5 rounded-full bg-[#ef4444]" />
+                    <span>&gt;= 14 deg Critical</span>
                   </div>
                 </div>
               </div>
 
-              {/* Category 3: Traversal Paths, Radars & Terrain Hazards */}
-              <div className="space-y-2">
-                <div className="text-[11px] font-mono uppercase font-bold text-cyan-300 tracking-wider flex items-center gap-1.5 pb-1 border-b border-slate-800">
-                  <span>3. Route Lines, Safety Zones & Hazards</span>
-                </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
-                    <div className="w-8 flex flex-col items-center justify-center pt-2 shrink-0">
-                      <div className="w-7 h-1.5 bg-cyan-400 rounded-full shadow-[0_0_8px_#22d3ee]"></div>
-                    </div>
-                    <div>
-                      <div className="font-bold text-cyan-300 text-xs">Solid Cyan Path: A* Safe Corridor</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                        Calculated safest terrain route avoiding slopes &gt;15°, boulder clusters, and sand traps while ensuring battery margin.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
-                    <div className="w-8 flex flex-col items-center justify-center pt-2 shrink-0">
-                      <div className="w-7 h-0 border-t-2 border-dashed border-orange-400"></div>
-                    </div>
-                    <div>
-                      <div className="font-bold text-orange-300 text-xs">Dashed Orange: Direct Line-of-Sight</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                        Straight Euclidean distance between origin and target, shown for visual comparison of terrain detour necessity.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
-                    <div className="w-8 flex items-center justify-center shrink-0">
-                      <div className="w-7 h-7 rounded-full border-2 border-dashed border-emerald-400/70 bg-emerald-500/10 flex items-center justify-center text-[9px] font-mono text-emerald-300">
-                        2.5k
-                      </div>
-                    </div>
-                    <div>
-                      <div className="font-bold text-emerald-300 text-xs">Green Dashed Circle: 2.5 km Station Zone</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                        Fast-charge base service radius. Within this zone, astronauts can safely reach emergency shelter in &lt;45 min.
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
-                    <div className="w-8 flex items-center justify-center shrink-0">
-                      <div className="w-7 h-7 rounded-full border-2 border-dashed border-red-500 bg-red-500/20 flex items-center justify-center text-xs">
-                        ⚠️
-                      </div>
-                    </div>
-                    <div>
-                      <div className="font-bold text-red-400 text-xs">Red Shaded Circles: Hazard Polygons</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                        Unsafe terrain zones (loose basaltic sand dunes with &gt;30% wheel slip, sheer crater cliffs &gt;18° incline).
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3 sm:col-span-2">
-                    <div className="w-8 flex items-center justify-center shrink-0">
-                      <div className="w-7 h-7 rounded-full border-2 border-orange-500 bg-orange-500/20 flex items-center justify-center text-xs text-orange-300">
-                        🌪️
-                      </div>
-                    </div>
-                    <div>
-                      <div className="font-bold text-orange-300 text-xs">Orange Pulsing Front: Regional Dust Storm Radar</div>
-                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
-                        Predictive radar showing approaching dust front distance (km), estimated time of arrival (ETA in min), and barometer drop rate. Triggers 1-tap shelter evacuation.
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            {/* Footer */}
-            <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
-              <span className="text-[11px] font-mono text-slate-400">
-                DALIL MARS • JEZERO CRATER TACTICAL NAV SUITE
-              </span>
               <button
+                type="button"
                 onClick={() => setShowLegendSheet(false)}
-                className="glove-btn px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs uppercase cursor-pointer"
+                className="glove-btn w-full min-h-[42px] rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#4f5767] text-[#edf0f5] font-bold uppercase cursor-pointer"
               >
-                Close Legend
+                CLOSE LEGEND
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 11. INTERACTIVE 360° MARS PANORAMA & ULTRA-HD VISTA VIEWER MODAL */}
+      {/* 360 PHOTOSPHERE / HIGH-RES 2D IMAGERY VIEWER */}
       {activePanorama && (
         <MarsPanoramaViewer
           panorama={activePanorama}
-          allPanoramas={jezeroPanoramas}
+          allPanoramas={viewerArchiveList}
           onSelectPanorama={(p) => setActivePanorama(p)}
           onClose={() => setActivePanorama(null)}
-          onNavigateToLocation={(p) => {
-            const matchingPOI = sciencePOIs.find(
-              (poi) => poi.name === p.associatedPOI || poi.sol === p.sol
-            );
-            if (matchingPOI) {
-              handleNavigateToPOI(matchingPOI.id);
-              setActivePanorama(null);
-            }
-          }}
-        />
-      )}
-
-      {/* 12. SCIENTIFIC LANDMARK DOSSIER & 5-PHOTO CAROUSEL DRAWER */}
-      {activeLandmark && (
-        <LandmarkDrawer
-          landmark={activeLandmark}
-          onClose={() => setActiveLandmark(null)}
-          onNavigateToLandmark={(lm) => {
-            setActiveLandmark(null);
-            handleNavigateToPOI(lm.id);
-          }}
-          onSetOriginLandmark={(lm) => {
-            setActiveLandmark(null);
-            handleSetOrigin(lm.id);
-          }}
-          onOpenPanorama={() => {
-            handleOpenPanorama(activeLandmark.id);
-          }}
-          isCurrentLocation={
-            activeLandmark.id === astronautLocId ||
-            (astronautLocId === 'hab-alpha' && activeLandmark.id === 'landing_site')
-          }
+          onNavigateToLocation={(p) => handleNavigateToPOI(p.poiId || p.id)}
         />
       )}
     </div>

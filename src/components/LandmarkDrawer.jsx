@@ -3,6 +3,7 @@ import {
   X,
   Navigation,
   MapPin,
+  Crosshair,
   ChevronLeft,
   ChevronRight,
   Camera,
@@ -17,12 +18,12 @@ export default function LandmarkDrawer({
   onClose,
   onNavigateToLandmark,
   onSetOriginLandmark,
+  onSetTargetLandmark,
   onOpenPanorama,
   isCurrentLocation = false,
 }) {
   const [photoIdx, setPhotoIdx] = useState(0);
 
-  // Reset photo index when landmark changes
   useEffect(() => {
     setPhotoIdx(0);
   }, [landmark?.id]);
@@ -53,23 +54,23 @@ export default function LandmarkDrawer({
 
   return (
     <aside
-      className="fixed top-0 left-0 bottom-0 z-40 w-full sm:w-[420px] max-w-[92vw] bg-[#13161c] border-r border-[#242933] shadow-2xl flex flex-col overflow-hidden text-[#edf0f5] animate-slideInLeft transition-transform"
-      style={{ zIndex: 1050 }}
+      className="fixed top-[42px] left-0 bottom-[48px] z-[980] w-full sm:w-[410px] max-w-[92vw] bg-[#13161c] border-r border-[#242933] flex flex-col overflow-hidden text-[#edf0f5]"
     >
-      {/* 1. Header with Landmark Title & Close Button */}
-      <div className="flex items-center justify-between p-3.5 bg-[#191d24] border-b border-[#242933] shrink-0">
+      {/* 1. Header */}
+      <div className="flex items-center justify-between px-3 py-2.5 bg-[#191d24] border-b border-[#242933] shrink-0">
         <div className="flex items-center gap-2 min-w-0 pr-2">
-          <div className="h-8 w-8 rounded-lg bg-[#222731] border border-[#353c4a] flex items-center justify-center text-cyan-400 shrink-0">
+          <div className="h-8 w-8 rounded-[4px] bg-[#0b0d11] border border-[#353c4a] flex items-center justify-center text-[#22c55e] shrink-0">
             <Compass className="h-4 w-4" />
           </div>
           <div className="min-w-0">
-            <h2 className="text-xs font-bold font-mono tracking-wider text-[#edf0f5] truncate uppercase">
+            <h2 className="text-[11px] font-bold font-mono tracking-wider text-[#edf0f5] truncate uppercase">
               {landmark.name}
             </h2>
-            <div className="text-[10px] font-mono text-[#9da5b4] flex items-center gap-2">
+            <div className="text-[10px] font-mono text-[#9da5b4] flex items-center gap-1.5">
+              <span className="inline-block w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
               <span className="text-[#22c55e] font-semibold">{landmark.category}</span>
-              <span>•</span>
-              <span>Elev {landmark.elevation_m} m</span>
+              <span>|</span>
+              <span>ELEV {landmark.elevation_m} m</span>
             </div>
           </div>
         </div>
@@ -77,70 +78,67 @@ export default function LandmarkDrawer({
         <button
           onClick={onClose}
           title="Close Dossier"
-          className="glove-btn h-9 w-9 rounded-xl bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] text-[#9da5b4] hover:text-[#edf0f5] flex items-center justify-center shrink-0 cursor-pointer transition-colors"
+          className="glove-btn h-10 w-10 rounded-[4px] bg-[#13161c] hover:bg-[#222731] active:bg-[#2c323f] border border-[#353c4a] text-[#9da5b4] hover:text-[#edf0f5] flex items-center justify-center shrink-0 cursor-pointer"
         >
-          <X className="h-5 w-5" />
+          <X className="h-4 w-4" />
         </button>
       </div>
 
       {/* 2. Scrollable Body */}
-      <div className="flex-1 overflow-y-auto p-3.5 space-y-3.5">
-        {/* Multi-Sensor Photo Carousel (5 Images) */}
+      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {/* Multi-Sensor Photo Carousel */}
         {photos.length > 0 && (
-          <div className="rounded-xl border border-[#242933] overflow-hidden bg-[#0b0d11]">
+          <div className="rounded-[4px] border border-[#242933] overflow-hidden bg-[#0b0d11]">
             <div className="relative w-full h-52 bg-[#0b0d11]">
               <img
                 src={photoUrl}
                 alt={currentPhoto?.title || landmark.name}
-                className="w-full h-full object-cover transition-opacity duration-150"
+                className="w-full h-full object-cover"
               />
 
-              {/* Prev / Next Buttons */}
               {photos.length > 1 && (
                 <>
                   <button
                     onClick={prevPhoto}
-                    title="Previous Image"
-                    className="glove-btn absolute left-2 top-1/2 -translate-y-1/2 h-10 w-9 rounded-lg bg-[#13161c]/80 hover:bg-[#191d24] border border-[#353c4a] text-[#edf0f5] flex items-center justify-center cursor-pointer transition-all active:scale-95"
+                    title="Previous Sensor Frame"
+                    className="glove-btn absolute left-2 top-1/2 -translate-y-1/2 h-10 w-9 rounded-[4px] bg-[#13161c]/90 hover:bg-[#222731] border border-[#353c4a] text-[#edf0f5] flex items-center justify-center cursor-pointer"
                   >
                     <ChevronLeft className="h-5 w-5" />
                   </button>
                   <button
                     onClick={nextPhoto}
-                    title="Next Image"
-                    className="glove-btn absolute right-2 top-1/2 -translate-y-1/2 h-10 w-9 rounded-lg bg-[#13161c]/80 hover:bg-[#191d24] border border-[#353c4a] text-[#edf0f5] flex items-center justify-center cursor-pointer transition-all active:scale-95"
+                    title="Next Sensor Frame"
+                    className="glove-btn absolute right-2 top-1/2 -translate-y-1/2 h-10 w-9 rounded-[4px] bg-[#13161c]/90 hover:bg-[#222731] border border-[#353c4a] text-[#edf0f5] flex items-center justify-center cursor-pointer"
                   >
                     <ChevronRight className="h-5 w-5" />
                   </button>
                 </>
               )}
 
-              {/* Counter Badge */}
-              <div className="absolute top-2 right-2 px-2 py-0.5 rounded bg-[#0b0d11]/85 border border-[#242933] text-[10px] font-mono text-[#edf0f5]">
+              <div className="absolute top-2 right-2 px-2 py-0.5 rounded-[4px] bg-[#0b0d11]/90 border border-[#353c4a] text-[10px] font-mono text-[#edf0f5]">
                 {photoIdx + 1} / {photos.length}
               </div>
 
-              {/* Photo Caption Bar */}
-              <div className="absolute bottom-0 inset-x-0 bg-gradient-to-t from-[#0b0d11] via-[#0b0d11]/80 to-transparent p-2.5 pt-6">
-                <div className="text-xs font-semibold text-[#edf0f5] truncate">
+              <div className="absolute bottom-0 inset-x-0 bg-[#0b0d11]/90 border-t border-[#242933] px-2.5 py-1.5">
+                <div className="text-[11px] font-semibold text-[#edf0f5] truncate font-mono">
                   {currentPhoto?.title}
                 </div>
-                <div className="text-[10px] font-mono text-[#9da5b4]">
+                <div className="text-[9.5px] font-mono text-[#9da5b4]">
                   {currentPhoto?.source || 'NASA / JPL-Caltech / USGS'}
                 </div>
               </div>
             </div>
 
-            {/* Thumbnail Strip (5 thumbs) */}
             {photos.length > 1 && (
-              <div className="grid grid-cols-5 gap-1.5 p-2 bg-[#0b0d11] border-t border-[#242933]">
+              <div className="grid grid-cols-5 gap-1 p-1.5 bg-[#0b0d11] border-t border-[#242933]">
                 {photos.map((p, idx) => (
                   <button
                     key={idx}
                     onClick={() => setPhotoIdx(idx)}
-                    className={`h-11 rounded border overflow-hidden cursor-pointer transition-all ${
+                    title={p.title}
+                    className={`h-11 rounded-[4px] border overflow-hidden cursor-pointer ${
                       idx === photoIdx
-                        ? 'border-[#edf0f5] ring-1 ring-[#edf0f5] opacity-100'
+                        ? 'border-[#edf0f5] opacity-100'
                         : 'border-[#242933] opacity-60 hover:opacity-90'
                     }`}
                   >
@@ -156,119 +154,139 @@ export default function LandmarkDrawer({
           </div>
         )}
 
-        {/* Action Buttons: Route Here / Set Origin */}
+        {/* Action Buttons */}
         <div className="grid grid-cols-2 gap-2">
           {!isCurrentLocation ? (
             <button
               onClick={() => onNavigateToLandmark?.(landmark)}
-              className="glove-btn col-span-2 min-h-[46px] rounded-xl bg-[#22c55e] hover:bg-[#16a34a] text-[#0b0d11] font-black text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer shadow-lg active:scale-95 transition-all"
+              className="glove-btn col-span-2 min-h-[44px] rounded-[4px] bg-[#22c55e] hover:bg-[#16a34a] text-[#0b0d11] font-mono font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
             >
-              <Navigation className="h-4 w-4 fill-[#0b0d11]" />
-              <span>Navigate Here From Position</span>
+              <Navigation className="h-4 w-4" />
+              <span>ROUTE HERE</span>
             </button>
           ) : (
-            <div className="col-span-2 py-2.5 rounded-xl bg-cyan-950/60 border border-cyan-500/50 text-cyan-300 text-center font-mono font-bold text-xs">
-              📍 YOU ARE CURRENTLY AT THIS LANDMARK
+            <div className="col-span-2 min-h-[40px] flex items-center justify-center rounded-[4px] bg-[#191d24] border border-[#22c55e]/50 text-[#22c55e] font-mono font-bold text-[11px] uppercase">
+              [CURRENT ORIGIN POSITION]
             </div>
           )}
 
           <button
             onClick={() => onSetOriginLandmark?.(landmark)}
-            className="glove-btn min-h-[40px] rounded-xl bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#9da5b4] hover:text-[#edf0f5] font-mono text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+            className="glove-btn min-h-[40px] rounded-[4px] bg-[#191d24] hover:bg-[#222731] active:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] font-mono text-[11px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <MapPin className="h-3.5 w-3.5 text-cyan-400" />
-            <span>Set As Origin</span>
+            <MapPin className="h-3.5 w-3.5 text-[#22c55e]" />
+            <span>SET BASE</span>
           </button>
 
           <button
-            onClick={() => onOpenPanorama?.(landmark.id)}
-            className="glove-btn min-h-[40px] rounded-xl bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#9da5b4] hover:text-[#edf0f5] font-mono text-[11px] font-bold flex items-center justify-center gap-1.5 cursor-pointer active:scale-95"
+            onClick={() => onSetTargetLandmark?.(landmark)}
+            className="glove-btn min-h-[40px] rounded-[4px] bg-[#191d24] hover:bg-[#222731] active:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] font-mono text-[11px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
           >
-            <Camera className="h-3.5 w-3.5 text-amber-400" />
-            <span>360° / Vista</span>
+            <Crosshair className="h-3.5 w-3.5 text-[#9da5b4]" />
+            <span>SET TARGET</span>
+          </button>
+
+          <button
+            onClick={() => onOpenPanorama?.(landmark)}
+            className="glove-btn col-span-2 min-h-[40px] rounded-[4px] bg-[#191d24] hover:bg-[#222731] active:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] font-mono text-[11px] font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
+          >
+            <Camera className="h-3.5 w-3.5 text-[#edf0f5]" />
+            <span>SURFACE VISTA / 360</span>
           </button>
         </div>
 
         {/* Geological Unit & Coordinates */}
-        <div className="p-3 rounded-xl bg-[#191d24] border border-[#242933] space-y-1.5">
+        <div className="p-2.5 rounded-[4px] bg-[#191d24] border border-[#242933] space-y-1.5">
           <div className="flex items-center justify-between text-[10px] font-mono uppercase text-[#9da5b4]">
             <span className="flex items-center gap-1">
-              <Layers className="h-3.5 w-3.5 text-[#22c55e]" /> USGS SIM 3464 Unit
+              <Layers className="h-3.5 w-3.5 text-[#22c55e]" /> USGS SIM 3464 UNIT
             </span>
-            <span>{landmark.coords?.[0]?.toFixed(4)}°N, {landmark.coords?.[1]?.toFixed(4)}°E</span>
+            <span>
+              {landmark.coords?.[0]?.toFixed(4)} N, {landmark.coords?.[1]?.toFixed(4)} E
+            </span>
           </div>
-          <div className="text-xs font-bold text-[#edf0f5]">{landmark.usgs_unit || 'Regional Cartographic Unit'}</div>
-          <p className="text-[11px] text-[#9da5b4] leading-relaxed pt-1 border-t border-[#242933]/60">
+          <div className="text-xs font-bold font-mono text-[#edf0f5]">
+            {landmark.usgs_unit || 'Regional Cartographic Unit'}
+          </div>
+          <p className="text-[11px] text-[#9da5b4] leading-relaxed pt-1 border-t border-[#242933]">
             {landmark.brief}
           </p>
         </div>
 
-        {/* PIXL XRF Elemental Oxide Chemistry Grid */}
+        {/* PIXL XRF Chemistry */}
         {chem && Object.keys(chem).length > 0 && (
-          <div className="p-3 rounded-xl bg-[#191d24] border border-[#242933] space-y-2">
+          <div className="p-2.5 rounded-[4px] bg-[#191d24] border border-[#242933] space-y-2">
             <div className="text-[10px] font-mono uppercase text-[#9da5b4] font-bold flex items-center gap-1.5">
-              <FlaskConical className="h-3.5 w-3.5 text-cyan-400" />
-              <span>PIXL XRF Major Elemental Oxides (wt%)</span>
+              <FlaskConical className="h-3.5 w-3.5 text-[#edf0f5]" />
+              <span>PIXL XRF MAJOR OXIDES (WT%)</span>
             </div>
-            <div className="grid grid-cols-6 gap-1.5 text-center">
+            <div className="grid grid-cols-6 gap-1 text-center">
               {[
-                { k: 'SiO₂', v: chem.sio2_wt },
+                { k: 'SiO2', v: chem.sio2_wt },
                 { k: 'FeO', v: chem.feo_wt },
-                { k: 'Al₂O₃', v: chem.al2o3_wt },
+                { k: 'Al2O3', v: chem.al2o3_wt },
                 { k: 'MgO', v: chem.mgo_wt },
                 { k: 'CaO', v: chem.cao_wt },
-                { k: 'SO₃', v: chem.so3_wt },
+                { k: 'SO3', v: chem.so3_wt },
               ].map((item, idx) => (
-                <div key={idx} className="p-1 rounded bg-[#0b0d11] border border-[#242933]">
+                <div key={idx} className="p-1 rounded-[4px] bg-[#0b0d11] border border-[#242933]">
                   <div className="text-[8px] font-mono text-[#656d7d]">{item.k}</div>
-                  <div className="text-[11px] font-mono font-bold text-[#edf0f5]">{item.v ?? '—'}</div>
+                  <div className="text-[11px] font-mono font-bold text-[#edf0f5]">{item.v ?? '--'}</div>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Soil Mechanics & Bearing Capacity */}
+        {/* Regolith & Geotechnical */}
         {soil && (
-          <div className="p-3 rounded-xl bg-[#191d24] border border-[#242933] space-y-2 text-xs">
+          <div className="p-2.5 rounded-[4px] bg-[#191d24] border border-[#242933] space-y-1.5 text-xs">
             <div className="text-[10px] font-mono uppercase text-[#9da5b4] font-bold flex items-center gap-1.5">
-              <Activity className="h-3.5 w-3.5 text-emerald-400" />
-              <span>Regolith & Geotechnical Properties</span>
+              <Activity className="h-3.5 w-3.5 text-[#22c55e]" />
+              <span>REGOLITH & GEOTECHNICAL READINGS</span>
             </div>
-            <div className="space-y-1.5 text-[11px] font-mono">
-              <div className="flex justify-between py-0.5 border-b border-[#242933]/50">
-                <span className="text-[#9da5b4]">Bearing Capacity:</span>
-                <span className="font-bold text-[#22c55e]">{soil.soil_bearing_capacity || '140 kPa (Nominal)'}</span>
+            <div className="space-y-1 text-[10.5px] font-mono">
+              <div className="flex justify-between py-0.5 border-b border-[#242933]">
+                <span className="text-[#656d7d]">BEARING CAPACITY</span>
+                <span className="font-semibold text-[#22c55e] text-right">
+                  {soil.soil_bearing_capacity || '140 kPa (Nominal)'}
+                </span>
               </div>
-              <div className="flex justify-between py-0.5 border-b border-[#242933]/50">
-                <span className="text-[#9da5b4]">Grain Size:</span>
-                <span className="font-bold text-[#edf0f5] truncate max-w-[200px]">{soil.grain_size || 'Sand / Pebble'}</span>
+              <div className="flex justify-between py-0.5 border-b border-[#242933] gap-2">
+                <span className="text-[#656d7d]">GRAIN SIZE</span>
+                <span className="font-semibold text-[#edf0f5] text-right truncate max-w-[200px]">
+                  {soil.grain_size || 'Sand / Pebble'}
+                </span>
               </div>
-              <div className="flex justify-between py-0.5 border-b border-[#242933]/50">
-                <span className="text-[#9da5b4]">Perchlorate:</span>
-                <span className="font-bold text-[#ef4444]">{soil.perchlorate_content || '0.2 wt%'}</span>
+              <div className="flex justify-between py-0.5 border-b border-[#242933] gap-2">
+                <span className="text-[#656d7d]">PERCHLORATE</span>
+                <span className="font-semibold text-[#ef4444] text-right">
+                  {soil.perchlorate_content || '0.2 wt%'}
+                </span>
               </div>
-              <div className="flex justify-between py-0.5">
-                <span className="text-[#9da5b4]">Biosignatures:</span>
-                <span className="font-bold text-amber-300 truncate max-w-[190px]">{soil.organics_biosignatures || 'Baseline'}</span>
+              <div className="flex justify-between py-0.5 gap-2">
+                <span className="text-[#656d7d]">BIOSIGNATURES</span>
+                <span className="font-semibold text-[#edf0f5] text-right truncate max-w-[190px]">
+                  {soil.organics_biosignatures || 'Baseline'}
+                </span>
               </div>
             </div>
           </div>
         )}
 
-        {/* Mars 2020 Cored Sample Tubes */}
+        {/* Cored Samples */}
         {samples.length > 0 && (
-          <div className="p-3 rounded-xl bg-[#191d24] border border-[#242933] space-y-1.5 text-xs">
+          <div className="p-2.5 rounded-[4px] bg-[#191d24] border border-[#242933] space-y-1.5 text-xs">
             <div className="text-[10px] font-mono uppercase text-[#9da5b4] font-bold">
-              Cached Perseverance Samples
+              CACHED PERSEVERANCE SAMPLES
             </div>
             <div className="space-y-1">
               {samples.map((s, idx) => (
                 <div
                   key={idx}
-                  className="p-1.5 rounded-lg bg-[#0b0d11] border border-[#242933] text-[11px] font-mono text-[#9da5b4] flex items-center gap-2"
+                  className="p-1.5 rounded-[4px] bg-[#0b0d11] border border-[#242933] text-[10.5px] font-mono text-[#9da5b4] flex items-center gap-2"
                 >
-                  <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e]" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-[#22c55e] shrink-0" />
                   <span>{s}</span>
                 </div>
               ))}
