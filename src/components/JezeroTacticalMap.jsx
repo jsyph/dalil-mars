@@ -17,16 +17,24 @@ export default function JezeroTacticalMap({
   dustFrontState = null,
   solarPhase = 'day',
   astronautLocId = 'hab-alpha',
+  basemap = 'satellite',
+  reliefBlend = 0.3,
+  landmarks = [],
   onSelectPOI,
   onSelectWaypointSol,
   onOpenPanorama,
   onNavigateToPOI,
   onSetOrigin,
+  onSelectLandmark,
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const layerGroupsRef = useRef({});
   const liveMarkerRef = useRef(null);
+  const basemapOverlayRef = useRef(null);
+  const reliefOverlayRef = useRef(null);
+
+  const REGIONAL_BOUNDS = [[17.7000, 76.7980], [18.7013, 77.8009]];
 
   // Global dispatcher for popup button clicks
   useEffect(() => {
@@ -41,12 +49,24 @@ export default function JezeroTacticalMap({
       mapInstanceRef.current?.closePopup();
       onSetOrigin?.(poiId);
     };
+    window.dispatchOpenLandmark = (landmarkId) => {
+      mapInstanceRef.current?.closePopup();
+      const match = landmarks.find(
+        (l) => l.id === landmarkId || l.id.replace(/_/g, '-') === landmarkId.replace(/_/g, '-')
+      );
+      if (match) {
+        onSelectLandmark?.(match);
+      } else {
+        onSelectLandmark?.(landmarkId);
+      }
+    };
     return () => {
       delete window.dispatchMarsPano;
       delete window.dispatchNavigateTo;
       delete window.dispatchSetOrigin;
+      delete window.dispatchOpenLandmark;
     };
-  }, [onOpenPanorama, onNavigateToPOI, onSetOrigin]);
+  }, [onOpenPanorama, onNavigateToPOI, onSetOrigin, onSelectLandmark, landmarks]);
 
   // Initialize Leaflet Map once
   useEffect(() => {
@@ -74,6 +94,29 @@ export default function JezeroTacticalMap({
 
     opmBasemap.addTo(map);
 
+    // Basemap Image Overlay for Regional Jezero Quadrangle
+    const basemapUrls = {
+      satellite: '/data/ctx_mosaic_regional.png',
+      terrain: '/data/hrsc_hillshade.png',
+      elevation: '/data/hrsc_elevation_color.png',
+      themis: '/data/themis_night_ir.png',
+    };
+
+    if (basemapUrls[basemap]) {
+      basemapOverlayRef.current = L.imageOverlay(basemapUrls[basemap], REGIONAL_BOUNDS, {
+        opacity: 1.0,
+        zIndex: 1,
+        interactive: false,
+      }).addTo(map);
+    }
+
+    // Hillshade Relief Blend Overlay
+    reliefOverlayRef.current = L.imageOverlay('/data/hrsc_hillshade.png', REGIONAL_BOUNDS, {
+      opacity: basemap === 'satellite' ? reliefBlend : 0.0,
+      zIndex: 2,
+      interactive: false,
+    }).addTo(map);
+
     layerGroupsRef.current = {
       traverse: L.layerGroup().addTo(map),
       slope: L.layerGroup().addTo(map),
@@ -81,6 +124,7 @@ export default function JezeroTacticalMap({
       science: L.layerGroup().addTo(map),
       route: L.layerGroup().addTo(map),
       dustFront: L.layerGroup().addTo(map),
+      landmarks: L.layerGroup().addTo(map),
     };
 
     mapInstanceRef.current = map;
@@ -90,10 +134,50 @@ export default function JezeroTacticalMap({
         liveMarkerRef.current.remove();
         liveMarkerRef.current = null;
       }
+      if (basemapOverlayRef.current) {
+        basemapOverlayRef.current.remove();
+        basemapOverlayRef.current = null;
+      }
+      if (reliefOverlayRef.current) {
+        reliefOverlayRef.current.remove();
+        reliefOverlayRef.current = null;
+      }
       map.remove();
       mapInstanceRef.current = null;
     };
   }, []);
+
+  // Update Basemap & Regional Image Overlays dynamically
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const basemapUrls = {
+      satellite: '/data/ctx_mosaic_regional.png',
+      terrain: '/data/hrsc_hillshade.png',
+      elevation: '/data/hrsc_elevation_color.png',
+      themis: '/data/themis_night_ir.png',
+    };
+
+    if (basemapOverlayRef.current) {
+      basemapOverlayRef.current.remove();
+      basemapOverlayRef.current = null;
+    }
+
+    const targetUrl = basemapUrls[basemap];
+    if (targetUrl) {
+      basemapOverlayRef.current = L.imageOverlay(targetUrl, REGIONAL_BOUNDS, {
+        opacity: 1.0,
+        zIndex: 1,
+        interactive: false,
+      }).addTo(map);
+    }
+
+    // Set relief blend according to basemap mode
+    if (reliefOverlayRef.current) {
+      reliefOverlayRef.current.setOpacity(basemap === 'satellite' ? reliefBlend : 0.0);
+    }
+  }, [basemap, reliefBlend]);
 
   // Smooth Animated Fly-To Zoom when Locate / Compass Pin is Pressed!
   useEffect(() => {
@@ -288,6 +372,10 @@ export default function JezeroTacticalMap({
       });
 
       const marker = L.marker([poi.lat, poi.lon], { icon: customIcon });
+      const matchingLm = landmarks.find(
+        (l) => l.id === poi.id || l.id.replace(/_/g, '-') === poi.id.replace(/_/g, '-') || (poi.id === 'hab-alpha' && l.id === 'landing_site')
+      );
+
       marker.bindPopup(`
         <div style="font-size:12px; max-width:250px;">
           <div style="font-weight:700; color:${bgColor}; text-transform:uppercase; font-size:10px;">
@@ -316,6 +404,13 @@ export default function JezeroTacticalMap({
               width:100%; padding:4px 8px; background:#334155; color:#cbd5e1;
               font-weight:700; font-size:10px; border-radius:6px; border:none; cursor:pointer;
             ">📍 SET AS STARTING ORIGIN</button>
+            ${matchingLm ? `
+              <button onclick="window.dispatchOpenLandmark('${matchingLm.id}')" style="
+                width:100%; padding:5px 8px; background:#191d24; color:#22c55e;
+                border:1px solid rgba(34,197,94,0.4); font-weight:700; font-size:10px;
+                border-radius:6px; cursor:pointer; font-family:monospace;
+              ">📖 SCIENTIFIC DOSSIER & 5-PHOTO CAROUSEL</button>
+            ` : ''}
             <button onclick="window.dispatchMarsPano('${poi.id}')" style="
               width:100%; padding:5px 8px; background:${bgColor}; color:#020617;
               font-weight:800; font-size:11px; border-radius:8px; border:none; cursor:pointer;
@@ -332,7 +427,85 @@ export default function JezeroTacticalMap({
 
       marker.addTo(science);
     });
-  }, [sciencePOIs, layers.science, startPOI, endPOI, routeResult?.chargingStop, astronautLocId, onSelectPOI, onSelectWaypointSol, onOpenPanorama, onNavigateToPOI, onSetOrigin]);
+  }, [sciencePOIs, layers.science, startPOI, endPOI, routeResult?.chargingStop, astronautLocId, landmarks, onSelectPOI, onSelectWaypointSol, onOpenPanorama, onNavigateToPOI, onSetOrigin]);
+
+  // Render Layer: Jezero Planetary Landmarks & Regional Science Dossiers
+  useEffect(() => {
+    const { landmarks: lmGroup } = layerGroupsRef.current;
+    if (!lmGroup) return;
+    lmGroup.clearLayers();
+
+    if (layers.landmarks === false || !landmarks || landmarks.length === 0) return;
+
+    landmarks.forEach((lm) => {
+      const isCurrentLoc = lm.id === astronautLocId;
+      const markerIcon = L.divIcon({
+        className: 'landmark-map-pin',
+        html: `
+          <div style="position: relative; display: flex; align-items: center; justify-content: center; cursor: pointer;">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <circle cx="12" cy="12" r="9" stroke="#353c4a" stroke-width="1.5" fill="#13161c"/>
+              <circle cx="12" cy="12" r="7.5" stroke="#edf0f5" stroke-width="1.2" fill="#191d24"/>
+              <circle cx="12" cy="12" r="3" fill="#22c55e"/>
+            </svg>
+            <div style="
+              position: absolute; top: -16px; left: 50%; transform: translateX(-50%);
+              white-space: nowrap; font-family: monospace; font-size: 8.5px; font-weight: 700;
+              color: #9da5b4; background: rgba(11, 13, 17, 0.85); padding: 1px 4px;
+              border-radius: 3px; border: 1px solid #242933; pointer-events: none;
+            ">${lm.name.length > 16 ? lm.name.slice(0, 15) + '…' : lm.name}</div>
+          </div>
+        `,
+        iconSize: [24, 24],
+        iconAnchor: [12, 12],
+      });
+
+      const marker = L.marker(lm.coords, { icon: markerIcon });
+      const regolith = lm.soil_regolith?.dominant_type || 'Basaltic Regolith';
+      const usgsUnit = lm.usgs_unit || 'USGS SIM 3464';
+
+      marker.bindPopup(`
+        <div style="font-size:12px; max-width:270px; font-family:var(--font-sans, sans-serif); color:#edf0f5;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+            <span style="font-family:monospace; font-size:9.5px; font-weight:700; color:#22c55e; letter-spacing:0.05em; text-transform:uppercase;">
+              ${lm.category || 'LANDMARK'}
+            </span>
+            <span style="font-family:monospace; font-size:9px; color:#656d7d;">${usgsUnit}</span>
+          </div>
+          <div style="font-weight:700; font-size:13px; color:#edf0f5; margin-bottom:4px; font-family:monospace;">
+            ${lm.name}
+          </div>
+          <div style="font-size:11px; color:#9da5b4; margin-bottom:6px; line-height:1.35;">
+            ${lm.brief ? lm.brief.slice(0, 130) + '…' : ''}
+          </div>
+          <div style="background:#191d24; border:1px solid #242933; border-radius:4px; padding:6px; font-size:10px; margin-bottom:8px; font-family:monospace;">
+            <div><span style="color:#656d7d;">ELEVATION:</span> <span style="color:#edf0f5;">${lm.elevation_m} m</span></div>
+            <div><span style="color:#656d7d;">COORDS:</span> <span style="color:#edf0f5;">${lm.coords[0].toFixed(4)}°N, ${lm.coords[1].toFixed(4)}°E</span></div>
+            <div><span style="color:#656d7d;">REGOLITH:</span> <span style="color:#9da5b4;">${regolith}</span></div>
+          </div>
+          
+          <div style="display:flex; flex-direction:column; gap:5px;">
+            <button onclick="window.dispatchOpenLandmark('${lm.id}')" style="
+              width:100%; min-height:36px; padding:6px 10px; background:#191d24; color:#22c55e;
+              border:1px solid rgba(34,197,94,0.4); border-radius:4px; font-weight:700; font-size:10.5px;
+              font-family:monospace; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;
+            ">📖 SCIENTIFIC DOSSIER & 5-PHOTO CAROUSEL</button>
+            <button onclick="window.dispatchNavigateTo('${lm.id}')" style="
+              width:100%; min-height:32px; padding:5px 8px; background:#22c55e; color:#0b0d11;
+              border:none; border-radius:4px; font-weight:700; font-size:10.5px;
+              font-family:monospace; cursor:pointer; display:flex; align-items:center; justify-content:center; gap:6px;
+            ">🎯 NAVIGATE HERE FROM POSITION</button>
+          </div>
+        </div>
+      `);
+
+      marker.on('click', () => {
+        onSelectLandmark?.(lm);
+      });
+
+      marker.addTo(lmGroup);
+    });
+  }, [landmarks, layers.landmarks, astronautLocId, onSelectLandmark]);
 
   // Render A* Safe Marswalk Route (1-Leg or 2-Leg Recharged Route)
   useEffect(() => {

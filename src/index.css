@@ -1,14 +1,35 @@
 @import "tailwindcss";
 @import "leaflet/dist/leaflet.css";
 
+:root {
+  /* Centralized Theme: Aerospace Instrument Cluster (feat/jezero-ground-control palette) */
+  --color-surface-bg: #0b0d11;
+  --color-surface-panel: #13161c;
+  --color-surface-card: #191d24;
+  --color-surface-hover: #222731;
+  --color-surface-active: #2c323f;
+  
+  --color-border-subtle: #242933;
+  --color-border-medium: #353c4a;
+  --color-border-strong: #4f5767;
+
+  --color-text-primary: #edf0f5;
+  --color-text-secondary: #9da5b4;
+  --color-text-muted: #656d7d;
+
+  --color-status-ok: #22c55e;
+  --color-status-fault: #ef4444;
+  --color-status-neutral: #9da5b4;
+}
+
 @layer base {
   html, body, #root {
     height: 100%;
     width: 100%;
     margin: 0;
     padding: 0;
-    background-color: #020617;
-    color: #f1f5f9;
+    background-color: var(--color-surface-bg);
+    color: var(--color-text-primary);
     font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     user-select: none;
     -webkit-user-select: none;
@@ -18,57 +39,60 @@
 
 /* Leaflet overrides for dark Martian tactical HUD */
 .leaflet-container {
-  background: #09090b !important;
+  background: #0b0d11 !important;
   font-family: inherit;
 }
 
 .leaflet-control-zoom {
   border: none !important;
-  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.5) !important;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7) !important;
 }
 
 .leaflet-control-zoom a {
-  width: 48px !important;
-  height: 48px !important;
-  line-height: 46px !important;
-  font-size: 24px !important;
+  width: 44px !important;
+  height: 44px !important;
+  line-height: 42px !important;
+  font-size: 22px !important;
   font-weight: 700 !important;
-  background-color: rgba(15, 23, 42, 0.95) !important;
-  color: #f1f5f9 !important;
-  border-color: rgba(51, 65, 85, 0.9) !important;
-  border-radius: 14px !important;
+  background-color: #13161c !important;
+  color: #edf0f5 !important;
+  border: 1px solid #353c4a !important;
+  border-radius: 12px !important;
   margin-bottom: 6px !important;
 }
 
 .leaflet-control-zoom a:hover {
-  background-color: rgba(30, 41, 59, 1) !important;
-  color: #22d3ee !important;
+  background-color: #222731 !important;
+  color: #22c55e !important;
 }
 
 .leaflet-popup-content-wrapper,
 .leaflet-popup-tip {
-  background: rgba(15, 23, 42, 0.97) !important;
-  color: #f8fafc !important;
-  border: 1.5px solid rgba(251, 146, 60, 0.4);
-  backdrop-filter: blur(12px);
-  border-radius: 1rem !important;
+  background: #13161c !important;
+  color: #edf0f5 !important;
+  border: 1px solid #353c4a !important;
+  backdrop-filter: blur(14px);
+  border-radius: 0.85rem !important;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.8) !important;
 }
 
 .leaflet-popup-close-button {
-  color: #94a3b8 !important;
+  color: #9da5b4 !important;
   font-size: 18px !important;
   padding: 6px !important;
 }
 
 .leaflet-control-attribution {
-  background: rgba(2, 6, 23, 0.8) !important;
-  color: #64748b !important;
+  background: rgba(11, 13, 17, 0.85) !important;
+  color: #656d7d !important;
   font-size: 10px !important;
   border-radius: 6px 0 0 0;
+  border-top: 1px solid #242933;
+  border-left: 1px solid #242933;
 }
 
 .leaflet-control-attribution a {
-  color: #94a3b8 !important;
+  color: #9da5b4 !important;
 }
 
 /* Google Maps-style Directional Navigation Puck & Heading Cone */

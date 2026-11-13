@@ -50,11 +50,13 @@ import {
 } from 'lucide-react';
 import JezeroTacticalMap from './components/JezeroTacticalMap';
 import MarsPanoramaViewer from './components/MarsPanoramaViewer';
+import LandmarkDrawer from './components/LandmarkDrawer';
 import waypointsData from './data/jezero_waypoints.json';
 import medaWeatherData from './data/meda_weather.json';
 import povImagesData from './data/pov_images.json';
 import jezeroPanoramas from './data/jezero_panoramas.json';
 import scienceHazardsData from './data/jezero_science_hazards.json';
+import landmarksData from './data/landmarks.json';
 import {
   calculateBearingDegrees,
   computeMarswalkRoute,
@@ -96,12 +98,18 @@ export default function App() {
   const [showLocationPinTag, setShowLocationPinTag] = useState(false);
   const [compassRotation, setCompassRotation] = useState(0);
 
+  // Google Maps Basemap & 3D Relief Blend state
+  const [basemap, setBasemap] = useState('satellite'); // 'satellite' | 'terrain' | 'elevation' | 'themis' | 'default'
+  const [reliefBlend, setReliefBlend] = useState(0.3); // 0.0 to 1.0 (HRSC Hillshade blend over basemap)
+  const [activeLandmark, setActiveLandmark] = useState(null);
+
   // Layer visibility toggles
   const [layers, setLayers] = useState({
     slope: true,
     hazards: true,
     science: true,
     traverse: true,
+    landmarks: true,
   });
 
   // Route endpoints & mobility
@@ -214,12 +222,42 @@ export default function App() {
     }, toast.duration || 5500);
   };
 
+  const findPOIOrLandmark = (id) => {
+    if (!id) return null;
+    let poi = sciencePOIs.find((p) => p.id === id);
+    if (!poi) {
+      poi = sciencePOIs.find(
+        (p) => p.id.replace(/-/g, '_') === id.replace(/-/g, '_')
+      );
+    }
+    if (!poi && (id === 'landing_site' || id === 'hab-alpha')) {
+      poi = sciencePOIs.find((p) => p.id === 'hab-alpha');
+    }
+    if (!poi) {
+      const lm = landmarksData.find((l) => l.id === id || l.id.replace(/_/g, '-') === id.replace(/_/g, '-'));
+      if (lm) {
+        poi = {
+          id: lm.id,
+          name: lm.name,
+          lat: lm.coords[0],
+          lon: lm.coords[1],
+          elev: lm.elevation_m,
+          sol: 0,
+          description: lm.brief,
+          minerals: lm.soil_regolith?.dominant_type || 'Regolith',
+          type: 'science',
+        };
+      }
+    }
+    return poi;
+  };
+
   const startPOI = useMemo(
-    () => sciencePOIs.find((p) => p.id === startId) || sciencePOIs[0],
+    () => findPOIOrLandmark(startId) || sciencePOIs[0],
     [sciencePOIs, startId]
   );
   const endPOI = useMemo(
-    () => sciencePOIs.find((p) => p.id === endId) || sciencePOIs[3],
+    () => findPOIOrLandmark(endId) || sciencePOIs[3],
     [sciencePOIs, endId]
   );
 
@@ -671,10 +709,10 @@ export default function App() {
 
   // Navigate directly to a target POI starting from current astronaut position!
   const handleNavigateToPOI = (targetId) => {
-    const targetPOI = sciencePOIs.find((p) => p.id === targetId);
+    const targetPOI = findPOIOrLandmark(targetId);
     if (!targetPOI) return;
 
-    if (targetId === astronautLocId) {
+    if (targetPOI.id === astronautLocId || (astronautLocId === 'hab-alpha' && targetPOI.id === 'landing_site')) {
       showToast({
         id: 'already-here',
         type: 'info',
@@ -686,8 +724,8 @@ export default function App() {
 
     // Always start from where the astronaut currently is!
     setStartId(astronautLocId);
-    setEndId(targetId);
-    setSelectedSol(targetPOI.sol);
+    setEndId(targetPOI.id);
+    setSelectedSol(targetPOI.sol || 3);
     setNavMode('browse');
     setNavStepIdx(0);
     setNavPlaying(false);
@@ -695,23 +733,24 @@ export default function App() {
       id: 'route-set',
       type: 'info',
       title: `🧭 Route Plotted: Next Leg`,
-      message: `Starting from ${sciencePOIs.find((p) => p.id === astronautLocId)?.name || 'Current Position'} ➔ ${targetPOI.name}`,
+      message: `Starting from ${findPOIOrLandmark(astronautLocId)?.name || 'Current Position'} ➔ ${targetPOI.name}`,
     });
   };
 
   // Set any POI as the new starting origin / current location
   const handleSetOrigin = (poiId) => {
-    setAstronautLocId(poiId);
-    setStartId(poiId);
+    const target = findPOIOrLandmark(poiId);
+    const resolvedId = target?.id || poiId;
+    setAstronautLocId(resolvedId);
+    setStartId(resolvedId);
     setNavStepIdx(0);
     setNavPlaying(false);
     setNavMode('browse');
-    const p = sciencePOIs.find((item) => item.id === poiId);
     showToast({
       id: 'origin-updated',
       type: 'info',
       title: `📍 Origin Updated`,
-      message: `Current location set to ${p?.name || poiId}.`,
+      message: `Current location set to ${target?.name || resolvedId}.`,
     });
   };
 
@@ -791,6 +830,9 @@ export default function App() {
           dustFrontState={dustFrontState}
           solarPhase={martianEnv.solarPhase}
           astronautLocId={astronautLocId}
+          basemap={basemap}
+          reliefBlend={reliefBlend}
+          landmarks={landmarksData}
           onSelectPOI={(poi) => {
             handleNavigateToPOI(poi.id);
             handleOpenPanorama(poi.id);
@@ -801,6 +843,10 @@ export default function App() {
           onOpenPanorama={handleOpenPanorama}
           onNavigateToPOI={handleNavigateToPOI}
           onSetOrigin={handleSetOrigin}
+          onSelectLandmark={(lm) => {
+            const match = typeof lm === 'object' ? lm : landmarksData.find((l) => l.id === lm);
+            setActiveLandmark(match || null);
+          }}
         />
       </div>
 
@@ -964,24 +1010,24 @@ export default function App() {
         ) : (
           /* GOOGLE MAPS EXPLORE & SEARCH BAR */
           <div className="pointer-events-auto w-full max-w-xl space-y-2">
-            <div className="flex items-center justify-between gap-2 rounded-2xl bg-slate-900/95 border border-slate-700/80 px-3 py-2 shadow-2xl backdrop-blur-md">
+            <div className="flex items-center justify-between gap-2 rounded-2xl bg-[#13161c]/95 border border-[#353c4a] px-3.5 py-2.5 shadow-2xl backdrop-blur-md">
               <div className="flex items-center gap-2.5">
-                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-400 font-bold">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-[#191d24] border border-[#353c4a] text-[#22c55e] font-bold">
                   <Compass className="h-5 w-5" />
                 </div>
                 <div>
                   <div className="flex items-center gap-2">
-                    <span className="text-sm font-black tracking-wider uppercase text-slate-100">
+                    <span className="text-sm font-black tracking-wider uppercase text-[#edf0f5] font-mono">
                       Dalil Mars
                     </span>
-                    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-mono text-emerald-400 border border-emerald-500/30">
-                      JEZERO
+                    <span className="rounded bg-[#22c55e]/15 px-1.5 py-0.5 text-[9px] font-mono text-[#22c55e] border border-[#22c55e]/30">
+                      JEZERO TERMINAL
                     </span>
                   </div>
-                  <div className="text-[10px] font-mono text-slate-400 flex items-center gap-1.5">
+                  <div className="text-[10px] font-mono text-[#9da5b4] flex items-center gap-1.5">
                     <span>SOL {selectedMissionSol}</span>
                     <span>•</span>
-                    <span className="text-emerald-400 font-bold">{martianEnv.lstText}</span>
+                    <span className="text-[#22c55e] font-bold">{martianEnv.lstText}</span>
                     <span>•</span>
                     <span>{martianEnv.ambientTempC}°C</span>
                   </div>
@@ -992,10 +1038,10 @@ export default function App() {
               <div className="flex items-center gap-1">
                 <button
                   onClick={() => setShowRouteOptions((v) => !v)}
-                  className={`glove-btn min-h-[40px] px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 cursor-pointer ${
+                  className={`glove-btn min-h-[40px] px-3 py-1.5 rounded-xl border text-xs font-mono font-semibold flex items-center gap-1.5 cursor-pointer ${
                     showRouteOptions
-                      ? 'bg-cyan-500 text-slate-950 border-cyan-400'
-                      : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                      ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e] font-bold'
+                      : 'bg-[#191d24] text-[#edf0f5] border-[#353c4a] hover:bg-[#222731]'
                   }`}
                 >
                   <Sliders className="h-3.5 w-3.5" />
@@ -1005,19 +1051,19 @@ export default function App() {
             </div>
 
             {/* Simulation Environment Mode Selector (☀️ Nominal | 🌪 Dust Storm | ⚡ Solar Flare) */}
-            <div className="flex items-center gap-1 bg-slate-950/85 p-1 rounded-2xl border border-slate-800 backdrop-blur-md">
+            <div className="flex items-center gap-1 bg-[#13161c]/90 p-1 rounded-2xl border border-[#242933] backdrop-blur-md font-mono">
               <button
                 onClick={() => {
                   setWeatherKey('nominal');
                   setIncomingDustAlert(false);
                 }}
-                className={`glove-btn flex-1 min-h-[34px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                className={`glove-btn flex-1 min-h-[36px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
                   weatherKey === 'nominal'
-                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-[#22c55e]/20 text-[#22c55e] border border-[#22c55e]/60'
+                    : 'text-[#9da5b4] hover:text-[#edf0f5]'
                 }`}
               >
-                <Sun className="h-3.5 w-3.5 text-amber-400" />
+                <Sun className="h-3.5 w-3.5 text-[#22c55e]" />
                 <span>Nominal Sol</span>
               </button>
 
@@ -1027,13 +1073,13 @@ export default function App() {
                   setIncomingDustAlert(true);
                   setShowDustRadarCard(true);
                 }}
-                className={`glove-btn flex-1 min-h-[34px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                className={`glove-btn flex-1 min-h-[36px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
                   weatherKey === 'dust_storm'
-                    ? 'bg-orange-500/25 text-orange-300 border border-orange-500/50'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-[#ef4444]/25 text-[#ef4444] border border-[#ef4444]/60'
+                    : 'text-[#9da5b4] hover:text-[#edf0f5]'
                 }`}
               >
-                <Wind className="h-3.5 w-3.5 text-orange-400" />
+                <Wind className="h-3.5 w-3.5 text-[#ef4444]" />
                 <span>Dust Storm</span>
               </button>
 
@@ -1042,10 +1088,10 @@ export default function App() {
                   setWeatherKey('solar_storm');
                   setIncomingDustAlert(false);
                 }}
-                className={`glove-btn flex-1 min-h-[34px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                className={`glove-btn flex-1 min-h-[36px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer transition-all ${
                   weatherKey === 'solar_storm'
-                    ? 'bg-red-500/25 text-red-300 border border-red-500/50'
-                    : 'text-slate-400 hover:text-slate-200'
+                    ? 'bg-[#ef4444]/25 text-[#ef4444] border border-[#ef4444]/60'
+                    : 'text-[#9da5b4] hover:text-[#edf0f5]'
                 }`}
               >
                 <Zap className="h-3.5 w-3.5 text-red-400" />
@@ -1245,10 +1291,10 @@ export default function App() {
         <button
           onClick={handleCompassClick}
           title="Compass: Tap to Re-align North & Zoom in to Location"
-          className="glove-btn flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900/95 hover:bg-slate-800 border-2 border-cyan-500/60 hover:border-cyan-400 shadow-xl backdrop-blur-md text-cyan-400 font-mono text-[11px] font-bold cursor-pointer transition-all active:scale-90"
+          className="glove-btn flex h-12 w-12 items-center justify-center rounded-2xl bg-[#13161c]/95 hover:bg-[#222731] border-2 border-[#353c4a] hover:border-[#4f5767] shadow-xl backdrop-blur-md text-[#edf0f5] font-mono text-[11px] font-bold cursor-pointer transition-all active:scale-90"
         >
           <Compass
-            className="h-6 w-6 transition-transform duration-500"
+            className="h-6 w-6 transition-transform duration-500 text-[#22c55e]"
             style={{ transform: `rotate(${compassRotation}deg)` }}
           />
         </button>
@@ -1259,8 +1305,8 @@ export default function App() {
           title="Find My Location: Smooth Zoom-In with Radar Wave"
           className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border-2 shadow-xl backdrop-blur-md cursor-pointer transition-all active:scale-90 ${
             followAstronaut
-              ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-cyan-500/50'
-              : 'bg-slate-900/95 text-slate-300 border-slate-700 hover:bg-slate-800'
+              ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e] shadow-[#22c55e]/40'
+              : 'bg-[#13161c]/95 text-[#edf0f5] border-[#353c4a] hover:bg-[#222731]'
           }`}
         >
           <Crosshair className="h-6 w-6" />
@@ -1270,10 +1316,10 @@ export default function App() {
         <button
           onClick={() => handleOpenPanorama(endId || startId)}
           title="Open Location Photo / 360° Panorama"
-          className="glove-btn relative flex h-12 w-12 items-center justify-center rounded-2xl border shadow-xl backdrop-blur-md cursor-pointer transition-all bg-slate-900/90 text-cyan-400 hover:text-white border-cyan-500/60 hover:border-cyan-400 hover:bg-cyan-950 active:scale-90"
+          className="glove-btn relative flex h-12 w-12 items-center justify-center rounded-2xl border-2 shadow-xl backdrop-blur-md cursor-pointer transition-all bg-[#13161c]/95 text-[#22c55e] hover:text-white border-[#353c4a] hover:border-[#22c55e] hover:bg-[#222731] active:scale-90"
         >
           <Camera className="h-6 w-6" />
-          <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-cyan-400 border-2 border-slate-950 animate-pulse" />
+          <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-[#22c55e] border-2 border-[#0b0d11] animate-pulse" />
         </button>
 
         {/* Storm Radar Alert FAB (Toggles Predictive Metric Card) */}
@@ -1283,10 +1329,10 @@ export default function App() {
             setShowDustRadarCard(true);
           }}
           title="Toggle Predictive Storm Radar Card"
-          className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border shadow-xl backdrop-blur-md cursor-pointer transition-all ${
+          className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border-2 shadow-xl backdrop-blur-md cursor-pointer transition-all ${
             incomingDustAlert || weatherKey === 'dust_storm'
-              ? 'bg-orange-500 text-slate-950 border-orange-300 animate-pulse shadow-orange-500/40'
-              : 'bg-slate-900/90 text-slate-300 border-slate-700 hover:bg-slate-800'
+              ? 'bg-[#ef4444] text-[#0b0d11] border-[#ef4444] animate-pulse shadow-[#ef4444]/40'
+              : 'bg-[#13161c]/95 text-[#edf0f5] border-[#353c4a] hover:bg-[#222731]'
           }`}
         >
           <Wind className="h-6 w-6" />
@@ -1295,20 +1341,24 @@ export default function App() {
         {/* Map Layers Switcher FAB */}
         <button
           onClick={() => setShowLayersSheet((v) => !v)}
-          title="Map Layers"
-          className="glove-btn flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900/90 border border-slate-700 text-slate-300 hover:bg-slate-800 shadow-xl backdrop-blur-md cursor-pointer"
+          title="Map Types & Layers (Google Maps style)"
+          className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border-2 shadow-xl backdrop-blur-md cursor-pointer transition-all ${
+            showLayersSheet
+              ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e]'
+              : 'bg-[#13161c]/95 text-[#edf0f5] border-[#353c4a] hover:bg-[#222731]'
+          }`}
         >
-          <Layers className="h-6 w-6 text-orange-400" />
+          <Layers className="h-6 w-6" />
         </button>
 
         {/* Map Legend & Symbology Guide FAB */}
         <button
           onClick={() => setShowLegendSheet((v) => !v)}
           title="Map Legend: What do the icons & colored dots mean?"
-          className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border shadow-xl backdrop-blur-md cursor-pointer transition-all active:scale-90 ${
+          className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border-2 shadow-xl backdrop-blur-md cursor-pointer transition-all active:scale-90 ${
             showLegendSheet
-              ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-cyan-500/50'
-              : 'bg-slate-900/90 text-cyan-400 border-slate-700 hover:bg-slate-800'
+              ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e] shadow-[#22c55e]/40'
+              : 'bg-[#13161c]/95 text-[#edf0f5] border-[#353c4a] hover:bg-[#222731]'
           }`}
         >
           <Info className="h-6 w-6" />
@@ -1359,116 +1409,251 @@ export default function App() {
         </div>
       )}
 
-      {/* 9. FLOATING LAYERS SHEET (When FAB is Tapped) */}
+      {/* 9. GOOGLE MAPS STYLE BOTTOM-LEFT BASEMAP QUICK-TOGGLE THUMBNAIL */}
+      <div className="absolute bottom-24 left-4 z-30 flex flex-col items-center gap-2">
+        <button
+          onClick={() => setBasemap((b) => (b === 'satellite' ? 'terrain' : 'satellite'))}
+          title={`Active: ${basemap.toUpperCase()} — Tap to toggle Terrain/Satellite or tap Layers button`}
+          className="group glove-btn relative flex h-14 w-14 flex-col items-center justify-center overflow-hidden rounded-2xl border-2 border-[#353c4a] bg-[#13161c] shadow-2xl transition-all hover:border-[#22c55e] active:scale-95 cursor-pointer"
+        >
+          <img
+            src={basemap === 'satellite' ? '/data/hrsc_hillshade.png' : '/data/ctx_mosaic_regional.png'}
+            alt="Basemap preview"
+            className="absolute inset-0 h-full w-full object-cover opacity-75 group-hover:scale-110 transition-transform"
+          />
+          <div className="absolute inset-0 bg-gradient-to-t from-[#0b0d11]/90 via-transparent to-black/20" />
+          <span className="relative z-10 text-[9px] font-mono font-bold uppercase tracking-wider text-[#edf0f5] bg-[#13161c]/90 px-1.5 py-0.5 rounded border border-[#242933]">
+            {basemap === 'satellite' ? 'Terrain' : 'Satellite'}
+          </span>
+        </button>
+      </div>
+
+      {/* 10. GOOGLE MAPS STYLE MAP TYPES & LAYERS SHEET (When FAB or Switcher is Tapped) */}
       {showLayersSheet && (
-        <div className="absolute right-16 top-52 z-40 w-64 rounded-2xl bg-slate-900/95 border-2 border-slate-700 p-3 shadow-2xl backdrop-blur-xl space-y-2">
-          <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 text-xs font-bold uppercase text-orange-400">
-            <span className="flex items-center gap-1.5">
-              <Layers className="h-4 w-4" /> Map Layers
+        <div className="absolute right-16 top-36 z-40 w-80 max-w-[92vw] rounded-2xl bg-[#13161c]/95 border-2 border-[#353c4a] p-4 shadow-2xl backdrop-blur-xl space-y-3.5 text-[#edf0f5]">
+          <div className="flex items-center justify-between pb-2 border-b border-[#242933] text-xs font-mono font-bold uppercase tracking-wider text-[#22c55e]">
+            <span className="flex items-center gap-2">
+              <Layers className="h-4 w-4 text-[#22c55e]" /> Map Type & Layers
             </span>
-            <button onClick={() => setShowLayersSheet(false)} className="text-slate-400 hover:text-white">
+            <button
+              onClick={() => setShowLayersSheet(false)}
+              className="p-1 rounded-md text-[#9da5b4] hover:text-white hover:bg-[#222731] cursor-pointer"
+            >
               <X className="h-4 w-4" />
             </button>
           </div>
-          <div className="space-y-1 text-xs">
-            {[
-              { key: 'slope', label: 'Slope Safety Heatmap', icon: <TrendingUp className="h-3.5 w-3.5 text-emerald-400" /> },
-              { key: 'hazards', label: 'Terrain Hazards (Sand/Cliffs)', icon: <AlertTriangle className="h-3.5 w-3.5 text-red-400" /> },
-              { key: 'science', label: 'Bases & Science POIs', icon: <Zap className="h-3.5 w-3.5 text-amber-400" /> },
-              { key: 'traverse', label: 'Perseverance Rover Track', icon: <Navigation className="h-3.5 w-3.5 text-orange-400" /> },
-            ].map((item) => (
-              <label
-                key={item.key}
-                className="flex items-center justify-between min-h-[38px] px-2 rounded-lg hover:bg-slate-800 cursor-pointer"
-              >
-                <span className="flex items-center gap-2">
-                  {item.icon}
-                  <span>{item.label}</span>
-                </span>
-                <input
-                  type="checkbox"
-                  checked={layers[item.key]}
-                  onChange={() => toggleLayer(item.key)}
-                  className="w-4 h-4 accent-orange-500"
-                />
-              </label>
-            ))}
+
+          {/* Section A: Google Maps Visual Map Type Cards */}
+          <div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-[#9da5b4] mb-2 font-bold">
+              Map Type (Jezero Regional GIS)
+            </div>
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                {
+                  id: 'satellite',
+                  name: 'Satellite',
+                  desc: 'MRO CTX 5m',
+                  img: '/data/ctx_mosaic_regional.png',
+                },
+                {
+                  id: 'terrain',
+                  name: 'Terrain',
+                  desc: 'HRSC Hillshade',
+                  img: '/data/hrsc_hillshade.png',
+                },
+                {
+                  id: 'elevation',
+                  name: 'Elevation',
+                  desc: 'Hypsometric DTM',
+                  img: '/data/hrsc_elevation_color.png',
+                },
+                {
+                  id: 'themis',
+                  name: 'Thermal IR',
+                  desc: 'THEMIS Night',
+                  img: '/data/themis_night_ir.png',
+                },
+                {
+                  id: 'default',
+                  name: 'Vector',
+                  desc: 'Carto Mars',
+                  img: null,
+                },
+              ].map((m) => {
+                const isActive = basemap === m.id;
+                return (
+                  <button
+                    key={m.id}
+                    onClick={() => setBasemap(m.id)}
+                    className={`glove-btn relative flex flex-col items-center justify-between p-1.5 rounded-xl border text-center transition-all cursor-pointer ${
+                      isActive
+                        ? 'border-[#22c55e] bg-[#191d24] ring-2 ring-[#22c55e]/40 shadow-md'
+                        : 'border-[#242933] bg-[#191d24]/70 hover:border-[#353c4a] hover:bg-[#222731]'
+                    }`}
+                  >
+                    <div className="w-full h-11 rounded-lg overflow-hidden relative bg-[#0b0d11] mb-1">
+                      {m.img ? (
+                        <img
+                          src={m.img}
+                          alt={m.name}
+                          className="w-full h-full object-cover"
+                        />
+                      ) : (
+                        <div className="w-full h-full flex items-center justify-center bg-[#13161c] text-[#9da5b4]">
+                          <MapIcon className="h-5 w-5" />
+                        </div>
+                      )}
+                      {isActive && (
+                        <div className="absolute top-1 right-1 h-3.5 w-3.5 rounded-full bg-[#22c55e] flex items-center justify-center text-[#0b0d11]">
+                          <Check className="h-2.5 w-2.5 stroke-[3]" />
+                        </div>
+                      )}
+                    </div>
+                    <div className="text-[11px] font-mono font-bold leading-tight text-[#edf0f5]">
+                      {m.name}
+                    </div>
+                    <div className="text-[9px] font-mono text-[#656d7d] leading-none mt-0.5">
+                      {m.desc}
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
-          <div className="pt-2 border-t border-slate-800">
+          {/* Section B: 3D Hillshade Relief Blend Slider */}
+          <div className="p-2.5 rounded-xl bg-[#191d24] border border-[#242933] space-y-1.5">
+            <div className="flex items-center justify-between text-xs font-mono">
+              <span className="text-[#9da5b4] flex items-center gap-1.5">
+                <TrendingUp className="h-3.5 w-3.5 text-[#22c55e]" />
+                <span>3D Relief Hillshade Blend</span>
+              </span>
+              <span className="text-[#22c55e] font-bold">{Math.round(reliefBlend * 100)}%</span>
+            </div>
+            <input
+              type="range"
+              min="0"
+              max="1"
+              step="0.05"
+              value={reliefBlend}
+              onChange={(e) => setReliefBlend(parseFloat(e.target.value))}
+              className="w-full accent-[#22c55e] cursor-pointer h-2 bg-[#0b0d11] rounded-lg"
+            />
+            <div className="flex justify-between text-[9px] font-mono text-[#656d7d]">
+              <span>Pure Imagery (0%)</span>
+              <span>50% Relief</span>
+              <span>Full Relief (100%)</span>
+            </div>
+          </div>
+
+          {/* Section C: Map Details & Overlays */}
+          <div>
+            <div className="text-[10px] font-mono uppercase tracking-wider text-[#9da5b4] mb-1.5 font-bold">
+              Map Details & Overlays
+            </div>
+            <div className="space-y-1 text-xs font-mono">
+              {[
+                { key: 'landmarks', label: 'Landmarks & Science Sites (11 Sites)', icon: <Target className="h-3.5 w-3.5 text-[#22c55e]" /> },
+                { key: 'slope', label: 'Slope Safety Heatmap', icon: <TrendingUp className="h-3.5 w-3.5 text-emerald-400" /> },
+                { key: 'hazards', label: 'Terrain Hazards (Sand/Cliffs)', icon: <AlertTriangle className="h-3.5 w-3.5 text-[#ef4444]" /> },
+                { key: 'science', label: 'Bases & Virtual Chargers', icon: <Zap className="h-3.5 w-3.5 text-amber-400" /> },
+                { key: 'traverse', label: 'Perseverance Rover Track', icon: <Navigation className="h-3.5 w-3.5 text-[#edf0f5]" /> },
+              ].map((item) => (
+                <label
+                  key={item.key}
+                  className="flex items-center justify-between min-h-[38px] px-2.5 py-1 rounded-xl bg-[#191d24] border border-[#242933] hover:bg-[#222731] cursor-pointer"
+                >
+                  <span className="flex items-center gap-2 text-[#edf0f5]">
+                    {item.icon}
+                    <span className="text-[11px]">{item.label}</span>
+                  </span>
+                  <input
+                    type="checkbox"
+                    checked={Boolean(layers[item.key])}
+                    onChange={() => toggleLayer(item.key)}
+                    className="w-4 h-4 accent-[#22c55e] rounded cursor-pointer"
+                  />
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* Section D: Map Legend & Symbology Link */}
+          <div className="pt-2 border-t border-[#242933]">
             <button
               onClick={() => {
                 setShowLayersSheet(false);
                 setShowLegendSheet(true);
               }}
-              className="glove-btn w-full min-h-[38px] py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+              className="glove-btn w-full min-h-[40px] py-1.5 rounded-xl bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#edf0f5] font-mono font-bold text-xs flex items-center justify-center gap-2 cursor-pointer"
             >
-              <Info className="h-4 w-4 text-cyan-400" />
-              <span>Map Legend & Symbology</span>
+              <Info className="h-4 w-4 text-[#22c55e]" />
+              <span>Map Legend & Symbology Guide</span>
             </button>
           </div>
         </div>
       )}
 
-      {/* 10. BOTTOM GOOGLE MAPS NAVIGATION & TRIP BAR */}
+      {/* 11. BOTTOM GOOGLE MAPS NAVIGATION & TRIP BAR */}
       <div className="absolute bottom-3 left-3 right-3 z-30 flex flex-col items-center">
         {/* Quick Map Legend Pill on Canvas */}
         <div className="w-full max-w-xl flex items-center justify-between mb-1.5 px-1 pointer-events-auto">
           <button
             onClick={() => setShowLegendSheet((v) => !v)}
-            className="glove-btn px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-[11px] font-mono text-cyan-300 flex items-center gap-1.5 shadow-lg backdrop-blur-md cursor-pointer active:scale-95 transition-transform"
+            className="glove-btn px-3 py-1.5 rounded-xl bg-[#13161c]/90 hover:bg-[#222731] border border-[#353c4a] text-[11px] font-mono text-[#edf0f5] flex items-center gap-1.5 shadow-lg backdrop-blur-md cursor-pointer active:scale-95 transition-transform"
           >
-            <Info className="h-3.5 w-3.5 text-cyan-400" />
+            <Info className="h-3.5 w-3.5 text-[#22c55e]" />
             <span>Map Legend ({showLegendSheet ? 'Close' : 'Icons & Dots Guide'})</span>
           </button>
         </div>
 
-        <div className="w-full max-w-xl rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-xl overflow-hidden transition-all">
+        <div className="w-full max-w-xl rounded-2xl bg-[#13161c]/95 border border-[#353c4a] shadow-2xl backdrop-blur-xl overflow-hidden transition-all text-[#edf0f5]">
           {navMode === 'navigating' ? (
             /* ACTIVE NAVIGATION CONTROLS (Google Maps Android Drive Bar) */
             <div className="p-3.5 space-y-3">
               <div className="flex items-center justify-between">
                 <div>
-                  <div className="text-2xl font-black text-cyan-300 font-mono flex items-baseline gap-1.5">
+                  <div className="text-2xl font-black text-[#22c55e] font-mono flex items-baseline gap-1.5">
                     <span>{liveNavState?.estTimeRemainingMin}</span>
-                    <span className="text-xs font-sans font-bold text-slate-300">min</span>
+                    <span className="text-xs font-sans font-bold text-[#9da5b4]">min</span>
                   </div>
-                  <div className="text-xs text-slate-400 flex items-center gap-2">
+                  <div className="text-xs text-[#9da5b4] flex items-center gap-2 font-mono">
                     <span>{liveNavState?.distRemainingKm} km remaining</span>
                     <span>•</span>
-                    <span className="text-emerald-400 font-bold">Sol {selectedMissionSol}</span>
+                    <span className="text-[#22c55e] font-bold">Sol {selectedMissionSol}</span>
                   </div>
                 </div>
 
                 {/* Big Live Suit/Rover Battery & O2 Status Gauges */}
                 <div className="flex items-center gap-3">
-                  <div className="rounded-xl bg-slate-950 p-2 border border-slate-800 text-right min-w-[90px]">
-                    <div className="flex items-center justify-end gap-1 text-[10px] text-slate-400 font-mono">
-                      <Battery className={`h-3.5 w-3.5 ${liveNavState?.currentBattery < 25 ? 'text-red-400' : 'text-cyan-400'}`} />
+                  <div className="rounded-xl bg-[#0b0d11] p-2 border border-[#242933] text-right min-w-[95px]">
+                    <div className="flex items-center justify-end gap-1 text-[10px] text-[#9da5b4] font-mono">
+                      <Battery className={`h-3.5 w-3.5 ${liveNavState?.currentBattery < 25 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`} />
                       <span>BATTERY</span>
                     </div>
-                    <div className={`text-sm font-black font-mono ${liveNavState?.currentBattery < 25 ? 'text-red-400' : 'text-cyan-300'}`}>
+                    <div className={`text-sm font-black font-mono ${liveNavState?.currentBattery < 25 ? 'text-[#ef4444]' : 'text-[#edf0f5]'}`}>
                       {liveNavState?.currentBattery}%
                     </div>
-                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                    <div className="w-full h-1.5 bg-[#191d24] rounded-full overflow-hidden mt-0.5">
                       <div
-                        className={`h-full ${liveNavState?.currentBattery < 25 ? 'bg-red-500' : 'bg-cyan-400'}`}
+                        className={`h-full ${liveNavState?.currentBattery < 25 ? 'bg-[#ef4444]' : 'bg-[#22c55e]'}`}
                         style={{ width: `${liveNavState?.currentBattery}%` }}
                       />
                     </div>
                   </div>
 
-                  <div className="rounded-xl bg-slate-950 p-2 border border-slate-800 text-right min-w-[90px]">
-                    <div className="flex items-center justify-end gap-1 text-[10px] text-slate-400 font-mono">
-                      <Droplets className="h-3.5 w-3.5 text-emerald-400" />
+                  <div className="rounded-xl bg-[#0b0d11] p-2 border border-[#242933] text-right min-w-[95px]">
+                    <div className="flex items-center justify-end gap-1 text-[10px] text-[#9da5b4] font-mono">
+                      <Droplets className="h-3.5 w-3.5 text-[#22c55e]" />
                       <span>PLSS TANK</span>
                     </div>
-                    <div className="text-sm font-black font-mono text-emerald-300">
+                    <div className="text-sm font-black font-mono text-[#edf0f5]">
                       {liveNavState?.currentO2}%
                     </div>
-                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                    <div className="w-full h-1.5 bg-[#191d24] rounded-full overflow-hidden mt-0.5">
                       <div
-                        className="h-full bg-emerald-400"
+                        className="h-full bg-[#22c55e]"
                         style={{ width: `${liveNavState?.currentO2}%` }}
                       />
                     </div>
@@ -1477,11 +1662,11 @@ export default function App() {
               </div>
 
               {/* Big Glove-Friendly Android Action Buttons (All with Icons) */}
-              <div className="grid grid-cols-4 gap-2 pt-1">
+              <div className="grid grid-cols-4 gap-2 pt-1 font-mono">
                 <button
                   onClick={() => setNavPlaying((p) => !p)}
-                  className={`glove-btn col-span-2 min-h-[52px] rounded-xl text-slate-950 font-black text-sm uppercase flex items-center justify-center gap-2 cursor-pointer shadow-lg ${
-                    navPlaying ? 'bg-amber-400 hover:bg-amber-300' : 'bg-emerald-400 hover:bg-emerald-300'
+                  className={`glove-btn col-span-2 min-h-[52px] rounded-xl text-[#0b0d11] font-black text-sm uppercase flex items-center justify-center gap-2 cursor-pointer shadow-lg transition-colors ${
+                    navPlaying ? 'bg-amber-400 hover:bg-amber-300' : 'bg-[#22c55e] hover:bg-[#16a34a]'
                   }`}
                 >
                   {navPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
@@ -1490,17 +1675,17 @@ export default function App() {
 
                 <button
                   onClick={() => setNavSpeed((s) => (s === 1 ? 3 : 1))}
-                  className="glove-btn min-h-[52px] rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono font-bold text-xs border border-slate-700 flex flex-col items-center justify-center cursor-pointer"
+                  className="glove-btn min-h-[52px] rounded-xl bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] font-mono font-bold text-xs border border-[#353c4a] flex flex-col items-center justify-center cursor-pointer"
                 >
-                  <Gauge className="h-4 w-4 mb-0.5 text-cyan-400" />
+                  <Gauge className="h-4 w-4 mb-0.5 text-[#22c55e]" />
                   <span>{navSpeed}x Speed</span>
                 </button>
 
                 <button
                   onClick={stopNavigation}
-                  className="glove-btn min-h-[52px] rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-200 font-bold text-xs flex flex-col items-center justify-center cursor-pointer"
+                  className="glove-btn min-h-[52px] rounded-xl bg-[#191d24] hover:bg-[#ef4444]/20 border border-[#ef4444]/50 text-[#ef4444] font-bold text-xs flex flex-col items-center justify-center cursor-pointer"
                 >
-                  <LogOut className="h-4 w-4 mb-0.5 text-rose-400" />
+                  <LogOut className="h-4 w-4 mb-0.5 text-[#ef4444]" />
                   <span>Exit</span>
                 </button>
               </div>
@@ -1509,7 +1694,7 @@ export default function App() {
               {(incomingDustAlert || weatherKey === 'dust_storm' || liveNavState?.currentBattery < 25) && (
                 <button
                   onClick={triggerShelterDivert}
-                  className="glove-btn w-full min-h-[46px] rounded-xl bg-gradient-to-r from-red-600 to-amber-600 text-white font-extrabold text-xs uppercase flex items-center justify-center gap-2 shadow-lg cursor-pointer animate-pulse"
+                  className="glove-btn w-full min-h-[46px] rounded-xl bg-[#ef4444] hover:bg-red-600 text-[#0b0d11] font-black text-xs uppercase flex items-center justify-center gap-2 shadow-lg cursor-pointer animate-pulse font-mono"
                 >
                   <ShieldAlert className="h-4 w-4" />
                   <span>Divert to {nearestShelter.station.name} ({nearestShelter.distKm} km)</span>
@@ -1521,26 +1706,26 @@ export default function App() {
             <div className="p-4 space-y-3">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2.5">
-                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-[#22c55e]/20 text-[#22c55e] border border-[#22c55e]/40">
                     <CheckCircle2 className="h-6 w-6" />
                   </span>
                   <div>
-                    <div className="text-[10px] font-mono uppercase text-emerald-400 font-bold tracking-wider">
+                    <div className="text-[10px] font-mono uppercase text-[#22c55e] font-bold tracking-wider">
                       Traverse Leg Complete
                     </div>
-                    <div className="text-base font-black text-white flex items-center gap-1.5">
+                    <div className="text-base font-black text-[#edf0f5] flex items-center gap-1.5 font-mono">
                       <span>{startPOI.name}</span>
                       {startPOI.isChargingStation && (
-                        <span className="rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
+                        <span className="rounded-full bg-[#22c55e]/20 text-[#22c55e] border border-[#22c55e]/40 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
                           <Zap className="h-3 w-3" /> Recharged 100%
                         </span>
                       )}
                       <button
                         onClick={() => handleOpenPanorama(startPOI.id)}
                         title="View Photo / 360° Panorama of this Location"
-                        className="glove-btn px-2 py-0.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 text-[10px] font-bold flex items-center gap-1 cursor-pointer shrink-0 ml-1"
+                        className="glove-btn px-2 py-0.5 rounded-lg bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#22c55e] text-[10px] font-bold flex items-center gap-1 cursor-pointer shrink-0 ml-1"
                       >
-                        <Camera className="h-3 w-3 text-cyan-400" />
+                        <Camera className="h-3 w-3 text-[#22c55e]" />
                         <span>{startPOI.id === 'hab-alpha' || startPOI.id === 'seitah-ridge' ? '360°' : 'Photo'}</span>
                       </button>
                     </div>
@@ -1548,32 +1733,32 @@ export default function App() {
                 </div>
 
                 <div className="text-right font-mono">
-                  <div className="text-[10px] text-slate-400">ELEVATION</div>
-                  <div className="text-xs font-bold text-slate-200">{startPOI.elev} m</div>
+                  <div className="text-[10px] text-[#656d7d]">ELEVATION</div>
+                  <div className="text-xs font-bold text-[#edf0f5]">{startPOI.elev} m</div>
                 </div>
               </div>
 
               {/* Current Field Telemetry Reserve */}
-              <div className="grid grid-cols-2 gap-2 bg-slate-950/90 p-2.5 rounded-xl border border-slate-800 text-xs">
+              <div className="grid grid-cols-2 gap-2 bg-[#0b0d11] p-2.5 rounded-xl border border-[#242933] text-xs">
                 <div className="flex items-center justify-between font-mono">
-                  <span className="flex items-center gap-1.5 text-slate-400">
-                    <Battery className="h-3.5 w-3.5 text-cyan-400" /> Suit Battery
+                  <span className="flex items-center gap-1.5 text-[#9da5b4]">
+                    <Battery className="h-3.5 w-3.5 text-[#22c55e]" /> Suit Battery
                   </span>
-                  <span className="font-bold text-cyan-300">{startBatteryPct}%</span>
+                  <span className="font-bold text-[#edf0f5]">{startBatteryPct}%</span>
                 </div>
                 <div className="flex items-center justify-between font-mono">
-                  <span className="flex items-center gap-1.5 text-slate-400">
-                    <Droplets className="h-3.5 w-3.5 text-emerald-400" /> PLSS O2 Tank
+                  <span className="flex items-center gap-1.5 text-[#9da5b4]">
+                    <Droplets className="h-3.5 w-3.5 text-[#22c55e]" /> PLSS O2 Tank
                   </span>
-                  <span className="font-bold text-emerald-300">{startO2Pct}%</span>
+                  <span className="font-bold text-[#edf0f5]">{startO2Pct}%</span>
                 </div>
               </div>
 
               {/* One-Tap Next Waypoint Selector */}
-              <div className="space-y-1.5">
-                <div className="text-[11px] font-mono text-slate-400 uppercase tracking-wide flex items-center justify-between">
+              <div className="space-y-1.5 font-mono">
+                <div className="text-[11px] text-[#9da5b4] uppercase tracking-wide flex items-center justify-between">
                   <span>Select Next Waypoint to Continue:</span>
-                  <span className="text-[10px] text-cyan-400">Routes from {startPOI.name.split(' ')[0]}</span>
+                  <span className="text-[10px] text-[#22c55e]">From {startPOI.name.split(' ')[0]}</span>
                 </div>
                 <div className="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-0.5">
                   {sciencePOIs
@@ -1589,17 +1774,17 @@ export default function App() {
                             handleNavigateToPOI(dest.id);
                             handleOpenPanorama(dest.id);
                           }}
-                          className="glove-btn p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-cyan-500/60 text-left transition-all cursor-pointer flex flex-col justify-between group active:scale-95"
+                          className="glove-btn p-2.5 rounded-xl bg-[#191d24] hover:bg-[#222731] border border-[#242933] hover:border-[#22c55e] text-left transition-all cursor-pointer flex flex-col justify-between group active:scale-95"
                         >
                           <div className="flex items-start justify-between gap-1">
-                            <span className="text-xs font-bold text-slate-100 group-hover:text-cyan-300 line-clamp-1">
+                            <span className="text-xs font-bold text-[#edf0f5] group-hover:text-[#22c55e] line-clamp-1">
                               {dest.isChargingStation ? '⚡ ' : ''}{dest.name}
                             </span>
-                            <span className="text-[10px] font-mono text-cyan-400 shrink-0 font-semibold">{dist} km</span>
+                            <span className="text-[10px] font-mono text-[#22c55e] shrink-0 font-semibold">{dist} km</span>
                           </div>
-                          <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400">
+                          <div className="mt-1 flex items-center justify-between text-[10px] text-[#9da5b4]">
                             <span className="line-clamp-1">{dest.minerals || 'Scientific Site'}</span>
-                            <span className="text-emerald-400 font-bold group-hover:translate-x-0.5 transition-transform">➔</span>
+                            <span className="text-[#22c55e] font-bold group-hover:translate-x-0.5 transition-transform">➔</span>
                           </div>
                         </button>
                       );
@@ -1609,54 +1794,54 @@ export default function App() {
             </div>
           ) : (
             /* EXPLORE & ROUTE PLANNING TRIP SHEET */
-            <div className="p-3.5 space-y-3">
+            <div className="p-3.5 space-y-3 font-mono">
               {/* Origin and Destination header with Swap button */}
-              <div className="flex items-center justify-between gap-2 bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/80">
+              <div className="flex items-center justify-between gap-2 bg-[#0b0d11] p-2.5 rounded-xl border border-[#242933]">
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 uppercase">
-                    <span className="h-2 w-2 rounded-full bg-cyan-400"></span>
+                  <div className="flex items-center gap-1.5 text-[10px] text-[#9da5b4] uppercase">
+                    <span className="h-2 w-2 rounded-full bg-[#22c55e]"></span>
                     <span>Origin {startId === astronautLocId ? '(Field Pos)' : ''}</span>
                   </div>
-                  <div className="text-xs font-bold text-slate-200 truncate">{startPOI.name}</div>
+                  <div className="text-xs font-bold text-[#edf0f5] truncate">{startPOI.name}</div>
                 </div>
 
                 <button
                   onClick={handleSwapEndpoints}
                   title="Swap Origin and Destination"
-                  className="glove-btn h-9 w-9 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-300 flex items-center justify-center shrink-0 cursor-pointer active:scale-90 transition-transform"
+                  className="glove-btn h-9 w-9 rounded-xl bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#edf0f5] flex items-center justify-center shrink-0 cursor-pointer active:scale-90 transition-transform"
                 >
                   <ArrowLeftRight className="h-4 w-4" />
                 </button>
 
                 <div className="flex-1 min-w-0 text-right">
-                  <div className="flex items-center justify-end gap-1.5 text-[10px] font-mono text-slate-400 uppercase">
+                  <div className="flex items-center justify-end gap-1.5 text-[10px] text-[#9da5b4] uppercase">
                     <span>Destination</span>
-                    <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+                    <span className="h-2 w-2 rounded-full bg-[#22c55e]"></span>
                   </div>
-                  <div className="text-xs font-bold text-slate-200 truncate">{endPOI.name}</div>
+                  <div className="text-xs font-bold text-[#edf0f5] truncate">{endPOI.name}</div>
                 </div>
               </div>
 
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="text-base font-bold text-white line-clamp-1">{endPOI.name}</span>
+                    <span className="text-base font-bold text-[#edf0f5] line-clamp-1">{endPOI.name}</span>
                     {endPOI.isChargingStation && (
-                      <span className="rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
+                      <span className="rounded-full bg-[#22c55e]/20 text-[#22c55e] border border-[#22c55e]/40 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
                         <Zap className="h-3 w-3" /> Virtual Base
                       </span>
                     )}
                     <button
                       onClick={() => handleOpenPanorama(endPOI.id)}
                       title="View Photo / 360° Panorama of this Location"
-                      className="glove-btn px-2.5 py-1 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 text-[10px] font-bold flex items-center gap-1 cursor-pointer shrink-0 ml-auto"
+                      className="glove-btn px-2.5 py-1 rounded-xl bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#22c55e] text-[10px] font-bold flex items-center gap-1 cursor-pointer shrink-0 ml-auto"
                     >
-                      <Camera className="h-3.5 w-3.5 text-cyan-400" />
+                      <Camera className="h-3.5 w-3.5 text-[#22c55e]" />
                       <span>{endPOI.id === 'hab-alpha' || endPOI.id === 'seitah-ridge' ? '360° Sphere' : 'Photo'}</span>
                     </button>
                   </div>
-                  <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
-                    <span className="font-mono text-cyan-300 font-bold">{routeResult.distKm} km</span>
+                  <div className="text-xs text-[#9da5b4] mt-0.5 flex items-center gap-2 font-mono">
+                    <span className="text-[#22c55e] font-bold">{routeResult.distKm} km</span>
                     <span>•</span>
                     <span>{routeResult.durationMin} min walk</span>
                     <span>•</span>
@@ -1667,51 +1852,51 @@ export default function App() {
                 {/* Range Status Pill */}
                 <div className="shrink-0 text-right">
                   {routeResult.rangeStatus === 'direct_clear' && (
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Can Reach Direct
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-[#22c55e]/15 border border-[#22c55e]/30 px-2.5 py-1 text-[11px] font-bold text-[#22c55e]">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Direct Safe
                     </span>
                   )}
                   {routeResult.rangeStatus === 'recharged_ok' && (
                     <span className="inline-flex items-center gap-1 rounded-lg bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 text-[11px] font-bold text-amber-300">
-                      <Zap className="h-3.5 w-3.5" /> +15m Recharge Pit-Stop
+                      <Zap className="h-3.5 w-3.5" /> +15m Recharge
                     </span>
                   )}
                   {routeResult.rangeStatus === 'out_of_range' && (
-                    <span className="inline-flex items-center gap-1 rounded-lg bg-red-500/15 border border-red-500/30 px-2.5 py-1 text-[11px] font-bold text-red-400">
-                      <AlertTriangle className="h-3.5 w-3.5" /> Low Reserve Warning
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-[#ef4444]/15 border border-[#ef4444]/30 px-2.5 py-1 text-[11px] font-bold text-[#ef4444]">
+                      <AlertTriangle className="h-3.5 w-3.5" /> Low Reserve
                     </span>
                   )}
                 </div>
               </div>
 
               {/* Prominent Starting Battery & Tank Percentage Gauge Cards */}
-              <div className="grid grid-cols-2 gap-2 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+              <div className="grid grid-cols-2 gap-2 bg-[#0b0d11] p-2.5 rounded-xl border border-[#242933]">
                 <div>
-                  <div className="flex items-center justify-between text-xs text-slate-300 mb-1">
+                  <div className="flex items-center justify-between text-xs text-[#edf0f5] mb-1">
                     <span className="flex items-center gap-1.5 font-semibold">
-                      <BatteryCharging className="h-4 w-4 text-cyan-400" /> Battery
+                      <BatteryCharging className="h-4 w-4 text-[#22c55e]" /> Battery
                     </span>
-                    <span className="font-mono font-bold text-cyan-300">
-                      {startBatteryPct}% <span className="text-[10px] text-slate-500 font-normal">➔ {routeResult.finalArrivalBattery}%</span>
+                    <span className="font-mono font-bold text-[#edf0f5]">
+                      {startBatteryPct}% <span className="text-[10px] text-[#656d7d] font-normal">➔ {routeResult.finalArrivalBattery}%</span>
                     </span>
                   </div>
-                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="w-full h-2 bg-[#191d24] rounded-full overflow-hidden">
                     <div
-                      className={`h-full ${startBatteryPct < 30 ? 'bg-amber-400' : 'bg-cyan-400'}`}
+                      className={`h-full ${startBatteryPct < 30 ? 'bg-[#ef4444]' : 'bg-[#22c55e]'}`}
                       style={{ width: `${startBatteryPct}%` }}
                     />
                   </div>
                   <div className="flex items-center justify-between mt-1 text-[10px]">
                     <button
                       onClick={() => setStartBatteryPct((b) => Math.max(15, b - 15))}
-                      className="glove-btn px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-0.5 cursor-pointer"
+                      className="glove-btn px-1.5 py-0.5 rounded bg-[#191d24] hover:bg-[#222731] border border-[#242933] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
                     >
                       <Minus className="h-3 w-3" /> 15%
                     </button>
-                    <span className="text-slate-500 font-mono">Simulate</span>
+                    <span className="text-[#656d7d] font-mono">Simulate</span>
                     <button
                       onClick={() => setStartBatteryPct((b) => Math.min(100, b + 15))}
-                      className="glove-btn px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-0.5 cursor-pointer"
+                      className="glove-btn px-1.5 py-0.5 rounded bg-[#191d24] hover:bg-[#222731] border border-[#242933] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
                     >
                       <Plus className="h-3 w-3" /> 15%
                     </button>
@@ -1719,31 +1904,31 @@ export default function App() {
                 </div>
 
                 <div>
-                  <div className="flex items-center justify-between text-xs text-slate-300 mb-1">
+                  <div className="flex items-center justify-between text-xs text-[#edf0f5] mb-1">
                     <span className="flex items-center gap-1.5 font-semibold">
-                      <Droplets className="h-4 w-4 text-emerald-400" /> PLSS O2 Tank
+                      <Droplets className="h-4 w-4 text-[#22c55e]" /> PLSS O2 Tank
                     </span>
-                    <span className="font-mono font-bold text-emerald-300">
-                      {startO2Pct}% <span className="text-[10px] text-slate-500 font-normal">➔ {routeResult.finalArrivalO2}%</span>
+                    <span className="font-mono font-bold text-[#edf0f5]">
+                      {startO2Pct}% <span className="text-[10px] text-[#656d7d] font-normal">➔ {routeResult.finalArrivalO2}%</span>
                     </span>
                   </div>
-                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                  <div className="w-full h-2 bg-[#191d24] rounded-full overflow-hidden">
                     <div
-                      className="h-full bg-emerald-400"
+                      className="h-full bg-[#22c55e]"
                       style={{ width: `${startO2Pct}%` }}
                     />
                   </div>
                   <div className="flex items-center justify-between mt-1 text-[10px]">
                     <button
                       onClick={() => setStartO2Pct((o) => Math.max(15, o - 15))}
-                      className="glove-btn px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-0.5 cursor-pointer"
+                      className="glove-btn px-1.5 py-0.5 rounded bg-[#191d24] hover:bg-[#222731] border border-[#242933] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
                     >
                       <Minus className="h-3 w-3" /> 15%
                     </button>
-                    <span className="text-slate-500 font-mono">Simulate</span>
+                    <span className="text-[#656d7d] font-mono">Simulate</span>
                     <button
                       onClick={() => setStartO2Pct((o) => Math.min(100, o + 15))}
-                      className="glove-btn px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-0.5 cursor-pointer"
+                      className="glove-btn px-1.5 py-0.5 rounded bg-[#191d24] hover:bg-[#222731] border border-[#242933] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
                     >
                       <Plus className="h-3 w-3" /> 15%
                     </button>
@@ -1755,16 +1940,16 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <button
                   onClick={startNavigation}
-                  className="glove-btn flex-1 min-h-[56px] rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-base uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-xl shadow-emerald-500/25 cursor-pointer"
+                  className="glove-btn flex-1 min-h-[56px] rounded-2xl bg-[#22c55e] hover:bg-[#16a34a] text-[#0b0d11] font-black text-base uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-xl shadow-[#22c55e]/20 cursor-pointer"
                 >
-                  <Navigation className="h-6 w-6 fill-slate-950" />
+                  <Navigation className="h-6 w-6 fill-[#0b0d11]" />
                   <span>Start Navigation</span>
                 </button>
 
                 <button
                   onClick={() => setBottomSheetExpanded((v) => !v)}
                   title="Expand Route Details"
-                  className="glove-btn flex h-[56px] w-[56px] items-center justify-center rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer shrink-0"
+                  className="glove-btn flex h-[56px] w-[56px] items-center justify-center rounded-2xl bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] cursor-pointer shrink-0"
                 >
                   {bottomSheetExpanded ? <ChevronDown className="h-6 w-6" /> : <ChevronUp className="h-6 w-6" />}
                 </button>
@@ -1772,27 +1957,27 @@ export default function App() {
 
               {/* Expandable Route Details & Step list */}
               {bottomSheetExpanded && (
-                <div className="pt-2 border-t border-slate-800 space-y-2.5 text-xs max-h-48 overflow-y-auto pr-1">
+                <div className="pt-2 border-t border-[#242933] space-y-2.5 text-xs max-h-48 overflow-y-auto pr-1">
                   <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-mono">
-                    <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
-                      <div className="text-[9px] text-slate-400">ARRIVAL BATTERY</div>
-                      <div className="font-bold text-cyan-300">{routeResult.finalArrivalBattery}%</div>
+                    <div className="p-2 rounded-xl bg-[#0b0d11] border border-[#242933]">
+                      <div className="text-[9px] text-[#656d7d]">ARRIVAL BATTERY</div>
+                      <div className="font-bold text-[#22c55e]">{routeResult.finalArrivalBattery}%</div>
                     </div>
-                    <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
-                      <div className="text-[9px] text-slate-400">PEAK INCLINE</div>
+                    <div className="p-2 rounded-xl bg-[#0b0d11] border border-[#242933]">
+                      <div className="text-[9px] text-[#656d7d]">PEAK INCLINE</div>
                       <div className="font-bold text-amber-300">{routeResult.maxSlopeAlongPath}°</div>
                     </div>
-                    <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
-                      <div className="text-[9px] text-slate-400">HAZARDS BYPASSED</div>
-                      <div className="font-bold text-emerald-300">{routeResult.hazardsAvoided} zones</div>
+                    <div className="p-2 rounded-xl bg-[#0b0d11] border border-[#242933]">
+                      <div className="text-[9px] text-[#656d7d]">HAZARDS BYPASSED</div>
+                      <div className="font-bold text-[#22c55e]">{routeResult.hazardsAvoided} zones</div>
                     </div>
                   </div>
 
                   <div className="space-y-1.5 pt-1">
-                    <div className="text-[10px] font-mono uppercase text-slate-400">Turn-by-Turn Preview</div>
+                    <div className="text-[10px] font-mono uppercase text-[#656d7d]">Turn-by-Turn Preview</div>
                     {routeResult.navigationSteps?.slice(0, 4).map((step, idx) => (
-                      <div key={step.id} className="p-2 rounded-lg bg-slate-950 border border-slate-800 text-[11px]">
-                        <span className="font-bold text-slate-200">{idx + 1}. {step.instruction}</span>
+                      <div key={step.id} className="p-2 rounded-lg bg-[#0b0d11] border border-[#242933] text-[11px]">
+                        <span className="font-bold text-[#edf0f5]">{idx + 1}. {step.instruction}</span>
                         {step.detail && <div className="text-[10px] text-slate-400">{step.detail}</div>}
                       </div>
                     ))}
@@ -2065,6 +2250,29 @@ export default function App() {
               setActivePanorama(null);
             }
           }}
+        />
+      )}
+
+      {/* 12. SCIENTIFIC LANDMARK DOSSIER & 5-PHOTO CAROUSEL DRAWER */}
+      {activeLandmark && (
+        <LandmarkDrawer
+          landmark={activeLandmark}
+          onClose={() => setActiveLandmark(null)}
+          onNavigateToLandmark={(lm) => {
+            setActiveLandmark(null);
+            handleNavigateToPOI(lm.id);
+          }}
+          onSetOriginLandmark={(lm) => {
+            setActiveLandmark(null);
+            handleSetOrigin(lm.id);
+          }}
+          onOpenPanorama={() => {
+            handleOpenPanorama(activeLandmark.id);
+          }}
+          isCurrentLocation={
+            activeLandmark.id === astronautLocId ||
+            (astronautLocId === 'hab-alpha' && activeLandmark.id === 'landing_site')
+          }
         />
       )}
     </div>
