@@ -219,17 +219,19 @@ export default function JezeroTacticalMap({
       interactive: false,
     }).addTo(map);
 
-    // NASA HiRISE 25cm Ultra-High Resolution TMS Overlay
+    // NASA HiRISE 25cm Ultra-High Resolution TMS Overlay (Optional MMGIS Layer)
     const hiriseLayer = L.tileLayer(
       'https://mars.nasa.gov/mmgis-maps/M20/Layers/M20_HiRISE_RGB_mosaic_25cm_v4p2/{z}/{x}/{-y}.png',
       {
         tms: true,
         maxZoom: 18,
         opacity: 0.92,
-        keepBuffer: 6,
+        keepBuffer: 2,
         updateWhenIdle: true,
-        updateInterval: 120,
+        updateInterval: 200,
         zIndex: 5,
+        // Suppress broken tile red-X / console spam if remote NASA MMGIS server blocks requests
+        errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
       }
     );
 

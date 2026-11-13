@@ -137,7 +137,7 @@ export default function App() {
 
   // Cartographic Layer Toggles
   const [layers, setLayers] = useState({
-    hirise: true,
+    hirise: false,
     ellipse: true,
     linear: false,
     surface: false,
