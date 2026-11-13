@@ -3415,7 +3415,7 @@ export default function App() {
                         </div>
                       </div>
 
-                      {/* Primary 56px Glove START NAVIGATION Button */}
+                      {/* Primary 56px Glove START NAVIGATION Button & Turn-by-Turn Steps Toggle */}
                       <div className="flex items-center gap-2">
                         <button
                           type="button"
@@ -3429,25 +3429,16 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => setBottomSheetExpanded((v) => !v)}
-                          title="Toggle Route Details"
-                          className="glove-btn flex h-[56px] w-[56px] items-center justify-center rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] cursor-pointer shrink-0"
-                          aria-label="Toggle Route Details"
+                          title={bottomSheetExpanded ? 'Hide Turn-by-Turn Steps' : 'Show Turn-by-Turn Steps'}
+                          className={`glove-btn min-h-[56px] px-3.5 sm:px-4 rounded-[4px] border cursor-pointer shrink-0 font-mono text-xs font-bold uppercase tracking-wider flex items-center justify-center gap-2 transition-colors ${
+                            bottomSheetExpanded
+                              ? 'bg-[#222731] text-[#22c55e] border-[#22c55e]'
+                              : 'bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border-[#353c4a]'
+                          }`}
+                          aria-label="Toggle Route Steps"
                         >
-                          {bottomSheetExpanded ? (
-                            <ChevronDown className="h-5 w-5" />
-                          ) : (
-                            <ChevronUp className="h-5 w-5" />
-                          )}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => setTripPanelCollapsed(true)}
-                          title="Shrink Panel to Minimal View"
-                          className="glove-btn flex h-[56px] w-[56px] items-center justify-center rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] border border-[#353c4a] cursor-pointer shrink-0"
-                          aria-label="Shrink Panel"
-                        >
-                          <ChevronDown className="h-5 w-5 text-[#22c55e]" />
+                          <FileText className="h-4 w-4" />
+                          <span>{bottomSheetExpanded ? 'Hide Steps' : 'Route Steps'}</span>
                         </button>
                       </div>
 
