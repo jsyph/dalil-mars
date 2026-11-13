@@ -46,10 +46,9 @@ class Stage4CliffBarrierPipeline:
         rows, cols = cost_matrix.shape
 
         if os.path.exists(self.gdb_path):
-            import geopandas as gpd
-
             print(f"Reading linear barrier features from {self.gdb_path}...")
             try:
+                import geopandas as gpd
                 gdf_lines = gpd.read_file(
                     self.gdb_path, layer="LinearFeatures", engine="pyogrio"
                 ).to_crs(epsg=4326)

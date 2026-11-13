@@ -1,0 +1,25 @@
+{
+  "stage": 6,
+  "description": "Precomputed All-Pairs Obstacle-Aware Heuristic Distance Fields",
+  "downsample_factor": 64,
+  "fine_grid_shape": [
+    6560,
+    2950
+  ],
+  "coarse_grid_shape": [
+    102,
+    46
+  ],
+  "macro_cells_count": 4692,
+  "traversable_cells_count": 3525,
+  "macro_cell_resolution_m": 1293.05,
+  "all_pairs_matrix_shape": [
+    102,
+    46,
+    102,
+    46
+  ],
+  "matrix_ram_mb": 83.98,
+  "npz_disk_mb": 2.99,
+  "total_precompute_time_s": 24.23
+}

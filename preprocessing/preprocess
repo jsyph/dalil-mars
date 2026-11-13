@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -e
+DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$DIR/preprocess.py" ]; then
+    exec python3 "$DIR/preprocess.py" "$@"
+elif [ -f "$DIR/preprocessing/preprocess.py" ]; then
+    exec python3 "$DIR/preprocessing/preprocess.py" "$@"
+else
+    echo "Could not find preprocess.py"
+    exit 1
+fi

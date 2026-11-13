@@ -9,17 +9,17 @@
     "description": "Perseverance touchdown site (Sol 0). Mission hub & primary EVA egress airlock.",
     "priority": "HIGH",
     "grid_position": {
-      "row": 6559,
-      "col": 2949
+      "row": 2567,
+      "col": 1921
     },
     "original_grid_position": {
-      "row": 56679,
-      "col": 302785
+      "row": 2567,
+      "col": 1921
     },
-    "snap_offset_cells": -1,
-    "elevation_m": -2500.0,
-    "cell_traversal_cost": 999.0,
-    "is_safe_departure_point": false
+    "snap_offset_cells": 0,
+    "elevation_m": -2562.96,
+    "cell_traversal_cost": 1.0,
+    "is_safe_departure_point": true
   },
   {
     "waypoint_id": "WP-01",
@@ -31,17 +31,17 @@
     "description": "Delta bottomset smectite clay mudstones. Prime biosignature preservation target.",
     "priority": "CRITICAL",
     "grid_position": {
-      "row": 6559,
-      "col": 2949
+      "row": 2546,
+      "col": 1892
     },
     "original_grid_position": {
-      "row": 56679,
-      "col": 302785
+      "row": 2546,
+      "col": 1892
     },
-    "snap_offset_cells": -1,
-    "elevation_m": -2500.0,
-    "cell_traversal_cost": 999.0,
-    "is_safe_departure_point": false
+    "snap_offset_cells": 0,
+    "elevation_m": -2556.32,
+    "cell_traversal_cost": 1.0,
+    "is_safe_departure_point": true
   },
   {
     "waypoint_id": "WP-02",
@@ -53,17 +53,17 @@
     "description": "High-energy fluvial gravel beds with prominent cross-bedding.",
     "priority": "HIGH",
     "grid_position": {
-      "row": 6559,
-      "col": 2949
+      "row": 2528,
+      "col": 1866
     },
     "original_grid_position": {
-      "row": 56679,
-      "col": 302785
+      "row": 2528,
+      "col": 1866
     },
-    "snap_offset_cells": -1,
-    "elevation_m": -2500.0,
-    "cell_traversal_cost": 999.0,
-    "is_safe_departure_point": false
+    "snap_offset_cells": 0,
+    "elevation_m": -2547.57,
+    "cell_traversal_cost": 1.0,
+    "is_safe_departure_point": true
   },
   {
     "waypoint_id": "WP-03",
@@ -75,17 +75,17 @@
     "description": "Alkaline lake shoreline deposits rich in Mg-carbonates and hydrated silica.",
     "priority": "CRITICAL",
     "grid_position": {
-      "row": 6559,
-      "col": 2949
+      "row": 2519,
+      "col": 1816
     },
     "original_grid_position": {
-      "row": 56679,
-      "col": 302785
+      "row": 2519,
+      "col": 1816
     },
-    "snap_offset_cells": -1,
-    "elevation_m": -2500.0,
-    "cell_traversal_cost": 999.0,
-    "is_safe_departure_point": false
+    "snap_offset_cells": 0,
+    "elevation_m": -2475.19,
+    "cell_traversal_cost": 1.0,
+    "is_safe_departure_point": true
   },
   {
     "waypoint_id": "WP-04",
@@ -97,17 +97,17 @@
     "description": "Olivine-cumulate volcanic basement rocks flanked by active aeolian dunes (Aeb).",
     "priority": "MEDIUM",
     "grid_position": {
-      "row": 6559,
-      "col": 2949
+      "row": 2604,
+      "col": 1954
     },
     "original_grid_position": {
-      "row": 56679,
-      "col": 302785
+      "row": 2604,
+      "col": 1954
     },
-    "snap_offset_cells": -1,
-    "elevation_m": -2500.0,
-    "cell_traversal_cost": 999.0,
-    "is_safe_departure_point": false
+    "snap_offset_cells": 0,
+    "elevation_m": -2580.81,
+    "cell_traversal_cost": 1.0,
+    "is_safe_departure_point": true
   },
   {
     "waypoint_id": "WP-05",
@@ -119,17 +119,17 @@
     "description": "Deep fluvial breach canyon where ancient floodwaters sliced into Jezero Crater.",
     "priority": "MEDIUM",
     "grid_position": {
-      "row": 6559,
-      "col": 2949
+      "row": 2141,
+      "col": 1156
     },
     "original_grid_position": {
-      "row": 56679,
-      "col": 302785
+      "row": 2141,
+      "col": 1156
     },
-    "snap_offset_cells": -1,
-    "elevation_m": -2500.0,
-    "cell_traversal_cost": 999.0,
-    "is_safe_departure_point": false
+    "snap_offset_cells": 0,
+    "elevation_m": -2186.18,
+    "cell_traversal_cost": 1.0,
+    "is_safe_departure_point": true
   },
   {
     "waypoint_id": "WP-06",
@@ -141,16 +141,16 @@
     "description": "Deep pre-Noachian Martian basement crust uplifted by Isidis basin impact.",
     "priority": "HIGH",
     "grid_position": {
-      "row": 6559,
-      "col": 2949
+      "row": 2449,
+      "col": 1737
     },
     "original_grid_position": {
-      "row": 56679,
-      "col": 302785
+      "row": 2449,
+      "col": 1737
     },
-    "snap_offset_cells": -1,
-    "elevation_m": -2500.0,
-    "cell_traversal_cost": 999.0,
-    "is_safe_departure_point": false
+    "snap_offset_cells": 0,
+    "elevation_m": -2433.3,
+    "cell_traversal_cost": 1.0,
+    "is_safe_departure_point": true
   }
 ]

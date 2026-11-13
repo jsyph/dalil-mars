@@ -508,6 +508,86 @@
       </div>
     </div>
 
+    <!-- Stage 6: Heuristics & Distance Fields Panel -->
+    <div id="heuristics-panel" class="panel-section" style="border: 1px solid rgba(0, 229, 255, 0.4); background: rgba(0, 229, 255, 0.05); border-radius: 8px; padding: 12px;">
+      <div class="section-title" style="color: #00e5ff; margin-bottom: 8px;">
+        <span style="display: flex; align-items: center; gap: 6px;">
+          <span style="font-size: 14px;">🧭</span> Stage 6 | Heuristics & Paths
+        </span>
+        <span id="badge-heur-status" style="font-size: 10px; background: rgba(0, 229, 255, 0.2); color: #00e5ff; padding: 2px 6px; border-radius: 4px; font-family: var(--font-mono);">ACTIVE</span>
+      </div>
+
+      <!-- Point to Point Selection -->
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="font-size: 11px; color: var(--text-dim);">From (Origin):</label>
+            <span id="label-from-hint" style="font-size: 10px; color: #00e676; font-family: var(--font-mono);"></span>
+          </div>
+          <select id="heur-from-select" style="font-size: 12px; padding: 5px 8px; width: 100%;">
+            <option value="WP-05" selected>[WP-05] Neretva Vallis River Inlet Canyon</option>
+            <option value="WP-00">[WP-00] Octavia E. Butler Landing (Base Camp)</option>
+            <option value="WP-01">[WP-01] Kodiak Butte & Delta Front Clays</option>
+            <option value="WP-02">[WP-02] Hawksbill Gap & Conglomerates</option>
+            <option value="WP-03">[WP-03] Margin Carbonate Ancient Shoreline</option>
+            <option value="WP-04">[WP-04] Séítah Dune Corridor</option>
+            <option value="WP-06">[WP-06] Belva Crater Rim & Shock Breccia</option>
+            <option value="custom">🎯 Custom Point (Click 3D Terrain)</option>
+          </select>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 3px;">
+          <label style="font-size: 11px; color: var(--text-dim);">To (Target / Goal):</label>
+          <select id="heur-to-select" style="font-size: 12px; padding: 5px 8px; width: 100%;">
+            <option value="WP-00" selected>[WP-00] Octavia E. Butler Landing (Base Camp)</option>
+            <option value="WP-01">[WP-01] Kodiak Butte & Delta Front Clays</option>
+            <option value="WP-02">[WP-02] Hawksbill Gap & Conglomerates</option>
+            <option value="WP-03">[WP-03] Margin Carbonate Ancient Shoreline</option>
+            <option value="WP-04">[WP-04] Séítah Dune Corridor</option>
+            <option value="WP-05">[WP-05] Neretva Vallis River Inlet Canyon</option>
+            <option value="WP-06">[WP-06] Belva Crater Rim & Shock Breccia</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- Route Heuristic Metrics Display Card -->
+      <div id="heur-metrics-card" style="background: rgba(10, 14, 23, 0.88); border: 1px solid rgba(0, 229, 255, 0.25); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: baseline;">
+          <span style="font-size: 11px; color: var(--text-dim);">Obstacle-Aware Distance:</span>
+          <span id="stat-heur-dist" style="font-size: 16px; font-weight: 700; color: #00e5ff; font-family: var(--font-mono);">19.13 km</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 11px;">
+          <span style="color: var(--text-dim);">Direct Euclidean:</span>
+          <span id="stat-eucl-dist" style="color: #fff; font-family: var(--font-mono);">17.69 km</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 11px;">
+          <span style="color: var(--text-dim);">Terrain Detour Index:</span>
+          <span id="stat-detour-pct" style="color: #ffd600; font-family: var(--font-mono);">+8.1% (around cliffs)</span>
+        </div>
+        <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 11px;">
+          <span style="color: var(--text-dim);">Trajectory Waypoints:</span>
+          <span id="stat-path-steps" style="color: #fff; font-family: var(--font-mono);">49 nodes</span>
+        </div>
+      </div>
+
+      <!-- Action Toggles -->
+      <div style="display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+          <input type="checkbox" id="toggle-heur-path" checked>
+          <span>Render 3D Optimal Path Line</span>
+        </label>
+        <label style="display: flex; align-items: center; gap: 6px; font-size: 12px; cursor: pointer;">
+          <input type="checkbox" id="toggle-heur-heatmap">
+          <span>Heuristic Heatmap Overlay (0-90 km)</span>
+        </label>
+      </div>
+
+      <!-- Interactive Quick Hint -->
+      <div id="heur-hint" style="font-size: 10px; color: var(--text-dim); background: rgba(255, 255, 255, 0.04); padding: 5px 8px; border-radius: 4px; line-height: 1.4; margin-top: 6px;">
+        💡 <b>Click anywhere on 3D terrain</b> to inspect the heuristic distance and path from that point to the goal!
+      </div>
+    </div>
+
     <!-- Hazard Classification Breakdown -->
     <div class="panel-section">
       <div class="section-title">
@@ -718,6 +798,26 @@
     let showRoute = true;
     const toggleRoute = document.getElementById('toggle-route');
 
+    // Stage 6 Heuristics & Distance Fields
+    let heuristicPathGroup = null;
+    let currentHeuristicPathNodes = null;
+    let customOrigin = null;
+    let showHeurPath = true;
+    let showHeurHeatmap = false;
+    let availableHeuristicTargets = [];
+
+    const heurPanel = document.getElementById('heuristics-panel');
+    const heurFromSelect = document.getElementById('heur-from-select');
+    const heurToSelect = document.getElementById('heur-to-select');
+    const labelFromHint = document.getElementById('label-from-hint');
+    const statHeurDist = document.getElementById('stat-heur-dist');
+    const statEuclDist = document.getElementById('stat-eucl-dist');
+    const statDetourPct = document.getElementById('stat-detour-pct');
+    const statPathSteps = document.getElementById('stat-path-steps');
+    const toggleHeurPath = document.getElementById('toggle-heur-path');
+    const toggleHeurHeatmap = document.getElementById('toggle-heur-heatmap');
+    const badgeHeurStatus = document.getElementById('badge-heur-status');
+
     // Landmark & Waypoint Colors
     const LANDMARK_COLORS = {
       base_camp: '#ffd700',       // Gold
@@ -810,6 +910,32 @@
     const COLOR_SAFE_DARK_MIN = new THREE.Color('#212f3d');
     const COLOR_SAFE_DARK_MAX = new THREE.Color('#5d6d7e');
 
+    // Continuous Heuristic Distance Field Colormap (0 to 90 km)
+    const HEUR_STOPS = [
+      { t: 0.00, color: new THREE.Color('#00ffff') }, // 0 km - Target Goal Cyan
+      { t: 0.12, color: new THREE.Color('#00e676') }, // ~10 km - Vivid Emerald
+      { t: 0.28, color: new THREE.Color('#ffea00') }, // ~25 km - Bright Yellow
+      { t: 0.50, color: new THREE.Color('#ff9100') }, // ~45 km - Amber Orange
+      { t: 0.72, color: new THREE.Color('#f50057') }, // ~65 km - Magenta Rose
+      { t: 1.00, color: new THREE.Color('#651fff') }  // ~90 km - Deep Indigo Violet
+    ];
+
+    function getHeuristicHeatmapColor(distMeters, outColor) {
+      const maxDist = 80000.0; // 80 km normalization span
+      const t = Math.max(0, Math.min(1, distMeters / maxDist));
+      for (let i = 0; i < HEUR_STOPS.length - 1; i++) {
+        const s0 = HEUR_STOPS[i];
+        const s1 = HEUR_STOPS[i + 1];
+        if (t >= s0.t && t <= s1.t) {
+          const ratio = (t - s0.t) / (s1.t - s0.t);
+          outColor.copy(s0.color).lerp(s1.color, ratio);
+          return outColor;
+        }
+      }
+      outColor.copy(HEUR_STOPS[HEUR_STOPS.length - 1].color);
+      return outColor;
+    }
+
     // Initialize 3D Scene
     function initScene() {
       const container = document.getElementById('canvas-container');
@@ -859,9 +985,27 @@
       routeGroup = new THREE.Group();
       scene.add(routeGroup);
 
+      // Stage 6 Heuristics 3D Trajectory Path Container
+      heuristicPathGroup = new THREE.Group();
+      scene.add(heuristicPathGroup);
+
       // Raycaster for hover inspection
       raycaster = new THREE.Raycaster();
       mouse = new THREE.Vector2(-999, -999);
+
+      // Click detection on terrain (distinguish click from camera rotate)
+      let pointerDownX = 0, pointerDownY = 0;
+      container.addEventListener('pointerdown', (e) => {
+        pointerDownX = e.clientX;
+        pointerDownY = e.clientY;
+      });
+      container.addEventListener('pointerup', (e) => {
+        if (Math.hypot(e.clientX - pointerDownX, e.clientY - pointerDownY) < 6) {
+          if (e.target === renderer.domElement) {
+            onCanvasClick(e);
+          }
+        }
+      });
 
       window.addEventListener('resize', onWindowResize);
       window.addEventListener('mousemove', onMouseMove);
@@ -909,8 +1053,10 @@
           stageSelect.appendChild(opt);
         });
 
-        // Automatically select Stage 5 Consolidated (or Stage 4, or latest stage available)
-        const preferred = stages.find(s => s.id === 'stage_5_consolidated') ||
+        // Automatically select Stage 6 Consolidated if available, or Stage 5/4
+        const preferred = stages.find(s => s.id === 'stage_6_consolidated') ||
+                          stages.find(s => s.id.includes('stage_6')) ||
+                          stages.find(s => s.id === 'stage_5_consolidated') ||
                           stages.find(s => s.id.includes('stage_5')) ||
                           stages.find(s => s.id === 'stage_4_consolidated') ||
                           stages[stages.length - 1];
@@ -933,6 +1079,9 @@
       if (roiParam) {
         url += `&r_min=${roiParam.r_min}&r_max=${roiParam.r_max}&c_min=${roiParam.c_min}&c_max=${roiParam.c_max}`;
       }
+      if (showHeurHeatmap && heurToSelect && heurToSelect.value) {
+        url += `&target=${encodeURIComponent(heurToSelect.value)}`;
+      }
 
       const t0 = performance.now();
       try {
@@ -946,6 +1095,7 @@
         parseAndBuildScene(arrayBuffer);
         updateMetadataUI();
         fetchAndRenderLandmarks();
+        updateHeuristicsUI();
       } catch (err) {
         console.error('Error fetching stage data:', err);
         alert('Failed to load stage data: ' + err.message);
@@ -1090,7 +1240,10 @@
         instancedMesh.setMatrixAt(i, dummy.matrix);
 
         // Color coding
-        if (status === 2) {
+        if (showHeurHeatmap && cost >= 0 && status !== 2) {
+          // Heuristic Heatmap: Obstacle-aware distance field to target waypoint
+          getHeuristicHeatmapColor(cost, tempColor);
+        } else if (status === 2) {
           // Blocked / Barrier -> RED
           tempColor.copy(COLOR_BLOCKED);
         } else if (status === 1) {
@@ -1152,6 +1305,9 @@
 
       instancedMesh.instanceMatrix.needsUpdate = true;
       updateLandmarksPositions();
+      if (currentHeuristicPathNodes) {
+        render3DPathLine(currentHeuristicPathNodes);
+      }
     }
 
     // Dynamic Color Palette Update
@@ -1164,7 +1320,9 @@
 
       for (let i = 0; i < totalNodes; i++) {
         const node = nodeDataArray[i];
-        if (node.status === 2) {
+        if (showHeurHeatmap && node.cost >= 0 && node.status !== 2) {
+          getHeuristicHeatmapColor(node.cost, tempColor);
+        } else if (node.status === 2) {
           tempColor.copy(COLOR_BLOCKED);
         } else if (node.status === 1) {
           tempColor.copy(COLOR_DANGEROUS);
@@ -1201,7 +1359,12 @@
           document.getElementById('tip-coords').textContent = `Grid: (Col ${Math.round(data.col)}, Row ${Math.round(data.row)})`;
           document.getElementById('tip-elevation').textContent = `Elevation: ${data.z.toFixed(2)} m`;
           document.getElementById('tip-slope').textContent = `Slope: ${data.slope}°`;
-          document.getElementById('tip-cost').textContent = `Cost Weight: ${data.cost < 0 ? 'INF (Blocked)' : data.cost.toFixed(1)}`;
+
+          if (showHeurHeatmap && data.cost >= 0) {
+            document.getElementById('tip-cost').textContent = `Heuristic to [${heurToSelect.value}]: ${(data.cost / 1000).toFixed(2)} km`;
+          } else {
+            document.getElementById('tip-cost').textContent = `Cost Weight: ${data.cost < 0 ? 'INF (Blocked)' : data.cost.toFixed(1)}`;
+          }
 
           const statusElem = document.getElementById('tip-status');
           if (data.status === 2) {
@@ -1559,6 +1722,35 @@
         if (routeGroup) routeGroup.visible = showRoute;
       });
 
+      // Stage 6 Heuristics UI Event Listeners
+      heurFromSelect.addEventListener('change', () => {
+        if (heurFromSelect.value !== 'custom') {
+          labelFromHint.textContent = '';
+          customOrigin = null;
+        }
+        fetchAndRenderHeuristicPath();
+      });
+
+      heurToSelect.addEventListener('change', () => {
+        if (showHeurHeatmap) {
+          fetchAndRenderStage();
+        }
+        fetchAndRenderHeuristicPath();
+      });
+
+      toggleHeurPath.addEventListener('change', (e) => {
+        showHeurPath = e.target.checked;
+        if (heuristicPathGroup) heuristicPathGroup.visible = showHeurPath;
+        if (showHeurPath && currentHeuristicPathNodes) {
+          render3DPathLine(currentHeuristicPathNodes);
+        }
+      });
+
+      toggleHeurHeatmap.addEventListener('change', (e) => {
+        showHeurHeatmap = e.target.checked;
+        fetchAndRenderStage();
+      });
+
       // Camera Presets for Expanded Map
       document.getElementById('cam-iso').addEventListener('click', () => {
         tweenCamera(170, 210, 250, 0, 0, 0);
@@ -1599,6 +1791,218 @@
       } catch (e) {}
     }
 
+    // Stage 6 Heuristics Core Functions
+    function onCanvasClick(e) {
+      if (!instancedMesh || !nodeDataArray) return;
+      const rect = renderer.domElement.getBoundingClientRect();
+      const clickMouse = new THREE.Vector2(
+        ((e.clientX - rect.left) / rect.width) * 2 - 1,
+        -((e.clientY - rect.top) / rect.height) * 2 + 1
+      );
+      raycaster.setFromCamera(clickMouse, camera);
+      const intersects = raycaster.intersectObject(instancedMesh);
+      if (intersects.length > 0 && intersects[0].instanceId !== undefined) {
+        const id = intersects[0].instanceId;
+        const node = nodeDataArray[id];
+        if (node) {
+          customOrigin = { col: node.col, row: node.row, z: node.z };
+          heurFromSelect.value = 'custom';
+          labelFromHint.textContent = `(Col ${Math.round(node.col)}, Row ${Math.round(node.row)})`;
+          fetchAndRenderHeuristicPath();
+        }
+      }
+    }
+
+    async function updateHeuristicsUI() {
+      try {
+        const res = await fetch(`/api/heuristics?stage=${encodeURIComponent(currentStage)}`);
+        const data = await res.json();
+        if (data && !data.error && data.targets && data.targets.length > 0) {
+          heurPanel.style.display = 'flex';
+          availableHeuristicTargets = data.targets;
+
+          const curFrom = heurFromSelect.value;
+          const curTo = heurToSelect.value;
+
+          heurFromSelect.innerHTML = '';
+          heurToSelect.innerHTML = '';
+
+          const wpMap = {};
+          if (data.waypoints) {
+            data.waypoints.forEach(w => { wpMap[w.waypoint_id] = w.name; });
+          }
+
+          data.targets.forEach(t => {
+            const name = wpMap[t] || t;
+            const optF = document.createElement('option');
+            optF.value = t;
+            optF.textContent = `[${t}] ${name}`;
+            heurFromSelect.appendChild(optF);
+
+            const optT = document.createElement('option');
+            optT.value = t;
+            optT.textContent = `[${t}] ${name}`;
+            heurToSelect.appendChild(optT);
+          });
+
+          const optCustom = document.createElement('option');
+          optCustom.value = 'custom';
+          optCustom.textContent = '🎯 Custom Point (Click 3D Terrain)';
+          heurFromSelect.appendChild(optCustom);
+
+          if (data.targets.includes(curFrom) || curFrom === 'custom') {
+            heurFromSelect.value = curFrom;
+          } else if (data.targets.includes('WP-05')) {
+            heurFromSelect.value = 'WP-05';
+          } else {
+            heurFromSelect.value = data.targets[0];
+          }
+
+          if (data.targets.includes(curTo)) {
+            heurToSelect.value = curTo;
+          } else if (data.targets.includes('WP-00')) {
+            heurToSelect.value = 'WP-00';
+          } else {
+            heurToSelect.value = data.targets[Math.min(1, data.targets.length - 1)];
+          }
+
+          fetchAndRenderHeuristicPath();
+        } else {
+          heurPanel.style.display = 'none';
+          clearHeuristicPath();
+        }
+      } catch (err) {
+        console.error('Error fetching heuristics:', err);
+        heurPanel.style.display = 'none';
+        clearHeuristicPath();
+      }
+    }
+
+    function clearHeuristicPath() {
+      if (!heuristicPathGroup) return;
+      while (heuristicPathGroup.children.length > 0) {
+        const obj = heuristicPathGroup.children[0];
+        heuristicPathGroup.remove(obj);
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) {
+          if (Array.isArray(obj.material)) obj.material.forEach(m => m.dispose());
+          else obj.material.dispose();
+        }
+      }
+    }
+
+    async function fetchAndRenderHeuristicPath() {
+      clearHeuristicPath();
+
+      const from = heurFromSelect.value;
+      const to = heurToSelect.value;
+      if (!to) return;
+
+      let url = `/api/heuristics/path?stage=${encodeURIComponent(currentStage)}&to=${encodeURIComponent(to)}`;
+      if (from === 'custom') {
+        if (!customOrigin) {
+          statHeurDist.textContent = 'Click terrain...';
+          statEuclDist.textContent = '--';
+          statDetourPct.textContent = '--';
+          statPathSteps.textContent = '0 nodes';
+          return;
+        }
+        url += `&from_col=${customOrigin.col}&from_row=${customOrigin.row}`;
+      } else {
+        url += `&from=${encodeURIComponent(from)}`;
+      }
+
+      try {
+        const res = await fetch(url);
+        const data = await res.json();
+
+        if (!data || !data.reachable) {
+          statHeurDist.textContent = 'UNREACHABLE';
+          statHeurDist.style.color = 'var(--accent-blocked)';
+          statEuclDist.textContent = data.euclidean_distance_km !== undefined ? `${data.euclidean_distance_km} km` : '--';
+          statDetourPct.textContent = 'Barrier Blocked';
+          statPathSteps.textContent = '0 nodes';
+          return;
+        }
+
+        statHeurDist.style.color = '#00e5ff';
+        statHeurDist.textContent = `${data.heuristic_distance_km.toFixed(2)} km`;
+        statEuclDist.textContent = `${data.euclidean_distance_km.toFixed(2)} km`;
+        statDetourPct.textContent = `${data.detour_pct > 0 ? '+' : ''}${data.detour_pct.toFixed(1)}% (around terrain)`;
+        statPathSteps.textContent = `${data.steps_count} nodes`;
+
+        if (showHeurPath && data.path && data.path.length >= 2) {
+          render3DPathLine(data.path);
+        }
+      } catch (err) {
+        console.error('Failed to fetch heuristic path:', err);
+      }
+    }
+
+    function render3DPathLine(pathNodes) {
+      if (!pathNodes || pathNodes.length < 2) return;
+      currentHeuristicPathNodes = pathNodes;
+      clearHeuristicPath();
+      if (!showHeurPath) return;
+
+      const datumBaseline = (currentDatumMode === 'mean') ? ((gridBounds.minZ + gridBounds.maxZ) / 2.0) : gridBounds.minZ;
+
+      const points = pathNodes.map(pt => {
+        const posX = normScale.offsetX + pt.col * normScale.scaleX;
+        const posZ = normScale.offsetY + pt.row * normScale.scaleY;
+        const elev = (pt.z !== undefined && pt.z !== null && !isNaN(pt.z)) ? pt.z : gridBounds.minZ;
+        const posY = (elev - datumBaseline) * normScale.scaleZ * heightMultiplier + 2.2;
+        return new THREE.Vector3(posX, posY, posZ);
+      });
+
+      // 1. Glowing Neon Trajectory Tube
+      try {
+        const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal');
+        const tubeGeo = new THREE.TubeGeometry(curve, Math.min(256, points.length * 4), 0.6, 8, false);
+        const tubeMat = new THREE.MeshStandardMaterial({
+          color: 0x00e5ff,
+          emissive: 0x00e5ff,
+          emissiveIntensity: 0.85,
+          roughness: 0.2,
+          metalness: 0.8
+        });
+        const tubeMesh = new THREE.Mesh(tubeGeo, tubeMat);
+        heuristicPathGroup.add(tubeMesh);
+      } catch (e) {
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+        const lineMat = new THREE.LineBasicMaterial({ color: 0x00e5ff, linewidth: 4 });
+        heuristicPathGroup.add(new THREE.Line(lineGeo, lineMat));
+      }
+
+      // 2. Start Marker (Bright Emerald Sphere)
+      const startPt = points[0];
+      const startGeo = new THREE.SphereGeometry(1.6, 16, 16);
+      const startMat = new THREE.MeshStandardMaterial({
+        color: 0x00e676,
+        emissive: 0x00e676,
+        emissiveIntensity: 0.95
+      });
+      const startSphere = new THREE.Mesh(startGeo, startMat);
+      startSphere.position.copy(startPt);
+      startSphere.position.y += 1.0;
+      heuristicPathGroup.add(startSphere);
+
+      // 3. Goal Marker (Gold Beacon Diamond)
+      const endPt = points[points.length - 1];
+      const endGeo = new THREE.OctahedronGeometry(2.2, 0);
+      const endMat = new THREE.MeshStandardMaterial({
+        color: 0xffd600,
+        emissive: 0xffd600,
+        emissiveIntensity: 1.0,
+        roughness: 0.1
+      });
+      const endMesh = new THREE.Mesh(endGeo, endMat);
+      endMesh.position.copy(endPt);
+      endMesh.position.y += 2.2;
+      endMesh.userData = { isGoalDiamond: true };
+      heuristicPathGroup.add(endMesh);
+    }
+
     // Animation Loop
     function animate() {
       requestAnimationFrame(animate);
@@ -1621,6 +2025,15 @@
         landmarksGroup.children.forEach(c => {
           if (c.userData && c.userData.isDiamond) {
             c.rotation.y += c.userData.rotateSpeed || 0.02;
+          }
+        });
+      }
+
+      // Gentle rotation for Heuristic goal diamond marker
+      if (heuristicPathGroup && heuristicPathGroup.visible) {
+        heuristicPathGroup.children.forEach(c => {
+          if (c.userData && c.userData.isGoalDiamond) {
+            c.rotation.y += 0.03;
           }
         });
       }

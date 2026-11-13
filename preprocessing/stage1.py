@@ -1,12 +1,19 @@
 import numpy as np
 import matplotlib.pyplot as plt
-import rasterio
 
 tif_path = "./output/stage_1_consolidated/consolidated_dtm_mosaic.tif"
 
 print(f"Reading {tif_path}...")
-with rasterio.open(tif_path) as src:
-    z = src.read(1)
+try:
+    import rasterio
+    with rasterio.open(tif_path) as src:
+        z = src.read(1)
+except ImportError:
+    from osgeo import gdal
+    ds = gdal.Open(tif_path)
+    if ds is None:
+        raise FileNotFoundError(f"Could not open GeoTIFF at {tif_path}")
+    z = ds.GetRasterBand(1).ReadAsArray()
 
     # Mask out the NaNs so they don't skew the colormap
     z_masked = np.ma.masked_invalid(z)

@@ -52,6 +52,7 @@ class StageDataManager:
                 "has_elevation": False,
                 "has_costmap": False,
                 "has_slopes": False,
+                "has_heuristics": False,
                 "metadata": {},
                 "files": os.listdir(stage_path)
             }
@@ -82,6 +83,9 @@ class StageDataManager:
             slope_path = self._find_slope_file(entry)
             if slope_path:
                 stage_info["has_slopes"] = True
+
+            # Detect heuristics
+            stage_info["has_heuristics"] = any("heuristic" in f.lower() and f.endswith(".npz") for f in stage_info["files"]) or "stage_6" in entry
 
             stages.append(stage_info)
         return stages
@@ -125,7 +129,7 @@ class StageDataManager:
             return ""
         stage_dir = os.path.join(self.output_dir, stage_id)
         if os.path.exists(stage_dir):
-            # 1. Search priority patterns in stage dir
+            # 1. Search priority patterns in stage dir (excluding coarse downsampled maps, heuristics, and tensors)
             patterns = [
                 "*master*.npy",
                 "*hazard*cost*.npy",
@@ -137,17 +141,19 @@ class StageDataManager:
                 "*grid*.npy"
             ]
             for pat in patterns:
-                matches = glob.glob(os.path.join(stage_dir, pat))
-                if matches:
-                    return matches[0]
-            # 2. Any .npy in directory that is not elevation and not slope
+                for match in glob.glob(os.path.join(stage_dir, pat)):
+                    bname = os.path.basename(match).lower()
+                    if not any(bad in bname for bad in ["coarse", "heuristic", "tensor", "waypoint"]):
+                        return match
+            # 2. Any .npy in directory that is not elevation and not slope and not coarse/heuristic/tensor
             for f in sorted(os.listdir(stage_dir)):
                 fl = f.lower()
-                if fl.endswith(".npy") and not any(k in fl for k in ["elevation", "dtm", "height", "slope", "angle"]):
+                if fl.endswith(".npy") and not any(k in fl for k in ["elevation", "dtm", "height", "slope", "angle", "coarse", "heuristic", "tensor", "waypoint"]):
                     return os.path.join(stage_dir, f)
 
-        # 3. Fallback to preceding stage's master grid (e.g. stage 5 uses stage 4 master grid)
+        # 3. Fallback to preceding stage's master grid (e.g. stage 5 and 6 use stage 4 master grid)
         for prev in [
+            "stage_5_consolidated", "stage_5",
             "stage_4_consolidated", "stage_4",
             "stage_3_consolidated", "stage_3",
             "stage_2_consolidated", "stage_2"
@@ -156,10 +162,406 @@ class StageDataManager:
             if os.path.exists(prev_dir):
                 patterns = ["*master*.npy", "*hazard*.npy", "*barrier*.npy", "*cost*.npy", "*mask*.npy", "*grid*.npy"]
                 for pat in patterns:
-                    matches = glob.glob(os.path.join(prev_dir, pat))
+                    for match in glob.glob(os.path.join(prev_dir, pat)):
+                        bname = os.path.basename(match).lower()
+                        if not any(bad in bname for bad in ["coarse", "heuristic", "tensor", "waypoint"]):
+                            return match
+        return ""
+
+    def _find_heuristics_file(self, stage_id: str = "stage_6_consolidated") -> str:
+        """Finds heuristics maps npz file."""
+        stage_dir = os.path.join(self.output_dir, stage_id)
+        if os.path.exists(stage_dir):
+            for pat in ["*heuristics*.npz", "*heuristic*.npz"]:
+                matches = glob.glob(os.path.join(stage_dir, pat))
+                if matches:
+                    return matches[0]
+
+        for s6_cand in ["stage_6_consolidated", "stage_6"]:
+            s6_dir = os.path.join(self.output_dir, s6_cand)
+            if os.path.exists(s6_dir):
+                for pat in ["*heuristics*.npz", "*heuristic*.npz"]:
+                    matches = glob.glob(os.path.join(s6_dir, pat))
+                    if matches:
+                        return matches[0]
+
+        for root, _, files in os.walk(self.output_dir):
+            for f in files:
+                if "heuristic" in f.lower() and f.endswith(".npz"):
+                    return os.path.join(root, f)
+        return ""
+
+    def _find_coarse_cost_file(self, stage_id: str = "stage_6_consolidated") -> str:
+        """Finds coarse costmap npy file."""
+        for s6_cand in [stage_id, "stage_6_consolidated", "stage_6"]:
+            s6_dir = os.path.join(self.output_dir, s6_cand)
+            if os.path.exists(s6_dir):
+                for pat in ["*coarse*cost*.npy", "*coarse*.npy"]:
+                    matches = glob.glob(os.path.join(s6_dir, pat))
                     if matches:
                         return matches[0]
         return ""
+
+    def _get_waypoints_map(self, stage_id: str = "stage_6_consolidated"):
+        """Returns dict of waypoint_id -> waypoint details dict with fine & coarse positions."""
+        wp_dict = {}
+        cand_dirs = [
+            os.path.join(self.output_dir, stage_id),
+            os.path.join(self.output_dir, "stage_5_consolidated"),
+            os.path.join(self.output_dir, "stage_5")
+        ]
+        for cdir in cand_dirs:
+            reg_file = os.path.join(cdir, "consolidated_waypoints_registry.json")
+            if os.path.exists(reg_file):
+                try:
+                    with open(reg_file, "r") as f:
+                        data = json.load(f)
+                    for item in data:
+                        wid = item.get("waypoint_id")
+                        if not wid:
+                            continue
+                        pos = item.get("grid_position") or item.get("original_grid_position") or {}
+                        fine_r = int(pos.get("row", 0))
+                        fine_c = int(pos.get("col", 0))
+                        wp_dict[wid] = {
+                            "waypoint_id": wid,
+                            "name": item.get("name", wid),
+                            "type": item.get("type", "science_station"),
+                            "priority": item.get("priority", "HIGH"),
+                            "geologic_unit": item.get("geologic_unit", ""),
+                            "description": item.get("description", ""),
+                            "fine_position": [fine_r, fine_c],
+                            "coarse_position": [min(409, fine_r // 16), min(183, fine_c // 16)],
+                            "elevation_m": item.get("elevation_m")
+                        }
+                    if wp_dict:
+                        return wp_dict
+                except Exception as e:
+                    print(f"Error loading {reg_file}: {e}")
+
+        # Fallback to stage landmarks
+        lms = self.get_stage_landmarks(stage_id)
+        for lm in lms:
+            if lm.get("is_waypoint") and lm.get("waypoint_id"):
+                wid = lm["waypoint_id"]
+                fine_r = int(round(lm.get("row", 0)))
+                fine_c = int(round(lm.get("col", 0)))
+                wp_dict[wid] = {
+                    "waypoint_id": wid,
+                    "name": lm.get("name", wid),
+                    "type": lm.get("type", "science_station"),
+                    "priority": lm.get("priority", "HIGH"),
+                    "geologic_unit": lm.get("geologic_unit", ""),
+                    "description": lm.get("description", ""),
+                    "fine_position": [fine_r, fine_c],
+                    "coarse_position": [min(409, fine_r // 16), min(183, fine_c // 16)],
+                    "elevation_m": lm.get("z")
+                }
+        return wp_dict
+
+    def get_heuristics_summary(self, stage_id: str = "stage_6_consolidated"):
+        """Returns metadata, list of heuristic targets, and waypoint distance matrix."""
+        npz_path = self._find_heuristics_file(stage_id)
+        if not npz_path or not os.path.exists(npz_path):
+            return {"error": "Heuristics data not found"}
+
+        meta_path = os.path.join(os.path.dirname(npz_path), "consolidated_stage6_metadata.json")
+        meta = {}
+        if os.path.exists(meta_path):
+            try:
+                with open(meta_path, "r") as f:
+                    meta = json.load(f)
+            except Exception:
+                pass
+
+        wp_dict = self._get_waypoints_map(stage_id)
+
+        if npz_path.endswith(".npz"):
+            npz = np.load(npz_path)
+            targets = list(npz.keys())
+        else:
+            targets = meta.get("waypoints", list(wp_dict.keys()))
+
+        # Build waypoints list with rich details
+        wp_list = []
+        for wid in targets:
+            if wid in wp_dict:
+                wp_list.append(wp_dict[wid])
+            else:
+                wp_list.append({
+                    "waypoint_id": wid,
+                    "name": wid,
+                    "fine_position": [0, 0],
+                    "coarse_position": [0, 0]
+                })
+
+        # Distance matrix in kilometers between waypoints
+        matrix = {}
+        if npz_path.endswith(".npz"):
+            npz = np.load(npz_path)
+            for t1 in targets:
+                matrix[t1] = {}
+                if t1 in npz:
+                    arr = npz[t1]
+                    for t2 in targets:
+                        if t2 in wp_dict:
+                            cr, cc = wp_dict[t2]["coarse_position"]
+                            d = float(arr[cr, cc])
+                            matrix[t1][t2] = round(d / 1000.0, 3) if not np.isinf(d) else None
+                        else:
+                            matrix[t1][t2] = None
+
+        return {
+            "stage_id": stage_id,
+            "description": meta.get("description", "Obstacle-Aware Hierarchical Heuristic Distance Fields"),
+            "downsample_factor": meta.get("downsample_factor", 16),
+            "fine_grid_shape": meta.get("fine_grid_shape", [6560, 2950]),
+            "coarse_grid_shape": meta.get("coarse_grid_shape", [410, 184]),
+            "coarse_cell_size_m": meta.get("coarse_cell_size_m", 323.26),
+            "tensor_shape": meta.get("tensor_shape", [len(targets), 410, 184]),
+            "total_time_s": meta.get("total_time_s", 0.0),
+            "targets": targets,
+            "waypoints": wp_list,
+            "matrix_km": matrix
+        }
+
+    def compute_heuristic_path(self, stage_id: str, from_point: str = None, to_point: str = None,
+                               from_col: float = None, from_row: float = None,
+                               to_col: float = None, to_row: float = None):
+        """Computes optimal obstacle-aware trajectory and metrics between two points."""
+        npz_path = self._find_heuristics_file(stage_id)
+        if not npz_path or not os.path.exists(npz_path):
+            raise FileNotFoundError("Heuristics data not found")
+
+        wp_dict = self._get_waypoints_map(stage_id)
+
+        # Resolve Goal
+        goal_cr, goal_cc = None, None
+        goal_fr, goal_fc = None, None
+        goal_name = to_point or "Custom Goal"
+
+        if to_point and to_point in wp_dict:
+            goal_cr, goal_cc = wp_dict[to_point]["coarse_position"]
+            goal_fr, goal_fc = wp_dict[to_point]["fine_position"]
+            goal_name = wp_dict[to_point]["name"]
+        elif to_row is not None and to_col is not None:
+            goal_fr, goal_fc = float(to_row), float(to_col)
+            goal_cr = min(409, max(0, int(goal_fr // 16)))
+            goal_cc = min(183, max(0, int(goal_fc // 16)))
+            goal_name = f"Custom Goal ({int(goal_fc)}, {int(goal_fr)})"
+
+        # Resolve Start
+        start_cr, start_cc = None, None
+        start_fr, start_fc = None, None
+        start_name = from_point or "Custom Start"
+
+        if from_point and from_point in wp_dict:
+            start_cr, start_cc = wp_dict[from_point]["coarse_position"]
+            start_fr, start_fc = wp_dict[from_point]["fine_position"]
+            start_name = wp_dict[from_point]["name"]
+        elif from_row is not None and from_col is not None:
+            start_fr, start_fc = float(from_row), float(from_col)
+            start_cr = min(409, max(0, int(start_fr // 16)))
+            start_cc = min(183, max(0, int(start_fc // 16)))
+            start_name = f"Custom Start ({int(start_fc)}, {int(start_fr)})"
+
+        if goal_cr is None or start_cr is None:
+            raise ValueError("Must specify valid start and goal locations")
+
+        elev_arr = None
+        try:
+            elev_arr, _, _ = self.load_stage_arrays(stage_id)
+        except Exception:
+            pass
+
+        npz = np.load(npz_path)
+
+        if to_point in npz:
+            # Optimal gradient descent along precomputed distance field
+            h_map = npz[to_point]
+            total_dist_m = float(h_map[start_cr, start_cc])
+
+            if np.isinf(total_dist_m):
+                return {
+                    "reachable": False,
+                    "from": {"id": from_point, "name": start_name, "col": start_fc, "row": start_fr},
+                    "to": {"id": to_point, "name": goal_name, "col": goal_fc, "row": goal_fr},
+                    "error": "Goal is unreachable due to impassable barriers or coverage boundary"
+                }
+
+            path_coarse = [(start_cr, start_cc)]
+            curr = (start_cr, start_cc)
+            goal = (goal_cr, goal_cc)
+
+            for _ in range(1200):
+                if curr == goal:
+                    break
+                r, c = curr
+                best_next = curr
+                best_val = h_map[r, c]
+                for dr in [-1, 0, 1]:
+                    for dc in [-1, 0, 1]:
+                        if dr == 0 and dc == 0:
+                            continue
+                        nr, nc = r + dr, c + dc
+                        if 0 <= nr < h_map.shape[0] and 0 <= nc < h_map.shape[1]:
+                            val = h_map[nr, nc]
+                            if val < best_val:
+                                best_val = val
+                                best_next = (nr, nc)
+                if best_next == curr:
+                    break
+                curr = best_next
+                path_coarse.append(curr)
+
+        elif from_point in npz:
+            # Gradient descent backwards from goal to start on start's distance field
+            h_map = npz[from_point]
+            total_dist_m = float(h_map[goal_cr, goal_cc])
+
+            if np.isinf(total_dist_m):
+                return {
+                    "reachable": False,
+                    "from": {"id": from_point, "name": start_name, "col": start_fc, "row": start_fr},
+                    "to": {"id": to_point, "name": goal_name, "col": goal_fc, "row": goal_fr},
+                    "error": "Goal is unreachable due to impassable barriers or coverage boundary"
+                }
+
+            path_coarse = [(goal_cr, goal_cc)]
+            curr = (goal_cr, goal_cc)
+            goal = (start_cr, start_cc)
+
+            for _ in range(1200):
+                if curr == goal:
+                    break
+                r, c = curr
+                best_next = curr
+                best_val = h_map[r, c]
+                for dr in [-1, 0, 1]:
+                    for dc in [-1, 0, 1]:
+                        if dr == 0 and dc == 0:
+                            continue
+                        nr, nc = r + dr, c + dc
+                        if 0 <= nr < h_map.shape[0] and 0 <= nc < h_map.shape[1]:
+                            val = h_map[nr, nc]
+                            if val < best_val:
+                                best_val = val
+                                best_next = (nr, nc)
+                if best_next == curr:
+                    break
+                curr = best_next
+                path_coarse.append(curr)
+            path_coarse.reverse()
+
+        else:
+            # Fast A* on coarse costmap matching Stage 6 edge costs (~25ms)
+            coarse_cost_path = self._find_coarse_cost_file(stage_id)
+            if not coarse_cost_path or not os.path.exists(coarse_cost_path):
+                raise FileNotFoundError("Coarse costmap not found")
+            coarse_cost = np.load(coarse_cost_path)
+            R, C = coarse_cost.shape
+            import heapq
+
+            if np.isinf(coarse_cost[start_cr, start_cc]) or np.isinf(coarse_cost[goal_cr, goal_cc]):
+                return {
+                    "reachable": False,
+                    "from": {"id": from_point, "name": start_name, "col": start_fc, "row": start_fr},
+                    "to": {"id": to_point, "name": goal_name, "col": goal_fc, "row": goal_fr},
+                    "error": "Origin or destination is inside an impassable terrain barrier"
+                }
+
+            def h_eucl(r, c):
+                return float(np.hypot(r - goal_cr, c - goal_cc) * 323.26)
+
+            g_score = np.full((R, C), np.inf, dtype=np.float32)
+            g_score[start_cr, start_cc] = 0.0
+            came_from = {}
+
+            pq = [(h_eucl(start_cr, start_cc), 0.0, start_cr, start_cc)]
+            moves = [
+                (-1, 0, 323.26), (1, 0, 323.26), (0, -1, 323.26), (0, 1, 323.26),
+                (-1, -1, 457.16), (-1, 1, 457.16), (1, -1, 457.16), (1, 1, 457.16)
+            ]
+
+            found = False
+            while pq:
+                f, g, r, c = heapq.heappop(pq)
+                if (r, c) == (goal_cr, goal_cc):
+                    found = True
+                    break
+                if g > g_score[r, c]:
+                    continue
+                w_u = coarse_cost[r, c]
+                for dr, dc, step_cost in moves:
+                    nr, nc = r + dr, c + dc
+                    if 0 <= nr < R and 0 <= nc < C:
+                        w_v = coarse_cost[nr, nc]
+                        if np.isinf(w_v):
+                            continue
+                        edge_cost = step_cost * 0.5 * (w_u + w_v)
+                        new_g = g + edge_cost
+                        if new_g < g_score[nr, nc]:
+                            g_score[nr, nc] = new_g
+                            came_from[(nr, nc)] = (r, c)
+                            heapq.heappush(pq, (new_g + h_eucl(nr, nc), new_g, nr, nc))
+
+            if not found:
+                return {
+                    "reachable": False,
+                    "from": {"id": from_point, "name": start_name, "col": start_fc, "row": start_fr},
+                    "to": {"id": to_point, "name": goal_name, "col": goal_fc, "row": goal_fr},
+                    "error": "Goal is unreachable due to impassable barriers"
+                }
+
+            total_dist_m = float(g_score[goal_cr, goal_cc])
+            path_coarse = [(goal_cr, goal_cc)]
+            curr = (goal_cr, goal_cc)
+            while curr in came_from:
+                curr = came_from[curr]
+                path_coarse.append(curr)
+            path_coarse.reverse()
+
+        # Build 3D points
+        path_3d = []
+        for i, (cr, cc) in enumerate(path_coarse):
+            if i == 0 and start_fc is not None and start_fr is not None:
+                fc, fr = start_fc, start_fr
+            elif i == len(path_coarse) - 1 and goal_fc is not None and goal_fr is not None:
+                fc, fr = goal_fc, goal_fr
+            else:
+                fc = cc * 16.0 + 8.0
+                fr = cr * 16.0 + 8.0
+
+            z = -2500.0
+            if elev_arr is not None:
+                r_idx = max(0, min(elev_arr.shape[0] - 1, int(round(fr))))
+                c_idx = max(0, min(elev_arr.shape[1] - 1, int(round(fc))))
+                cell_z = float(elev_arr[r_idx, c_idx])
+                if not np.isnan(cell_z):
+                    z = round(cell_z, 1)
+
+            path_3d.append({
+                "col": round(fc, 1),
+                "row": round(fr, 1),
+                "z": z,
+                "coarse": [cr, cc]
+            })
+
+        eucl_dist_m = float(np.hypot((start_fc or 0) - (goal_fc or 0), (start_fr or 0) - (goal_fr or 0)) * 20.203946)
+        detour_pct = round(((total_dist_m / max(1.0, eucl_dist_m)) - 1.0) * 100.0, 1)
+
+        return {
+            "reachable": True,
+            "from": {"id": from_point, "name": start_name, "col": start_fc, "row": start_fr},
+            "to": {"id": to_point, "name": goal_name, "col": goal_fc, "row": goal_fr},
+            "heuristic_distance_m": round(total_dist_m, 1),
+            "heuristic_distance_km": round(total_dist_m / 1000.0, 2),
+            "euclidean_distance_m": round(eucl_dist_m, 1),
+            "euclidean_distance_km": round(eucl_dist_m / 1000.0, 2),
+            "detour_pct": detour_pct,
+            "steps_count": len(path_3d),
+            "path": path_3d
+        }
 
     def _find_slope_file(self, stage_id: str) -> str:
         # Stage 1 is pure unconstrained baseline elevation with zero obstacles
@@ -207,37 +609,27 @@ class StageDataManager:
         cost = np.load(cost_path, mmap_mode="r").astype(np.float32) if (cost_path and os.path.exists(cost_path)) else None
         slope = np.load(slope_path, mmap_mode="r").astype(np.float32) if (slope_path and os.path.exists(slope_path)) else None
 
+        # Ensure cost and slope matrices match elevation fine grid shape
+        if cost is not None and cost.shape != elev.shape:
+            # Fallback to stage 4 consolidated master grid
+            s4_grid = os.path.join(self.output_dir, "stage_4_consolidated", "consolidated_preprocessed_master_grid.npy")
+            if os.path.exists(s4_grid):
+                cost = np.load(s4_grid, mmap_mode="r").astype(np.float32)
+            else:
+                cost = None
+
+        if slope is not None and slope.shape != elev.shape:
+            slope = None
+
         # Clean old keys for this stage
         self._cache = {k: v for k, v in self._cache.items() if k[0] != stage_id}
         self._cache[cache_key] = (elev, cost, slope)
         return elev, cost, slope
 
-    def pack_binary_blocks(self, stage_id: str, step: int = 4, filter_mode: str = "all", roi: dict = None):
+    def pack_binary_blocks(self, stage_id: str, step: int = 4, filter_mode: str = "all", roi: dict = None, heuristic_target: str = None):
         """
         Packs stage data into a compact binary buffer for high-performance WebGL rendering.
-        
-        Binary Header: 64 bytes
-          - magic: 0x4D415253 ("MARS") [uint32]
-          - version: 1 [uint32]
-          - total_nodes: [uint32]
-          - grid_rows: [uint32]
-          - grid_cols: [uint32]
-          - step: [uint32]
-          - min_z: [float32]
-          - max_z: [float32]
-          - safe_count: [uint32]
-          - dangerous_count: [uint32]
-          - blocked_count: [uint32]
-          - reserved: 20 bytes padding
-
-        Node Record: 20 bytes per block
-          - x: float32 (grid column)
-          - y: float32 (grid row)
-          - z: float32 (elevation in meters)
-          - status: uint8 (0=Safe, 1=Dangerous/Yellow, 2=Blocked/Red)
-          - slope: uint8 (0-90 degrees)
-          - pad: uint16 (0)
-          - cost: float32 (cost multiplier)
+        Optionally overlays obstacle-aware heuristic distance fields.
         """
         t0 = time.time()
         elev, cost, slope = self.load_stage_arrays(stage_id)
@@ -299,6 +691,40 @@ class StageDataManager:
             status[is_danger] = 1
             status[is_blocked] = 2
             costs = np.where(is_blocked, -1.0, np.where(is_danger, 2.5, 1.0)).astype(np.float32)
+
+        # Check if Heuristic distance field overlay is active
+        heur_path = self._find_heuristics_file(stage_id)
+        if heur_path and heuristic_target and heuristic_target != "none":
+            target = heuristic_target
+            try:
+                if heur_path.endswith(".npz"):
+                    npz = np.load(heur_path)
+                    if target in npz:
+                        h_map = npz[target]
+                        rc = np.clip((y_coords // 16).astype(int), 0, h_map.shape[0] - 1)
+                        cc = np.clip((x_coords // 16).astype(int), 0, h_map.shape[1] - 1)
+                        h_vals = h_map[rc, cc]
+                        is_unreach = np.isinf(h_vals) | (h_vals >= 99999.0)
+                        status[is_unreach] = 2
+                        costs = np.where(is_unreach, -1.0, h_vals).astype(np.float32)
+                elif heur_path.endswith(".npy"):
+                    meta_path = os.path.join(os.path.dirname(heur_path), "consolidated_stage6_metadata.json")
+                    if os.path.exists(meta_path):
+                        with open(meta_path) as mf:
+                            meta = json.load(mf)
+                        wps = meta.get("waypoints", [])
+                        if target in wps:
+                            idx = wps.index(target)
+                            tensor = np.load(heur_path, mmap_mode="r")
+                            h_map = tensor[idx]
+                            rc = np.clip((y_coords // 16).astype(int), 0, h_map.shape[0] - 1)
+                            cc = np.clip((x_coords // 16).astype(int), 0, h_map.shape[1] - 1)
+                            h_vals = h_map[rc, cc]
+                            is_unreach = np.isinf(h_vals) | (h_vals >= 99999.0)
+                            status[is_unreach] = 2
+                            costs = np.where(is_unreach, -1.0, h_vals).astype(np.float32)
+            except Exception as e:
+                print(f"Error packing heuristic target {target}: {e}")
 
         # Apply user filter
         if filter_mode == "hazards":
@@ -647,11 +1073,46 @@ class VisualizerServerHandler(http.server.SimpleHTTPRequestHandler):
             self._send_json(landmarks)
             return
 
+        # API: heuristics summary & distance matrix
+        elif path == "/api/heuristics":
+            stage_id = query.get("stage", [default_stage])[0]
+            summary = self.data_manager.get_heuristics_summary(stage_id)
+            self._send_json(summary)
+            return
+
+        # API: point-to-point heuristic path calculation
+        elif path == "/api/heuristics/path":
+            stage_id = query.get("stage", [default_stage])[0]
+            from_pt = query.get("from", [None])[0]
+            to_pt = query.get("to", [None])[0]
+            from_col = float(query["from_col"][0]) if "from_col" in query else None
+            from_row = float(query["from_row"][0]) if "from_row" in query else None
+            to_col = float(query["to_col"][0]) if "to_col" in query else None
+            to_row = float(query["to_row"][0]) if "to_row" in query else None
+
+            try:
+                res = self.data_manager.compute_heuristic_path(
+                    stage_id,
+                    from_point=from_pt,
+                    to_point=to_pt,
+                    from_col=from_col,
+                    from_row=from_row,
+                    to_col=to_col,
+                    to_row=to_row
+                )
+                self._send_json(res)
+            except Exception as e:
+                import traceback
+                traceback.print_exc()
+                self._send_json({"error": str(e)}, status=400)
+            return
+
         # API: binary stream of 3D block nodes
         elif path == "/api/data":
             stage_id = query.get("stage", [default_stage])[0]
             step = int(query.get("step", [8])[0])
             filter_mode = query.get("filter", ["all"])[0]
+            target = query.get("target", [None])[0]
 
             roi = None
             if "r_min" in query and "r_max" in query:
@@ -663,7 +1124,7 @@ class VisualizerServerHandler(http.server.SimpleHTTPRequestHandler):
                 }
 
             try:
-                data = self.data_manager.pack_binary_blocks(stage_id, step=step, filter_mode=filter_mode, roi=roi)
+                data = self.data_manager.pack_binary_blocks(stage_id, step=step, filter_mode=filter_mode, roi=roi, heuristic_target=target)
                 self.send_response(200)
                 self.send_header("Content-Type", "application/octet-stream")
                 self.send_header("Content-Length", str(len(data)))

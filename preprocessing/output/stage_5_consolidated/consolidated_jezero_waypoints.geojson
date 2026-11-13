@@ -15,7 +15,7 @@
         "coordinates": [
           77.4508,
           18.4447,
-          -2500.0
+          -2562.96
         ]
       },
       "properties": {
@@ -23,9 +23,9 @@
         "name": "Octavia E. Butler Landing (Base Camp)",
         "type": "base_camp",
         "geologic_unit": "Njf",
-        "elevation_m": -2500.0,
-        "grid_row": 6559,
-        "grid_col": 2949,
+        "elevation_m": -2562.96,
+        "grid_row": 2567,
+        "grid_col": 1921,
         "priority": "HIGH",
         "description": "Perseverance touchdown site (Sol 0). Mission hub & primary EVA egress airlock."
       }
@@ -37,7 +37,7 @@
         "coordinates": [
           77.441,
           18.452,
-          -2500.0
+          -2556.32
         ]
       },
       "properties": {
@@ -45,9 +45,9 @@
         "name": "Kodiak Butte & Delta Front Clays",
         "type": "science_station",
         "geologic_unit": "NHjf1",
-        "elevation_m": -2500.0,
-        "grid_row": 6559,
-        "grid_col": 2949,
+        "elevation_m": -2556.32,
+        "grid_row": 2546,
+        "grid_col": 1892,
         "priority": "CRITICAL",
         "description": "Delta bottomset smectite clay mudstones. Prime biosignature preservation target."
       }
@@ -59,7 +59,7 @@
         "coordinates": [
           77.432,
           18.458,
-          -2500.0
+          -2547.57
         ]
       },
       "properties": {
@@ -67,9 +67,9 @@
         "name": "Hawksbill Gap & Delta Topset Conglomerates",
         "type": "science_station",
         "geologic_unit": "NHjf2",
-        "elevation_m": -2500.0,
-        "grid_row": 6559,
-        "grid_col": 2949,
+        "elevation_m": -2547.57,
+        "grid_row": 2528,
+        "grid_col": 1866,
         "priority": "HIGH",
         "description": "High-energy fluvial gravel beds with prominent cross-bedding."
       }
@@ -81,7 +81,7 @@
         "coordinates": [
           77.415,
           18.461,
-          -2500.0
+          -2475.19
         ]
       },
       "properties": {
@@ -89,9 +89,9 @@
         "name": "Margin Carbonate Unit (Ancient Shoreline)",
         "type": "science_station",
         "geologic_unit": "Nle",
-        "elevation_m": -2500.0,
-        "grid_row": 6559,
-        "grid_col": 2949,
+        "elevation_m": -2475.19,
+        "grid_row": 2519,
+        "grid_col": 1816,
         "priority": "CRITICAL",
         "description": "Alkaline lake shoreline deposits rich in Mg-carbonates and hydrated silica."
       }
@@ -103,7 +103,7 @@
         "coordinates": [
           77.462,
           18.432,
-          -2500.0
+          -2580.81
         ]
       },
       "properties": {
@@ -111,9 +111,9 @@
         "name": "S\u00e9\u00edtah Formation & Dune Corridor",
         "type": "science_station",
         "geologic_unit": "Njf",
-        "elevation_m": -2500.0,
-        "grid_row": 6559,
-        "grid_col": 2949,
+        "elevation_m": -2580.81,
+        "grid_row": 2604,
+        "grid_col": 1954,
         "priority": "MEDIUM",
         "description": "Olivine-cumulate volcanic basement rocks flanked by active aeolian dunes (Aeb)."
       }
@@ -125,7 +125,7 @@
         "coordinates": [
           77.19,
           18.59,
-          -2500.0
+          -2186.18
         ]
       },
       "properties": {
@@ -133,9 +133,9 @@
         "name": "Neretva Vallis River Inlet Breach Canyon",
         "type": "landmark",
         "geologic_unit": "channel",
-        "elevation_m": -2500.0,
-        "grid_row": 6559,
-        "grid_col": 2949,
+        "elevation_m": -2186.18,
+        "grid_row": 2141,
+        "grid_col": 1156,
         "priority": "MEDIUM",
         "description": "Deep fluvial breach canyon where ancient floodwaters sliced into Jezero Crater."
       }
@@ -147,7 +147,7 @@
         "coordinates": [
           77.388,
           18.485,
-          -2500.0
+          -2433.3
         ]
       },
       "properties": {
@@ -155,9 +155,9 @@
         "name": "Belva Crater Rim & Shock Megabreccia",
         "type": "science_station",
         "geologic_unit": "Nrb",
-        "elevation_m": -2500.0,
-        "grid_row": 6559,
-        "grid_col": 2949,
+        "elevation_m": -2433.3,
+        "grid_row": 2449,
+        "grid_col": 1737,
         "priority": "HIGH",
         "description": "Deep pre-Noachian Martian basement crust uplifted by Isidis basin impact."
       }

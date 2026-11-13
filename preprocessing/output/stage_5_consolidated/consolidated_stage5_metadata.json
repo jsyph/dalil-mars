@@ -5,5 +5,5 @@
   "base_camp_id": "WP-00",
   "science_stations_count": 5,
   "landmarks_count": 1,
-  "all_points_safe": false
+  "all_points_safe": true
 }

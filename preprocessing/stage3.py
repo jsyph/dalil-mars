@@ -50,11 +50,10 @@ class Stage3SurfaceHazardPipeline:
 
         # 2. Ingest & Rasterize Nili.gdb Vector Hazard Layers
         if os.path.exists(self.gdb_path):
-            import geopandas as gpd
-            from rasterio.features import rasterize
-
             print(f"Reading surface hazard layers from {self.gdb_path}...")
             try:
+                import geopandas as gpd
+                from rasterio.features import rasterize
                 # Load Sand Dune / SurfaceFeatures Layer (Aeb TARs)
                 gdf_hazards = gpd.read_file(
                     self.gdb_path, layer="SurfaceFeatures", engine="pyogrio"
