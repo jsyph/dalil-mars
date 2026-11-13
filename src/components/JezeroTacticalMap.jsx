@@ -818,30 +818,30 @@ export default function JezeroTacticalMap({
       );
 
       marker.bindPopup(`
-        <div style="font-size:11px; max-width:250px; font-family:'JetBrains Mono',monospace;">
-          <div style="font-weight:700; color:#22c55e; font-size:10px; text-transform:uppercase; margin-bottom:2px;">
+        <div style="font-size:12px; min-width:260px; max-width:280px; font-family:'JetBrains Mono',monospace;">
+          <div style="font-weight:700; color:#22c55e; font-size:11px; text-transform:uppercase; margin-bottom:3px; letter-spacing:0.04em;">
             ${poi.type.toUpperCase()} NODE
           </div>
-          <div style="font-weight:700; font-size:12px; color:#edf0f5; border-bottom:1px solid #242933; padding-bottom:4px; margin-bottom:6px;">
+          <div style="font-weight:700; font-size:13px; color:#edf0f5; border-bottom:1px solid #242933; padding-bottom:5px; margin-bottom:8px;">
             ${poi.name}
           </div>
-          <p style="margin:0 0 8px; color:#9da5b4; font-family:'Inter',sans-serif; font-size:11px; line-height:1.4;">
+          <p style="margin:0 0 10px; color:#9da5b4; font-family:'Inter',sans-serif; font-size:12px; line-height:1.45;">
             ${poi.description}
           </p>
-          <div style="display:flex; flex-direction:column; gap:5px;">
+          <div style="display:flex; flex-direction:column; gap:6px;">
             <button onclick="window.dispatchSetOrigin('${poi.id}')" style="
-              width:100%; min-height:36px; padding:6px 10px; background:#191d24; color:#edf0f5;
-              border:1px solid #353c4a; border-radius:4px; font-weight:700; font-size:10px; cursor:pointer; text-transform:uppercase;
+              width:100%; min-height:42px; padding:8px 12px; background:#191d24; color:#edf0f5;
+              border:1px solid #353c4a; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; text-transform:uppercase; font-family:'JetBrains Mono',monospace;
             ">SET AS ORIGIN BASE</button>
             <button onclick="window.dispatchNavigateTo('${poi.id}')" style="
-              width:100%; min-height:36px; padding:6px 10px; background:#16a34a; color:#0b0d11;
-              border:1px solid #22c55e; border-radius:4px; font-weight:700; font-size:10px; cursor:pointer; text-transform:uppercase;
+              width:100%; min-height:42px; padding:8px 12px; background:#16a34a; color:#0b0d11;
+              border:1px solid #22c55e; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; text-transform:uppercase; font-family:'JetBrains Mono',monospace;
             ">ROUTE TO TARGET</button>
             ${
               matchingLm
                 ? `<button onclick="window.dispatchOpenLandmark('${matchingLm.id}')" style="
-                    width:100%; min-height:36px; padding:6px 10px; background:#222731; color:#22c55e;
-                    border:1px solid rgba(34,197,94,0.45); border-radius:4px; font-weight:700; font-size:10px; cursor:pointer; text-transform:uppercase;
+                    width:100%; min-height:42px; padding:8px 12px; background:#222731; color:#22c55e;
+                    border:1px solid rgba(34,197,94,0.45); border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; text-transform:uppercase; font-family:'JetBrains Mono',monospace;
                   ">OPEN DOSSIER & PHOTOS</button>`
                 : ''
             }
@@ -921,40 +921,40 @@ export default function JezeroTacticalMap({
       const regolith = lm.regolith || 'Basaltic-Olivine Floor';
 
       marker.bindPopup(`
-        <div style="font-size:11px; min-width:235px; font-family:'Inter',sans-serif;">
-          <div style="font-family:'JetBrains Mono',monospace; font-size:9.5px; color:#22c55e; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">
+        <div style="font-size:12px; min-width:270px; max-width:300px; font-family:'Inter',sans-serif;">
+          <div style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#22c55e; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">
             REGIONAL LANDMARK
           </div>
-          <div style="font-weight:700; font-size:13px; color:#edf0f5; margin:2px 0 4px;">
+          <div style="font-weight:700; font-size:14px; color:#edf0f5; margin:3px 0 5px;">
             ${lm.name}
           </div>
-          <div style="font-size:11px; color:#9da5b4; margin-bottom:8px; line-height:1.4;">
+          <div style="font-size:11.5px; color:#9da5b4; margin-bottom:10px; line-height:1.4;">
             ${lm.type || 'Jezero Geologic Feature'} // ${lm.region || 'Jezero Quadrangle'}
           </div>
-          <div style="background:#191d24; border:1px solid #242933; border-radius:4px; padding:6px; font-size:10px; margin-bottom:8px; font-family:'JetBrains Mono',monospace; line-height:1.5;">
-            <div><span style="color:#656d7d;">ELEV:</span> <span style="color:#edf0f5;">${lm.elevation_m} m</span></div>
+          <div style="background:#191d24; border:1px solid #242933; border-radius:6px; padding:8px; font-size:11px; margin-bottom:10px; font-family:'JetBrains Mono',monospace; line-height:1.6;">
+            <div><span style="color:#656d7d;">ELEV:</span> <span style="color:#edf0f5; font-weight:700;">${lm.elevation_m} m</span></div>
             <div><span style="color:#656d7d;">COORDS:</span> <span style="color:#edf0f5;">${lm.coords[0].toFixed(4)} N, ${lm.coords[1].toFixed(4)} E</span></div>
             <div><span style="color:#656d7d;">SOIL:</span> <span style="color:#9da5b4;">${regolith}</span></div>
           </div>
-          <div style="display:flex; flex-direction:column; gap:5px;">
+          <div style="display:flex; flex-direction:column; gap:6px;">
             <button onclick="window.dispatchOpenLandmark('${lm.id}')" style="
-              width:100%; min-height:36px; padding:6px 10px; background:#191d24; color:#edf0f5;
-              border:1px solid #353c4a; border-radius:4px; font-weight:700; font-size:10px;
+              width:100%; min-height:42px; padding:8px 12px; background:#191d24; color:#edf0f5;
+              border:1px solid #353c4a; border-radius:6px; font-weight:700; font-size:11px;
               font-family:'JetBrains Mono',monospace; cursor:pointer; text-transform:uppercase;
-            ">OPEN DOSSIER & 5-PHOTO LOG</button>
+            ">OPEN DOSSIER & 6-PHOTO LOG</button>
             <button onclick="window.dispatchOpenLandmarkVista('${lm.id}')" style="
-              width:100%; min-height:36px; padding:6px 10px; background:#222731; color:#edf0f5;
-              border:1px solid #4f5767; border-radius:4px; font-weight:700; font-size:10px;
+              width:100%; min-height:42px; padding:8px 12px; background:#222731; color:#edf0f5;
+              border:1px solid #4f5767; border-radius:6px; font-weight:700; font-size:11px;
               font-family:'JetBrains Mono',monospace; cursor:pointer; text-transform:uppercase;
             ">OPEN SURFACE VISTA / 360</button>
             <button onclick="window.dispatchSetOrigin('${lm.id}')" style="
-              width:100%; min-height:36px; padding:6px 10px; background:#191d24; color:#9da5b4;
-              border:1px solid #353c4a; border-radius:4px; font-weight:700; font-size:10px;
+              width:100%; min-height:42px; padding:8px 12px; background:#191d24; color:#9da5b4;
+              border:1px solid #353c4a; border-radius:6px; font-weight:700; font-size:11px;
               font-family:'JetBrains Mono',monospace; cursor:pointer; text-transform:uppercase;
             ">SET AS ORIGIN BASE</button>
             <button onclick="window.dispatchNavigateTo('${lm.id}')" style="
-              width:100%; min-height:36px; padding:6px 10px; background:#16a34a; color:#0b0d11;
-              border:1px solid #22c55e; border-radius:4px; font-weight:700; font-size:10px;
+              width:100%; min-height:42px; padding:8px 12px; background:#16a34a; color:#0b0d11;
+              border:1px solid #22c55e; border-radius:6px; font-weight:700; font-size:11px;
               font-family:'JetBrains Mono',monospace; cursor:pointer; text-transform:uppercase;
             ">ROUTE TO THIS SITE</button>
           </div>

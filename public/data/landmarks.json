@@ -7,10 +7,15 @@
       18.4446,
       77.4509
     ],
-    "elevation_m": -2565.0,
+    "elevation_m": -2565,
     "usgs_unit": "Cf (Crater Floor Fractured Unit)",
     "brief": "Touchdown location of the Mars 2020 Perseverance rover on Sol 0 (February 18, 2021). Comprises a flat, fractured basaltic lava or impact-melt sheet blanketed with a thin veneer of aeolian sand.",
     "photos": [
+      {
+        "url": "/panoramas/octavia_butler_360.jpg",
+        "title": "Octavia E. Butler Landing 360° Panorama",
+        "source": "NASA / JPL-Caltech / ASU Mastcam-Z"
+      },
       {
         "url": "data/landmarks/landing_site_1.png",
         "title": "MRO CTX 5M Regional Context",
@@ -50,7 +55,7 @@
       "mineralogy": "Pyroxene (augite/pigeonite), Plagioclase feldspar, Forsteritic olivine, minor Magnetite",
       "organics_biosignatures": "Below baseline detection limit (SHERLOC / SuperCam)",
       "perchlorate_content": "0.22 wt% (Nominal background)",
-      "grain_size": "Fine to medium sand (150\u2013350 \u00b5m) with basalt pebble armor",
+      "grain_size": "Fine to medium sand (150–350 µm) with basalt pebble armor",
       "soil_bearing_capacity": "160 kPa (High firmness / Nominal rover wheel traction)"
     },
     "rover_samples": [
@@ -66,10 +71,15 @@
       18.4981,
       77.3625
     ],
-    "elevation_m": -2402.0,
-    "usgs_unit": "\u0394m / \u0394ss (Delta Remnant Outlier)",
-    "brief": "Prominent flat-topped erosional butte south of the main delta front. Mastcam-Z and SuperCam long-distance imaging revealed distinct steeply dipping deltaic foreset beds (15\u00b0\u201320\u00b0), confirming a sustained ancient paleolake highstand.",
+    "elevation_m": -2402,
+    "usgs_unit": "Δm / Δss (Delta Remnant Outlier)",
+    "brief": "Prominent flat-topped erosional butte south of the main delta front. Mastcam-Z and SuperCam long-distance imaging revealed distinct steeply dipping deltaic foreset beds (15°–20°), confirming a sustained ancient paleolake highstand.",
     "photos": [
+      {
+        "url": "/panoramas/kodiak_butte_delta.jpg",
+        "title": "Mount Kodiak Ancient Delta Remnant",
+        "source": "NASA / JPL-Caltech SuperCam RMI"
+      },
       {
         "url": "data/landmarks/kodiak_butte_1.png",
         "title": "MRO CTX 5M Regional Context",
@@ -109,7 +119,7 @@
       "mineralogy": "Fe/Mg smectite clays, Quartz/Hydrated silica, Calcium carbonate, Hematite",
       "organics_biosignatures": "High potential biosignature preservation zone (lacustrine depositional model)",
       "perchlorate_content": "0.14 wt% (Low)",
-      "grain_size": "Silt to fine sand (<63 \u00b5m to 125 \u00b5m); rounded boulder topsets",
+      "grain_size": "Silt to fine sand (<63 µm to 125 µm); rounded boulder topsets",
       "soil_bearing_capacity": "140 kPa (Moderately firm talus / slope slip risk on scarp)"
     },
     "rover_samples": [
@@ -124,10 +134,15 @@
       18.5284,
       77.4042
     ],
-    "elevation_m": -2426.0,
-    "usgs_unit": "Nvf / \u0394b (Delta Base Confluence)",
+    "elevation_m": -2426,
+    "usgs_unit": "Nvf / Δb (Delta Base Confluence)",
     "brief": "Historic surface cache depot for the NASA-ESA Mars Sample Return (MSR) campaign. Perseverance deposited 10 titanium sample tubes on the flat ground here between Dec 2022 and Jan 2023 as an operational backup.",
     "photos": [
+      {
+        "url": "/panoramas/jezero_floor_tracks.jpg",
+        "title": "Three Forks Sample Depot Ground Vista",
+        "source": "NASA / JPL-Caltech Navcam"
+      },
       {
         "url": "data/landmarks/three_forks_1.png",
         "title": "MRO CTX 5M Regional Context",
@@ -167,7 +182,7 @@
       "mineralogy": "Mixed basaltic debris, Magnesium carbonates, Fe-sulfates, minor smectite",
       "organics_biosignatures": "Depot zone: pristine tube hermetic sealing verified",
       "perchlorate_content": "0.28 wt% (Nominal)",
-      "grain_size": "Coarse grit (0.5\u20132.0 mm) over flat bedrock pavement",
+      "grain_size": "Coarse grit (0.5–2.0 mm) over flat bedrock pavement",
       "soil_bearing_capacity": "190 kPa (Optimal trafficability / Low slip)"
     },
     "rover_samples": [
@@ -180,16 +195,21 @@
   },
   {
     "id": "seitah_dunes",
-    "name": "SOUTH S\u00c9\u00cdTAH OLIVINE COMPLEX",
+    "name": "SOUTH SÉÍTAH OLIVINE COMPLEX",
     "category": "IGNEOUS_COMPLEX",
     "coords": [
       18.4312,
       77.4398
     ],
-    "elevation_m": -2569.0,
+    "elevation_m": -2569,
     "usgs_unit": "Oc (Olivine-Rich Cumulate Unit)",
     "brief": "Navajo for \"amidst the sand\". A geologically unique layered ultramafic unit featuring heavy aeolian sand ripples and cumulate igneous rocks that crystallized deep inside a magma chamber before water filled the crater.",
     "photos": [
+      {
+        "url": "/panoramas/van_zyl_overlook_360.jpg",
+        "title": "Van Zyl Overlook & Séítah 360° Photosphere",
+        "source": "NASA / JPL-Caltech / ASU Mastcam-Z"
+      },
       {
         "url": "data/landmarks/seitah_dunes_1.png",
         "title": "MRO CTX 5M Regional Context",
@@ -229,7 +249,7 @@
       "mineralogy": "Fo75 Olivine (>65 vol%), Magnesite, Siderite, Augite, Chromite",
       "organics_biosignatures": "Carbonate-bound abiotic organics detected by SHERLOC Raman",
       "perchlorate_content": "0.08 wt% (Very low)",
-      "grain_size": "Coarse olivine sand (500\u20131000 \u00b5m) in active aeolian ripples",
+      "grain_size": "Coarse olivine sand (500–1000 µm) in active aeolian ripples",
       "soil_bearing_capacity": "35 kPa (CRITICAL SLIP RISK: Wheel sinkage up to 60%)"
     },
     "rover_samples": [
@@ -245,10 +265,15 @@
       18.5345,
       77.378
     ],
-    "elevation_m": -2414.0,
-    "usgs_unit": "\u0394m (Fine-Grained Lacustrine Mudstone)",
+    "elevation_m": -2414,
+    "usgs_unit": "Δm (Fine-Grained Lacustrine Mudstone)",
     "brief": "Steep exposure of fine-grained deltaic mudstones deposited during a quiescent phase of Lake Jezero. Abrasion patch \"Swift Run\" revealed intense sulfate mineral concentrations and the highest biosignature preservation potential discovered to date.",
     "photos": [
+      {
+        "url": "/panoramas/wildcat_ridge_delta.jpg",
+        "title": "Wildcat Ridge Delta Front Outcrop",
+        "source": "NASA / JPL-Caltech Mastcam-Z Zoom"
+      },
       {
         "url": "data/landmarks/wildcat_ridge_1.png",
         "title": "MRO CTX 5M Regional Context",
@@ -288,7 +313,7 @@
       "mineralogy": "Ca-sulfates (Anhydrite/Gypsum), Smectite clay, Polycyclic aromatics, Halite",
       "organics_biosignatures": "CONFIRMED: Strongest SHERLOC 248 nm Raman peak (Aromatic ring hydrocarbons)",
       "perchlorate_content": "0.42 wt% (Elevated near surface salts)",
-      "grain_size": "Ultra-fine clay/silt (<10 \u00b5m) with crystalline sulfate veins",
+      "grain_size": "Ultra-fine clay/silt (<10 µm) with crystalline sulfate veins",
       "soil_bearing_capacity": "175 kPa (Dense cemented mudstone pavement)"
     },
     "rover_samples": [
@@ -304,10 +329,15 @@
       18.5085,
       77.4892
     ],
-    "elevation_m": -2549.0,
+    "elevation_m": -2549,
     "usgs_unit": "Cb (Impact Crater Ejecta & Megablocks)",
     "brief": "A 1-km diameter impact crater excavated into the delta and crater floor. Deep structural walls expose dramatic dipping cross-sections, faulted bedrock, and polymict impact breccias thrown from deep beneath the volcanic floor.",
     "photos": [
+      {
+        "url": "/panoramas/belva_crater_panorama.jpg",
+        "title": "Belva Crater Impact Basin Rim Vista",
+        "source": "NASA / JPL-Caltech Mastcam-Z"
+      },
       {
         "url": "data/landmarks/belva_crater_1.png",
         "title": "MRO CTX 5M Regional Context",
@@ -362,10 +392,15 @@
       18.608,
       77.185
     ],
-    "elevation_m": -2109.0,
+    "elevation_m": -2109,
     "usgs_unit": "Nvf (Fluvial Channel Canyon Floor)",
     "brief": "The monumental canyon carved through the western rim of Jezero Crater by ancient Martian rivers. Floods carrying boulders over a meter across breached the crater wall and dumped billions of cubic meters of sediment into the lake.",
     "photos": [
+      {
+        "url": "/panoramas/neretva_vallis_outflow.jpg",
+        "title": "Neretva Vallis River Channel & Outflow",
+        "source": "NASA / JPL-Caltech Mastcam-Z"
+      },
       {
         "url": "data/landmarks/neretva_vallis_1.png",
         "title": "MRO CTX 5M Regional Context",
@@ -420,10 +455,15 @@
       18.514,
       77.382
     ],
-    "elevation_m": -2404.0,
-    "usgs_unit": "\u0394b (Basal Delta Bottomset Unit)",
+    "elevation_m": -2404,
+    "usgs_unit": "Δb (Basal Delta Bottomset Unit)",
     "brief": "A shallow outcrop nestled near the base of the delta scarp. It features finely laminated mudstones and siltstones that precipitated directly from suspension in the deepest, most quiet waters of the Jezero paleolake.",
     "photos": [
+      {
+        "url": "/panoramas/jezero_rim_horizon.jpg",
+        "title": "Enchanted Lake Basal Delta Mudstone",
+        "source": "NASA / JPL-Caltech Mastcam-Z"
+      },
       {
         "url": "data/landmarks/enchanted_lake_1.png",
         "title": "MRO CTX 5M Regional Context",
@@ -463,7 +503,7 @@
       "mineralogy": "Nontronite/Saponite smectites, Calcite/Ankerite, Opal-CT hydrated silica",
       "organics_biosignatures": "Elevated fluorescence signals in proximity to carbonate nodules",
       "perchlorate_content": "0.25 wt% (Moderate)",
-      "grain_size": "Sub-micron clay to fine silt (<20 \u00b5m)",
+      "grain_size": "Sub-micron clay to fine silt (<20 µm)",
       "soil_bearing_capacity": "165 kPa (Compacted mudstone bench)"
     },
     "rover_samples": [
@@ -479,10 +519,15 @@
       18.65,
       77.46
     ],
-    "elevation_m": -2420.0,
+    "elevation_m": -2420,
     "usgs_unit": "Cr (Pre-Noachian Crustal Rim Breccia)",
     "brief": "The towering tectonic crater rim wall rising hundreds of meters above the basin floor. Formed during the giant Isidis impact event ~3.9 billion years ago, exposing the most ancient primordial crust of Mars.",
     "photos": [
+      {
+        "url": "/panoramas/crater_rim_drive.jpg",
+        "title": "Jezero Northern Rim Traverse View",
+        "source": "NASA / JPL-Caltech Mastcam-Z"
+      },
       {
         "url": "data/landmarks/north_rim_1.png",
         "title": "MRO CTX 5M Regional Context",
@@ -523,7 +568,7 @@
       "organics_biosignatures": "None (Pre-biotic igneous basement)",
       "perchlorate_content": "0.19 wt% (Nominal)",
       "grain_size": "Shattered blocky regolith (5 cm to 4 m boulders on scree slopes)",
-      "soil_bearing_capacity": "180 kPa (High slope angle >18\u00b0 / Slope rollover hazard)"
+      "soil_bearing_capacity": "180 kPa (High slope angle >18° / Slope rollover hazard)"
     },
     "rover_samples": [
       "Targeted for Mars 2020 Extended Mission Crater Rim Ascent"
@@ -537,10 +582,15 @@
       17.8356,
       77.5341
     ],
-    "elevation_m": -3032.0,
+    "elevation_m": -3032,
     "usgs_unit": "Ah (Ancient Southern Highlands Plateau)",
     "brief": "A well-preserved Noachian impact crater located in the southern Nili Planum highlands. Officially designated by the IAU/USGS after Sedona, Arizona, famous for oxidized terrestrial iron-rich sandstone formations.",
     "photos": [
+      {
+        "url": "/panoramas/jezero_tracks_floor.jpg",
+        "title": "Sedona Crater Impact Cavity",
+        "source": "NASA / JPL-Caltech Navcam"
+      },
       {
         "url": "data/landmarks/sedona_crater_1.png",
         "title": "MRO CTX 5M Regional Context",
@@ -580,7 +630,7 @@
       "mineralogy": "Ferric oxides (Hematite/Nanophase iron oxide), Smectite clay, Enstatite pyroxene",
       "organics_biosignatures": "Ancient Noachian hydrothermal alterites in crater floor",
       "perchlorate_content": "0.18 wt% (Nominal)",
-      "grain_size": "Fine ferric dust veneer over coarse angular impact ejecta (100 \u00b5m to 10 cm)",
+      "grain_size": "Fine ferric dust veneer over coarse angular impact ejecta (100 µm to 10 cm)",
       "soil_bearing_capacity": "170 kPa (Firm highland terrain / Stable traction)"
     },
     "rover_samples": [
@@ -595,10 +645,15 @@
       18.5257,
       77.7146
     ],
-    "elevation_m": -2603.0,
+    "elevation_m": -2603,
     "usgs_unit": "Cfe (Eastern Crater Floor & Ejecta Blanket)",
     "brief": "Distinct secondary impact crater situated on the eastern floor of Jezero Crater. Officially approved by IAU/USGS nomenclature, it exposes deep subsurface ejecta layers that predate the deltaic sediment inflows.",
     "photos": [
+      {
+        "url": "/panoramas/western_rim_view.jpg",
+        "title": "Hartwell Crater Regional Vista",
+        "source": "NASA / JPL-Caltech Mastcam-Z"
+      },
       {
         "url": "data/landmarks/hartwell_crater_1.png",
         "title": "MRO CTX 5M Regional Context",
@@ -632,13 +687,13 @@
         "feo_wt": 18.2,
         "al2o3_wt": 9.2,
         "mgo_wt": 9.8,
-        "cao_wt": 6.0,
+        "cao_wt": 6,
         "so3_wt": 5.5
       },
       "mineralogy": "Plagioclase, Augite, Olivine, secondary carbonate rinds",
       "organics_biosignatures": "Sterilized impact glass and basaltic floor regolith",
       "perchlorate_content": "0.31 wt% (Moderate)",
-      "grain_size": "Mixed coarse gravels (2\u201310 mm) and basaltic sand matrix",
+      "grain_size": "Mixed coarse gravels (2–10 mm) and basaltic sand matrix",
       "soil_bearing_capacity": "195 kPa (High bearing firmness / Minimal sinkage)"
     },
     "rover_samples": [
