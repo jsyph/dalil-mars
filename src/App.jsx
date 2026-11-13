@@ -33,6 +33,7 @@ import {
   Play,
   Plus,
   RotateCcw,
+  Search,
   ShieldAlert,
   Sliders,
   Square,
@@ -119,7 +120,10 @@ export default function App() {
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showLayersSheet, setShowLayersSheet] = useState(false);
   const [showLegendSheet, setShowLegendSheet] = useState(false);
-  const [showRouteOptions, setShowRouteOptions] = useState(false);
+  const [showSuitSettings, setShowSuitSettings] = useState(false);
+  const [activeLocationPicker, setActiveLocationPicker] = useState(null); // 'origin' | 'dest' | null
+  const [locationPickerFilter, setLocationPickerFilter] = useState('all'); // 'all' | 'science' | 'charging' | 'landmark'
+  const [locationSearchQuery, setLocationSearchQuery] = useState('');
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false);
   const [showLocationPinTag, setShowLocationPinTag] = useState(false);
   const [compassRotation, setCompassRotation] = useState(0);
@@ -313,6 +317,35 @@ export default function App() {
     });
     return items;
   }, [sciencePOIs]);
+
+  // Location counts for picker category badges
+  const locationPickerCounts = useMemo(() => {
+    return {
+      all: allSiteOptions.length,
+      science: allSiteOptions.filter((s) => !s.isChargingStation && s.type !== 'landmark').length,
+      charging: allSiteOptions.filter((s) => s.isChargingStation).length,
+      landmark: allSiteOptions.filter((s) => s.type === 'landmark').length,
+    };
+  }, [allSiteOptions]);
+
+  // Filtered site options for glove-friendly location selector
+  const filteredSiteOptions = useMemo(() => {
+    return allSiteOptions.filter((s) => {
+      if (locationPickerFilter === 'charging' && !s.isChargingStation) return false;
+      if (locationPickerFilter === 'science' && (s.isChargingStation || s.type === 'landmark')) return false;
+      if (locationPickerFilter === 'landmark' && s.type !== 'landmark') return false;
+
+      if (locationSearchQuery.trim()) {
+        const q = locationSearchQuery.toLowerCase();
+        const nameMatch = s.name.toLowerCase().includes(q);
+        const idMatch = s.id.toLowerCase().includes(q);
+        const elevMatch = s.elev && String(s.elev).includes(q);
+        const descMatch = s.description && s.description.toLowerCase().includes(q);
+        if (!nameMatch && !idMatch && !elevMatch && !descMatch) return false;
+      }
+      return true;
+    });
+  }, [allSiteOptions, locationPickerFilter, locationSearchQuery]);
 
   const weather = WEATHER_CONDITIONS[weatherKey];
   const loadout = LOADOUT_PROFILES[loadoutKey];
@@ -920,10 +953,14 @@ export default function App() {
   const switchUiMode = (nextMode) => {
     setUiMode(nextMode);
     setShowLayersSheet(false);
-    setShowRouteOptions(false);
+    setShowLegendSheet(false);
+    setShowSuitSettings(false);
+    setActiveLocationPicker(null);
   };
 
   const startNavigation = () => {
+    setShowSuitSettings(false);
+    setActiveLocationPicker(null);
     if (startId === endId && startId !== 'custom-origin') {
       showToast({
         id: 'select-destination',
@@ -2033,15 +2070,19 @@ export default function App() {
                       <div className="flex items-center gap-1.5 shrink-0">
                         <button
                           type="button"
-                          onClick={() => setShowRouteOptions((v) => !v)}
+                          onClick={() => {
+                            setShowSuitSettings((v) => !v);
+                            setActiveLocationPicker(null);
+                          }}
                           className={`glove-btn min-h-[42px] px-3 py-1.5 rounded-[4px] border text-xs font-mono font-bold uppercase flex items-center gap-1.5 cursor-pointer ${
-                            showRouteOptions
+                            showSuitSettings
                               ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e]'
                               : 'bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border-[#353c4a]'
                           }`}
+                          title="Astronaut Mobility Loadout & EVA Settings"
                         >
                           <Sliders className="h-4 w-4" />
-                          <span>Route Setup</span>
+                          <span>Suit & LST</span>
                         </button>
 
                         <button
@@ -2334,69 +2375,33 @@ export default function App() {
                 </div>
               )}
 
-              {/* A7. EXPANDABLE ROUTE SETUP MODAL */}
-              {showRouteOptions && (
-                <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[750] w-[94%] max-w-lg rounded-[6px] bg-[#13161c] border border-[#353c4a] p-4 space-y-3.5">
+              {/* A7-A. EXPANDABLE EVA SUIT & MISSION SETTINGS DRAWER */}
+              {showSuitSettings && (
+                <div className="absolute top-20 right-3 z-[750] w-[94%] max-w-md rounded-[6px] bg-[#13161c] border border-[#353c4a] p-4 space-y-3.5 shadow-2xl">
                   <div className="flex items-center justify-between pb-2 border-b border-[#242933]">
                     <div className="text-xs font-mono font-bold uppercase text-[#edf0f5] flex items-center gap-2">
                       <Sliders className="h-4 w-4 text-[#22c55e]" />
-                      <span>Route & EVA Suit Settings</span>
+                      <span>EVA Suit & Crew Loadout</span>
                     </div>
                     <button
                       type="button"
-                      onClick={() => setShowRouteOptions(false)}
+                      onClick={() => setShowSuitSettings(false)}
                       className="p-1.5 rounded-[4px] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] cursor-pointer"
-                      aria-label="Close Route Settings"
+                      aria-label="Close Suit Settings"
                     >
                       <X className="h-4 w-4" />
                     </button>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                    <div>
-                      <label className="block text-[10px] font-mono text-[#9da5b4] uppercase mb-1">
-                        Starting Location
-                      </label>
-                      <select
-                        value={startId === 'custom-origin' ? '' : startId}
-                        onChange={(e) => e.target.value && handleSetOrigin(e.target.value)}
-                        className="w-full min-h-[44px] rounded-[4px] bg-[#0b0d11] border border-[#353c4a] px-3 py-2 font-mono text-xs text-[#edf0f5]"
-                      >
-                        {allSiteOptions.map((s) => (
-                          <option key={`modal-orig-${s.id}`} value={s.id}>
-                            {s.isChargingStation ? '[CHG] ' : ''}{s.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
-                      <label className="block text-[10px] font-mono text-[#9da5b4] uppercase mb-1">
-                        Destination Target
-                      </label>
-                      <select
-                        value={endId === 'custom-dest' ? '' : endId}
-                        onChange={(e) => e.target.value && handleNavigateToPOI(e.target.value)}
-                        className="w-full min-h-[44px] rounded-[4px] bg-[#0b0d11] border border-[#353c4a] px-3 py-2 font-mono text-xs text-[#edf0f5]"
-                      >
-                        {allSiteOptions.map((s) => (
-                          <option key={`modal-dest-${s.id}`} value={s.id}>
-                            {s.isChargingStation ? '[CHG] ' : ''}{s.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-
                   <div>
                     <label className="block text-[10px] font-mono text-[#9da5b4] uppercase mb-1.5">
-                      Astronaut Mobility Mode
+                      Mobility Loadout Profile
                     </label>
                     <div className="grid grid-cols-3 gap-1.5">
                       {Object.values(LOADOUT_PROFILES).map((prof) => (
                         <button
                           type="button"
-                          key={`modal-prof-${prof.id}`}
+                          key={`suit-prof-${prof.id}`}
                           onClick={() => setLoadoutKey(prof.id)}
                           className={`glove-btn min-h-[46px] px-2 py-1.5 rounded-[4px] border text-xs font-mono font-semibold flex items-center justify-center gap-1.5 cursor-pointer ${
                             loadoutKey === prof.id
@@ -2416,6 +2421,10 @@ export default function App() {
                           </span>
                         </button>
                       ))}
+                    </div>
+                    <div className="mt-1.5 text-[10px] font-mono text-[#9da5b4] flex justify-between">
+                      <span>Nominal Speed: <strong className="text-[#edf0f5]">{loadout.speedKmH} km/h</strong></span>
+                      <span>O2 Burn Rate: <strong className="text-[#edf0f5]">{loadout.o2Rate}x</strong></span>
                     </div>
                   </div>
 
@@ -2469,12 +2478,253 @@ export default function App() {
 
                   <button
                     type="button"
-                    onClick={() => setShowRouteOptions(false)}
-                    className="glove-btn w-full min-h-[48px] rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] text-[#0b0d11] font-mono font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 border border-[#22c55e] cursor-pointer"
+                    onClick={() => setShowSuitSettings(false)}
+                    className="glove-btn w-full min-h-[46px] rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] text-[#0b0d11] font-mono font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 border border-[#22c55e] cursor-pointer"
                   >
                     <Check className="h-4 w-4" />
-                    <span>Apply Route Settings</span>
+                    <span>Confirm Suit Settings</span>
                   </button>
+                </div>
+              )}
+
+              {/* A7-B. GLOVE-FIRST MODAL LOCATION PICKER (REPLACES NATIVE DROPDOWNS) */}
+              {activeLocationPicker && (
+                <div
+                  className="fixed inset-0 z-[800] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 pointer-events-auto"
+                  onClick={() => setActiveLocationPicker(null)}
+                >
+                  <div
+                    className="w-full max-w-lg max-h-[85vh] rounded-[6px] bg-[#13161c] border border-[#353c4a] flex flex-col shadow-2xl overflow-hidden"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    {/* Picker Header */}
+                    <div className="p-3.5 border-b border-[#242933] flex items-center justify-between shrink-0">
+                      <div className="flex items-center gap-2.5">
+                        <span className="flex h-8 w-8 items-center justify-center rounded-[4px] bg-[#191d24] border border-[#353c4a]">
+                          <MapPin className="h-4 w-4 text-[#22c55e]" />
+                        </span>
+                        <div>
+                          <h3 className="text-xs font-mono font-bold uppercase text-[#edf0f5] tracking-wider">
+                            {activeLocationPicker === 'origin'
+                              ? 'Select Departure Origin'
+                              : 'Select Target Destination'}
+                          </h3>
+                          <p className="text-[10px] font-mono text-[#9da5b4]">
+                            {activeLocationPicker === 'origin'
+                              ? 'Choose starting station or astronaut field position'
+                              : 'Choose destination waypoint in Jezero Crater'}
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveLocationPicker(null)}
+                        className="p-2 rounded-[4px] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] cursor-pointer"
+                        aria-label="Close Location Picker"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+
+                    {/* Filter Tabs (44px min-h for glove compatibility) */}
+                    <div className="px-3.5 pt-3 pb-2 border-b border-[#242933] space-y-2.5 shrink-0 bg-[#0b0d11]">
+                      <div className="grid grid-cols-4 gap-1.5">
+                        {[
+                          { id: 'all', label: 'ALL', count: locationPickerCounts.all },
+                          { id: 'science', label: 'SCIENCE', count: locationPickerCounts.science },
+                          { id: 'charging', label: 'CHARGING', count: locationPickerCounts.charging },
+                          { id: 'landmark', label: 'LANDMARKS', count: locationPickerCounts.landmark },
+                        ].map((tab) => (
+                          <button
+                            type="button"
+                            key={tab.id}
+                            onClick={() => setLocationPickerFilter(tab.id)}
+                            className={`glove-btn min-h-[44px] px-1 py-1 rounded-[4px] border text-[11px] font-mono font-bold uppercase flex flex-col items-center justify-center cursor-pointer transition-colors ${
+                              locationPickerFilter === tab.id
+                                ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e]'
+                                : 'bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] border-[#353c4a]'
+                            }`}
+                          >
+                            <span>{tab.label}</span>
+                            <span
+                              className={`text-[9.5px] ${
+                                locationPickerFilter === tab.id ? 'text-[#0b0d11]/80' : 'text-[#656d7d]'
+                              }`}
+                            >
+                              ({tab.count})
+                            </span>
+                          </button>
+                        ))}
+                      </div>
+
+                      {/* Search & Filter Input */}
+                      <div className="relative">
+                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9da5b4] pointer-events-none" />
+                        <input
+                          type="text"
+                          value={locationSearchQuery}
+                          onChange={(e) => setLocationSearchQuery(e.target.value)}
+                          placeholder="Search 21 Jezero Crater sites or elevation..."
+                          className="w-full min-h-[44px] rounded-[4px] bg-[#13161c] border border-[#353c4a] pl-9 pr-8 text-xs font-mono text-[#edf0f5] placeholder:text-[#656d7d] focus:border-[#22c55e] outline-none"
+                        />
+                        {locationSearchQuery && (
+                          <button
+                            type="button"
+                            onClick={() => setLocationSearchQuery('')}
+                            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#9da5b4] hover:text-[#edf0f5] cursor-pointer"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Scrollable Location List */}
+                    <div className="flex-1 overflow-y-auto aerospace-scroll p-3 space-y-2">
+                      {/* Top Action for Origin: Use Current Field / GPS Position */}
+                      {activeLocationPicker === 'origin' && !locationSearchQuery && locationPickerFilter === 'all' && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setCustomOriginCoord(null);
+                            setAstronautLocId('hab-alpha');
+                            setStartId('hab-alpha');
+                            setActiveLocationPicker(null);
+                          }}
+                          className={`glove-btn w-full min-h-[54px] p-2.5 rounded-[4px] border text-left flex items-center justify-between cursor-pointer transition-colors ${
+                            startId === 'hab-alpha' && !customOriginCoord
+                              ? 'bg-[#22c55e]/15 border-[#22c55e]'
+                              : 'bg-[#191d24] hover:bg-[#222731] border-[#353c4a]'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0">
+                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] bg-[#13161c] border border-[#353c4a] text-[#22c55e]">
+                              <Crosshair className="h-4 w-4" />
+                            </span>
+                            <div className="min-w-0">
+                              <div className="text-xs font-bold text-[#edf0f5] flex items-center gap-1.5">
+                                <span>Current Field Position</span>
+                                <span className="rounded-[3px] bg-[#22c55e]/20 text-[#22c55e] text-[9px] font-mono px-1.5 py-0.2">
+                                  GPS FIX
+                                </span>
+                              </div>
+                              <div className="text-[10px] font-mono text-[#9da5b4] truncate mt-0.5">
+                                Live Coordinates: 18.4447°N, 77.4508°E
+                              </div>
+                            </div>
+                          </div>
+                          <div className="shrink-0 text-right font-mono">
+                            <span className="text-[10px] font-bold text-[#22c55e]">0.0 km</span>
+                          </div>
+                        </button>
+                      )}
+
+                      {filteredSiteOptions.length === 0 ? (
+                        <div className="text-center py-8 text-xs font-mono text-[#656d7d]">
+                          No Jezero sites match "{locationSearchQuery}"
+                        </div>
+                      ) : (
+                        filteredSiteOptions.map((s) => {
+                          const isSelected =
+                            activeLocationPicker === 'origin'
+                              ? startId === s.id
+                              : endId === s.id;
+                          const displayName = s.name.replace(' [Landmark]', '');
+                          const distKm = (
+                            marsDistanceMeters(startPOI.lat, startPOI.lon, s.lat, s.lon) / 1000
+                          ).toFixed(1);
+
+                          return (
+                            <button
+                              type="button"
+                              key={`picker-item-${s.id}`}
+                              onClick={() => {
+                                if (activeLocationPicker === 'origin') {
+                                  handleSetOrigin(s.id);
+                                } else {
+                                  handleNavigateToPOI(s.id);
+                                }
+                                setActiveLocationPicker(null);
+                              }}
+                              className={`glove-btn w-full min-h-[54px] p-2.5 rounded-[4px] border text-left flex items-center justify-between cursor-pointer transition-colors ${
+                                isSelected
+                                  ? 'bg-[#22c55e]/15 border-[#22c55e]'
+                                  : 'bg-[#191d24] hover:bg-[#222731] border-[#353c4a]'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span
+                                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] border ${
+                                    s.isChargingStation
+                                      ? 'bg-[#13161c] border-[#22c55e]/50 text-[#22c55e]'
+                                      : s.type === 'landmark'
+                                      ? 'bg-[#13161c] border-[#353c4a] text-[#edf0f5]'
+                                      : 'bg-[#13161c] border-[#353c4a] text-[#9da5b4]'
+                                  }`}
+                                >
+                                  {s.isChargingStation ? (
+                                    <Zap className="h-4 w-4" />
+                                  ) : s.type === 'landmark' ? (
+                                    <Compass className="h-4 w-4" />
+                                  ) : (
+                                    <Target className="h-4 w-4" />
+                                  )}
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-bold text-[#edf0f5] flex items-center gap-1.5 truncate">
+                                    <span className="truncate">{displayName}</span>
+                                    {s.isChargingStation && (
+                                      <span className="rounded-[3px] bg-[#22c55e]/20 text-[#22c55e] text-[9px] font-mono px-1 py-0.2 shrink-0">
+                                        BASE
+                                      </span>
+                                    )}
+                                  </div>
+                                  <div className="text-[10.5px] font-mono text-[#9da5b4] flex items-center gap-2 mt-0.5">
+                                    <span>Elev {s.elev} m</span>
+                                    <span>•</span>
+                                    <span className="capitalize">
+                                      {s.isChargingStation
+                                        ? 'Solar Recharge Station'
+                                        : s.type === 'landmark'
+                                        ? 'Geological Feature'
+                                        : 'Science POI'}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="shrink-0 flex items-center gap-2.5 pl-2 font-mono text-right">
+                                <span className="text-[11px] font-bold text-[#22c55e]">
+                                  {distKm} km
+                                </span>
+                                {isSelected ? (
+                                  <span className="flex h-5 w-5 items-center justify-center rounded-full bg-[#22c55e] text-[#0b0d11]">
+                                    <Check className="h-3.5 w-3.5" />
+                                  </span>
+                                ) : (
+                                  <span className="h-5 w-5 rounded-full border border-[#353c4a]" />
+                                )}
+                              </div>
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+
+                    {/* Picker Footer */}
+                    <div className="p-3 border-t border-[#242933] bg-[#0b0d11] flex items-center justify-between shrink-0">
+                      <div className="text-[10px] font-mono text-[#656d7d]">
+                        Showing {filteredSiteOptions.length} of {allSiteOptions.length} locations
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setActiveLocationPicker(null)}
+                        className="glove-btn min-h-[44px] px-4 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] font-mono text-xs font-bold uppercase cursor-pointer"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
                 </div>
               )}
 
@@ -2636,7 +2886,17 @@ export default function App() {
                       <div className="space-y-1.5">
                         <div className="text-[10px] font-mono text-[#9da5b4] uppercase flex items-center justify-between">
                           <span>Select Next Waypoint:</span>
-                          <span className="text-[#22c55e]">From {startPOI.name.split(' ')[0]}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setActiveLocationPicker('dest');
+                              setLocationPickerFilter('all');
+                              setLocationSearchQuery('');
+                            }}
+                            className="text-[#22c55e] hover:underline font-mono text-[10px] cursor-pointer flex items-center gap-1"
+                          >
+                            <span>All Sites ({allSiteOptions.length})</span>
+                          </button>
                         </div>
                         <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto aerospace-scroll pr-0.5">
                           {allSiteOptions
@@ -2681,32 +2941,61 @@ export default function App() {
                   ) : (
                     /* STATE 3: EXPLORE & ROUTE PLANNING TRIP SHEET */
                     <div className="p-3.5 space-y-3">
-                      <div className="flex items-center justify-between gap-2 bg-[#191d24] p-2.5 rounded-[4px] border border-[#242933]">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-1.5 text-[9.5px] font-mono text-[#9da5b4] uppercase">
-                            <span className="h-2 w-2 rounded-full bg-[#edf0f5]" />
-                            <span>Origin {startId === astronautLocId ? '(Field)' : ''}</span>
+                      {/* GLOVE-FRIENDLY ORIGIN & DESTINATION TOUCH TILES */}
+                      <div className="flex items-center justify-between gap-2 bg-[#191d24] p-2 rounded-[4px] border border-[#242933]">
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveLocationPicker('origin');
+                            setLocationPickerFilter('all');
+                            setLocationSearchQuery('');
+                          }}
+                          className="flex-1 min-w-0 text-left glove-btn min-h-[50px] p-2 rounded-[4px] bg-[#13161c] hover:bg-[#222731] border border-[#353c4a] hover:border-[#22c55e] transition-colors cursor-pointer group"
+                          aria-label="Select Departure Origin"
+                        >
+                          <div className="flex items-center justify-between gap-1 text-[9.5px] font-mono text-[#9da5b4] uppercase">
+                            <span className="flex items-center gap-1.5">
+                              <span className="h-2 w-2 rounded-full bg-[#edf0f5]" />
+                              <span>Origin {startId === astronautLocId ? '(Field)' : ''}</span>
+                            </span>
+                            <span className="text-[8.5px] font-bold text-[#656d7d] group-hover:text-[#22c55e]">CHANGE</span>
                           </div>
-                          <div className="text-xs font-bold text-[#edf0f5] truncate">{startPOI.name}</div>
-                        </div>
+                          <div className="text-xs font-bold text-[#edf0f5] truncate mt-1">
+                            {startPOI.name.replace(' [Landmark]', '')}
+                          </div>
+                        </button>
 
                         <button
                           type="button"
                           onClick={handleSwapEndpoints}
                           title="Swap Origin and Destination"
-                          className="glove-btn h-10 w-10 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] flex items-center justify-center shrink-0 cursor-pointer"
+                          className="glove-btn h-12 w-12 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] active:bg-[#353c4a] border border-[#353c4a] text-[#edf0f5] flex items-center justify-center shrink-0 cursor-pointer"
                           aria-label="Swap Origin and Destination"
                         >
                           <ArrowLeftRight className="h-4 w-4" />
                         </button>
 
-                        <div className="flex-1 min-w-0 text-right">
-                          <div className="flex items-center justify-end gap-1.5 text-[9.5px] font-mono text-[#9da5b4] uppercase">
-                            <span>Destination</span>
-                            <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setActiveLocationPicker('dest');
+                            setLocationPickerFilter('all');
+                            setLocationSearchQuery('');
+                          }}
+                          className="flex-1 min-w-0 text-right glove-btn min-h-[50px] p-2 rounded-[4px] bg-[#13161c] hover:bg-[#222731] border border-[#353c4a] hover:border-[#22c55e] transition-colors cursor-pointer group"
+                          aria-label="Select Target Destination"
+                        >
+                          <div className="flex items-center justify-between gap-1 text-[9.5px] font-mono text-[#9da5b4] uppercase">
+                            <span className="text-[8.5px] font-bold text-[#656d7d] group-hover:text-[#22c55e]">SELECT</span>
+                            <span className="flex items-center gap-1.5">
+                              <span>Destination</span>
+                              <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
+                            </span>
                           </div>
-                          <div className="text-xs font-bold text-[#edf0f5] truncate">{endPOI.name}</div>
-                        </div>
+                          <div className="text-xs font-bold text-[#edf0f5] truncate mt-1">
+                            {endPOI.name.replace(' [Landmark]', '')}
+                          </div>
+                        </button>
                       </div>
 
                       <div className="flex items-start justify-between gap-2 flex-wrap">
@@ -2759,6 +3048,33 @@ export default function App() {
                             </span>
                           )}
                         </div>
+                      </div>
+
+                      {/* Astronaut Mobility Mode Quick Toggle */}
+                      <div className="grid grid-cols-3 gap-1.5">
+                        {Object.values(LOADOUT_PROFILES).map((prof) => (
+                          <button
+                            type="button"
+                            key={`trip-prof-${prof.id}`}
+                            onClick={() => setLoadoutKey(prof.id)}
+                            className={`glove-btn min-h-[40px] px-2 py-1 rounded-[4px] border text-[11px] font-mono font-semibold flex items-center justify-center gap-1.5 cursor-pointer transition-colors ${
+                              loadoutKey === prof.id
+                                ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e] font-bold'
+                                : 'bg-[#191d24] hover:bg-[#222731] border-[#353c4a] text-[#edf0f5]'
+                            }`}
+                          >
+                            {prof.id === 'light' ? (
+                              <User className="h-3.5 w-3.5" />
+                            ) : prof.id === 'heavy' ? (
+                              <PackageCheck className="h-3.5 w-3.5" />
+                            ) : (
+                              <Truck className="h-3.5 w-3.5" />
+                            )}
+                            <span className="truncate">
+                              {prof.id === 'light' ? 'Solo Suit' : prof.id === 'heavy' ? 'Heavy Kit' : 'Rover Mule'}
+                            </span>
+                          </button>
+                        ))}
                       </div>
 
                       {/* Prominent Battery & PLSS O2 Tank Simulation Cards */}
