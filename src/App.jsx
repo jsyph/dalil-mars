@@ -20,6 +20,7 @@ import {
   EyeOff,
   Flame,
   Gauge,
+  Info,
   Layers,
   LogOut,
   Map as MapIcon,
@@ -88,6 +89,7 @@ export default function App() {
   const [showStreetViewPIP, setShowStreetViewPIP] = useState(false);
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false);
   const [showRouteOptions, setShowRouteOptions] = useState(false);
+  const [showLegendSheet, setShowLegendSheet] = useState(false);
 
   // Animated Camera Fly-To Zoom & Locating Wave state
   const [locatePulse, setLocatePulse] = useState(null);
@@ -1298,6 +1300,19 @@ export default function App() {
         >
           <Layers className="h-6 w-6 text-orange-400" />
         </button>
+
+        {/* Map Legend & Symbology Guide FAB */}
+        <button
+          onClick={() => setShowLegendSheet((v) => !v)}
+          title="Map Legend: What do the icons & colored dots mean?"
+          className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border shadow-xl backdrop-blur-md cursor-pointer transition-all active:scale-90 ${
+            showLegendSheet
+              ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-cyan-500/50'
+              : 'bg-slate-900/90 text-cyan-400 border-slate-700 hover:bg-slate-800'
+          }`}
+        >
+          <Info className="h-6 w-6" />
+        </button>
       </div>
 
       {/* 8. FLOATING MARTIAN "STREET VIEW" PICTURE-IN-PICTURE (PIP) CARD */}
@@ -1379,11 +1394,35 @@ export default function App() {
               </label>
             ))}
           </div>
+
+          <div className="pt-2 border-t border-slate-800">
+            <button
+              onClick={() => {
+                setShowLayersSheet(false);
+                setShowLegendSheet(true);
+              }}
+              className="glove-btn w-full min-h-[38px] py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer"
+            >
+              <Info className="h-4 w-4 text-cyan-400" />
+              <span>Map Legend & Symbology</span>
+            </button>
+          </div>
         </div>
       )}
 
       {/* 10. BOTTOM GOOGLE MAPS NAVIGATION & TRIP BAR */}
       <div className="absolute bottom-3 left-3 right-3 z-30 flex flex-col items-center">
+        {/* Quick Map Legend Pill on Canvas */}
+        <div className="w-full max-w-xl flex items-center justify-between mb-1.5 px-1 pointer-events-auto">
+          <button
+            onClick={() => setShowLegendSheet((v) => !v)}
+            className="glove-btn px-3 py-1.5 rounded-xl bg-slate-900/90 hover:bg-slate-800 border border-slate-700/80 text-[11px] font-mono text-cyan-300 flex items-center gap-1.5 shadow-lg backdrop-blur-md cursor-pointer active:scale-95 transition-transform"
+          >
+            <Info className="h-3.5 w-3.5 text-cyan-400" />
+            <span>Map Legend ({showLegendSheet ? 'Close' : 'Icons & Dots Guide'})</span>
+          </button>
+        </div>
+
         <div className="w-full max-w-xl rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-xl overflow-hidden transition-all">
           {navMode === 'navigating' ? (
             /* ACTIVE NAVIGATION CONTROLS (Google Maps Android Drive Bar) */
@@ -1764,6 +1803,251 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {/* 10B. MARTIAN MAP SYMBOLOGY & ICONS LEGEND MODAL */}
+      {showLegendSheet && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md">
+          <div className="relative w-full max-w-xl max-h-[88vh] flex flex-col rounded-3xl bg-slate-900/95 border-2 border-cyan-500/80 shadow-2xl overflow-hidden text-slate-100">
+            {/* Legend Header */}
+            <div className="flex items-center justify-between p-4 bg-slate-950 border-b border-slate-800">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-cyan-500/20 text-cyan-400 border border-cyan-500/40">
+                  <Info className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="text-sm font-black uppercase tracking-wider text-white">
+                    Map Symbology & Legend
+                  </div>
+                  <div className="text-[11px] font-mono text-cyan-400">
+                    What the Icons, Colored Dots & Route Overlays Mean
+                  </div>
+                </div>
+              </div>
+
+              <button
+                onClick={() => setShowLegendSheet(false)}
+                className="glove-btn p-2 rounded-xl text-slate-400 hover:text-white hover:bg-slate-800 cursor-pointer"
+              >
+                <X className="h-6 w-6" />
+              </button>
+            </div>
+
+            {/* Scrollable Legend Content */}
+            <div className="p-4 overflow-y-auto space-y-4 text-xs font-sans">
+              {/* Category 1: Waypoint Dots & Virtual Bases */}
+              <div className="space-y-2">
+                <div className="text-[11px] font-mono uppercase font-bold text-cyan-300 tracking-wider flex items-center gap-1.5 pb-1 border-b border-slate-800">
+                  <span>1. Waypoint Dots & Ground Facilities</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-black text-sm shrink-0 border-2 border-white shadow-lg shadow-emerald-500/30">
+                      ⚡
+                    </div>
+                    <div>
+                      <div className="font-bold text-emerald-300 text-xs">Virtual Base Charging Station</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                        Solar/reactor fast-charge depot. Fully restores suit battery & PLSS O2 to 100% in 15 min. Safe habitat.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-black text-sm shrink-0 border-2 border-white shadow-lg shadow-emerald-500/30">
+                      💧
+                    </div>
+                    <div>
+                      <div className="font-bold text-emerald-300 text-xs">ISRU Resource Target</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                        In-Situ Resource Utilization site (e.g. hydrated smectite clays 4-7% H2O, water extraction, propellant synthesis).
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-full bg-amber-500 text-slate-950 flex items-center justify-center font-black text-sm shrink-0 border-2 border-white shadow-lg shadow-amber-500/30">
+                      ★
+                    </div>
+                    <div>
+                      <div className="font-bold text-amber-300 text-xs">Science Exploration Target</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                        Key geological outcrops (e.g. Mount Kodiak delta foreset beds, Séítah olivine magma chamber, Belva impact rim).
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-full bg-purple-500 text-slate-950 flex items-center justify-center font-black text-sm shrink-0 border-2 border-white shadow-lg shadow-purple-500/30">
+                      ⬡
+                    </div>
+                    <div>
+                      <div className="font-bold text-purple-300 text-xs">Sample Depot & Minerals</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                        Mars Sample Return depot (e.g. Three Forks 10 cached titanium rock & regolith core tubes ready for retrieval).
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Category 2: Live Navigation & Position Badges */}
+              <div className="space-y-2">
+                <div className="text-[11px] font-mono uppercase font-bold text-cyan-300 tracking-wider flex items-center gap-1.5 pb-1 border-b border-slate-800">
+                  <span>2. Navigation Rings & Position Indicators</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+                    <div className="relative flex items-center justify-center shrink-0">
+                      <div className="h-8 w-8 rounded-full bg-cyan-500 text-slate-950 flex items-center justify-center font-bold text-xs border-2 border-cyan-300 shadow-[0_0_12px_#22d3ee]">
+                        📍
+                      </div>
+                      <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-cyan-400 animate-ping" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-cyan-300 text-xs flex items-center gap-1">
+                        <span>Current Field Position</span>
+                        <span className="text-[9px] bg-cyan-900/80 text-cyan-300 px-1.5 py-0.2 rounded border border-cyan-500/50">YOU ARE HERE</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                        Your locked physical position on Mars. Any newly selected waypoint will automatically route departing from here.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-full bg-emerald-500 text-slate-950 flex items-center justify-center font-bold text-xs shrink-0 border-2 border-emerald-300 shadow-[0_0_12px_#34d399]">
+                      🎯
+                    </div>
+                    <div>
+                      <div className="font-bold text-emerald-300 text-xs">Navigation Destination</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                        Target waypoint chosen for active traverse. Turn-by-turn guidance and battery predictions calculate toward this site.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+                    <div className="relative flex items-center justify-center shrink-0">
+                      <div className="h-8 w-8 rounded-full bg-yellow-400 text-slate-950 flex items-center justify-center font-bold text-xs border-2 border-yellow-200 shadow-[0_0_14px_#facc15]">
+                        ⚡
+                      </div>
+                      <span className="absolute -bottom-1 text-[8px] font-mono font-black bg-yellow-400 text-slate-950 px-1 rounded">100%</span>
+                    </div>
+                    <div>
+                      <div className="font-bold text-yellow-300 text-xs flex items-center gap-1">
+                        <span>Virtual Base Pit-Stop</span>
+                        <span className="text-[9px] bg-yellow-900/80 text-yellow-300 px-1.5 py-0.2 rounded border border-yellow-500/50">RECHARGE</span>
+                      </div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                        Automatically inserted intermediate charging stop when a direct route exceeds your suit/rover battery or oxygen limits.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+                    <div className="h-8 w-8 rounded-full bg-slate-900 text-cyan-400 border-2 border-cyan-400 flex items-center justify-center font-bold text-xs shrink-0 shadow-lg">
+                      <Navigation2 className="h-4 w-4" />
+                    </div>
+                    <div>
+                      <div className="font-bold text-cyan-300 text-xs">Live Astronaut Telemetry</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                        Animated marker representing the walking astronaut/rover in real time, rotating to match live heading azimuth (0°-360°).
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Category 3: Traversal Paths, Radars & Terrain Hazards */}
+              <div className="space-y-2">
+                <div className="text-[11px] font-mono uppercase font-bold text-cyan-300 tracking-wider flex items-center gap-1.5 pb-1 border-b border-slate-800">
+                  <span>3. Route Lines, Safety Zones & Hazards</span>
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+                    <div className="w-8 flex flex-col items-center justify-center pt-2 shrink-0">
+                      <div className="w-7 h-1.5 bg-cyan-400 rounded-full shadow-[0_0_8px_#22d3ee]"></div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-cyan-300 text-xs">Solid Cyan Path: A* Safe Corridor</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                        Calculated safest terrain route avoiding slopes &gt;15°, boulder clusters, and sand traps while ensuring battery margin.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+                    <div className="w-8 flex flex-col items-center justify-center pt-2 shrink-0">
+                      <div className="w-7 h-0 border-t-2 border-dashed border-orange-400"></div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-orange-300 text-xs">Dashed Orange: Direct Line-of-Sight</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                        Straight Euclidean distance between origin and target, shown for visual comparison of terrain detour necessity.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+                    <div className="w-8 flex items-center justify-center shrink-0">
+                      <div className="w-7 h-7 rounded-full border-2 border-dashed border-emerald-400/70 bg-emerald-500/10 flex items-center justify-center text-[9px] font-mono text-emerald-300">
+                        2.5k
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-emerald-300 text-xs">Green Dashed Circle: 2.5 km Station Zone</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                        Fast-charge base service radius. Within this zone, astronauts can safely reach emergency shelter in &lt;45 min.
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3">
+                    <div className="w-8 flex items-center justify-center shrink-0">
+                      <div className="w-7 h-7 rounded-full border-2 border-dashed border-red-500 bg-red-500/20 flex items-center justify-center text-xs">
+                        ⚠️
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-red-400 text-xs">Red Shaded Circles: Hazard Polygons</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                        Unsafe terrain zones (loose basaltic sand dunes with &gt;30% wheel slip, sheer crater cliffs &gt;18° incline).
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-xl bg-slate-950 border border-slate-800 flex items-start gap-3 sm:col-span-2">
+                    <div className="w-8 flex items-center justify-center shrink-0">
+                      <div className="w-7 h-7 rounded-full border-2 border-orange-500 bg-orange-500/20 flex items-center justify-center text-xs text-orange-300">
+                        🌪️
+                      </div>
+                    </div>
+                    <div>
+                      <div className="font-bold text-orange-300 text-xs">Orange Pulsing Front: Regional Dust Storm Radar</div>
+                      <div className="text-[11px] text-slate-400 mt-0.5 leading-snug">
+                        Predictive radar showing approaching dust front distance (km), estimated time of arrival (ETA in min), and barometer drop rate. Triggers 1-tap shelter evacuation.
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="p-3 bg-slate-950 border-t border-slate-800 flex items-center justify-between">
+              <span className="text-[11px] font-mono text-slate-400">
+                DALIL MARS • JEZERO CRATER TACTICAL NAV SUITE
+              </span>
+              <button
+                onClick={() => setShowLegendSheet(false)}
+                className="glove-btn px-4 py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs uppercase cursor-pointer"
+              >
+                Close Legend
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* 11. INTERACTIVE 360° MARS PANORAMA & ULTRA-HD VISTA VIEWER MODAL */}
       {activePanorama && (
