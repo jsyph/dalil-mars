@@ -128,23 +128,65 @@ export default function App() {
   // Active Interactive 360° Panorama Viewer State
   const [activePanorama, setActivePanorama] = useState(null);
 
-  const handleOpenPanorama = (sol, coords, poi) => {
+  const handleOpenPanorama = (target, coords, poi) => {
     let match = null;
-    if (poi) {
-      match = jezeroPanoramas.find((p) => p.associatedPOI === poi.name || p.id.includes(poi.id));
-    }
-    if (!match && sol !== undefined && sol !== null) {
-      match = jezeroPanoramas.reduce((prev, curr) =>
-        Math.abs(curr.sol - Number(sol)) < Math.abs(prev.sol - Number(sol)) ? curr : prev
+
+    // 1. If explicit poi object passed
+    const candidatePOI = poi || (target && typeof target === 'object' && target.id ? target : null);
+    if (candidatePOI) {
+      match = jezeroPanoramas.find(
+        (p) =>
+          p.poiId === candidatePOI.id ||
+          p.associatedPOI === candidatePOI.name ||
+          p.id.includes(candidatePOI.id)
       );
     }
-    if (!match) {
-      match = jezeroPanoramas[0];
+
+    // 2. If target is a string (e.g., 'hawksbill-gap', 'three-forks', 'belva-crater', etc.)
+    if (!match && typeof target === 'string') {
+      match = jezeroPanoramas.find(
+        (p) =>
+          p.poiId === target ||
+          p.id === target ||
+          p.associatedPOI === target ||
+          p.title.toLowerCase().includes(target.toLowerCase())
+      );
+      if (!match) {
+        const matchingScience = sciencePOIs.find(
+          (s) => s.id === target || s.name.toLowerCase().includes(target.toLowerCase())
+        );
+        if (matchingScience) {
+          match = jezeroPanoramas.find(
+            (p) => p.poiId === matchingScience.id || p.associatedPOI === matchingScience.name
+          );
+        }
+      }
     }
+
+    // 3. If target is a number (Sol)
+    if (!match && typeof target === 'number') {
+      match = jezeroPanoramas.find((p) => p.sol === target);
+      if (!match) {
+        match = jezeroPanoramas.reduce((prev, curr) =>
+          Math.abs(curr.sol - target) < Math.abs(prev.sol - target) ? curr : prev
+        );
+      }
+    }
+
+    // 4. Fallback to active destination or origin POI
+    if (!match) {
+      match =
+        jezeroPanoramas.find((p) => p.poiId === endId) ||
+        jezeroPanoramas.find((p) => p.poiId === startId) ||
+        jezeroPanoramas[0];
+    }
+
     setActivePanorama(match);
     showToast({
       id: `pano-${Date.now()}`,
-      title: match.is360 ? `🌐 360° Photosphere: ${match.title.split(' ')[0]}` : `📷 Surface Photo: ${match.title.split(' ')[0]}`,
+      title: match.is360
+        ? `🌐 360° Photosphere: ${match.locationName || match.title.split(' ')[0]}`
+        : `📷 Surface Photo: ${match.locationName || match.title.split(' ')[0]}`,
       message: `${match.locationName} • Sol ${match.sol} (${match.is360 ? 'Interactive 360° Sphere' : 'High-Res Surface Photo'})`,
       type: 'info',
       icon: 'camera',
@@ -505,10 +547,13 @@ export default function App() {
 
   const activePOV = useMemo(() => {
     if (!jezeroPanoramas.length) return null;
+    const targetPOI = endId || startId;
+    const matchByPOI = jezeroPanoramas.find((p) => p.poiId === targetPOI);
+    if (matchByPOI) return matchByPOI;
     return jezeroPanoramas.reduce((prev, curr) =>
       Math.abs(curr.sol - selectedSol) < Math.abs(prev.sol - selectedSol) ? curr : prev
     );
-  }, [selectedSol]);
+  }, [selectedSol, endId, startId]);
 
   // Active navigation maneuver for Google Maps turn banner
   const currentManeuver = useMemo(() => {
@@ -746,6 +791,7 @@ export default function App() {
           astronautLocId={astronautLocId}
           onSelectPOI={(poi) => {
             handleNavigateToPOI(poi.id);
+            handleOpenPanorama(poi.id);
           }}
           onSelectWaypointSol={(sol) => {
             setSelectedSol(sol);
@@ -1220,8 +1266,8 @@ export default function App() {
 
         {/* Martian "Street View" 360° POV Panorama Launcher FAB */}
         <button
-          onClick={() => handleOpenPanorama(selectedSol)}
-          title="Open Interactive 360° Mars Panorama"
+          onClick={() => handleOpenPanorama(endId || startId)}
+          title="Open Location Photo / 360° Panorama"
           className="glove-btn relative flex h-12 w-12 items-center justify-center rounded-2xl border shadow-xl backdrop-blur-md cursor-pointer transition-all bg-slate-900/90 text-cyan-400 hover:text-white border-cyan-500/60 hover:border-cyan-400 hover:bg-cyan-950 active:scale-90"
         >
           <Camera className="h-6 w-6" />
@@ -1269,7 +1315,7 @@ export default function App() {
             </button>
           </div>
           <div
-            onClick={() => handleOpenPanorama(activePOV.sol)}
+            onClick={() => handleOpenPanorama(activePOV.poiId || activePOV.id)}
             className="relative cursor-pointer group"
           >
             <img
@@ -1280,19 +1326,19 @@ export default function App() {
             />
             <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent flex items-end p-2.5">
               <span className="text-[11px] font-mono font-bold text-white bg-cyan-600/90 px-2 py-1 rounded-lg border border-cyan-400/50 shadow flex items-center gap-1">
-                🌐 TAP TO OPEN 360° SPHERE
+                {activePOV.is360 ? '🌐 TAP TO OPEN 360° SPHERE' : '📷 TAP TO VIEW HIGH-RES PHOTO'}
               </span>
             </div>
           </div>
           <div className="p-2.5 text-[11px] bg-slate-950 space-y-1.5">
-            <div className="font-semibold text-slate-200 line-clamp-1">{activePOV.title}</div>
+            <div className="font-semibold text-slate-200 line-clamp-1">{activePOV.locationName || activePOV.title}</div>
             <div className="text-[10px] font-mono text-cyan-400 uppercase">{activePOV.instrument || `Camera: ${activePOV.camera}`}</div>
             <button
-              onClick={() => handleOpenPanorama(activePOV.sol)}
+              onClick={() => handleOpenPanorama(activePOV.poiId || activePOV.id)}
               className="glove-btn w-full py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
             >
               <Eye className="h-3.5 w-3.5" />
-              <span>Launch 360° Photosphere</span>
+              <span>{activePOV.is360 ? 'Launch 360° Photosphere' : 'View High-Res Surface Photo'}</span>
             </button>
           </div>
         </div>
@@ -1450,6 +1496,14 @@ export default function App() {
                           <Zap className="h-3 w-3" /> Recharged 100%
                         </span>
                       )}
+                      <button
+                        onClick={() => handleOpenPanorama(startPOI.id)}
+                        title="View Photo / 360° Panorama of this Location"
+                        className="glove-btn px-2 py-0.5 rounded-lg bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 text-[10px] font-bold flex items-center gap-1 cursor-pointer shrink-0 ml-1"
+                      >
+                        <Camera className="h-3 w-3 text-cyan-400" />
+                        <span>{startPOI.id === 'hab-alpha' || startPOI.id === 'seitah-ridge' ? '360°' : 'Photo'}</span>
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -1492,7 +1546,10 @@ export default function App() {
                       return (
                         <button
                           key={dest.id}
-                          onClick={() => handleNavigateToPOI(dest.id)}
+                          onClick={() => {
+                            handleNavigateToPOI(dest.id);
+                            handleOpenPanorama(dest.id);
+                          }}
                           className="glove-btn p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-cyan-500/60 text-left transition-all cursor-pointer flex flex-col justify-between group active:scale-95"
                         >
                           <div className="flex items-start justify-between gap-1">
@@ -1550,6 +1607,14 @@ export default function App() {
                         <Zap className="h-3 w-3" /> Virtual Base
                       </span>
                     )}
+                    <button
+                      onClick={() => handleOpenPanorama(endPOI.id)}
+                      title="View Photo / 360° Panorama of this Location"
+                      className="glove-btn px-2.5 py-1 rounded-xl bg-cyan-950/80 hover:bg-cyan-900 border border-cyan-500/50 text-cyan-300 text-[10px] font-bold flex items-center gap-1 cursor-pointer shrink-0 ml-auto"
+                    >
+                      <Camera className="h-3.5 w-3.5 text-cyan-400" />
+                      <span>{endPOI.id === 'hab-alpha' || endPOI.id === 'seitah-ridge' ? '360° Sphere' : 'Photo'}</span>
+                    </button>
                   </div>
                   <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
                     <span className="font-mono text-cyan-300 font-bold">{routeResult.distKm} km</span>

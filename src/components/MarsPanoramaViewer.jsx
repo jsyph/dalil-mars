@@ -592,7 +592,7 @@ export default function MarsPanoramaViewer({
                   >
                     <span>{pIs360 ? '🌐' : '📷'}</span>
                     <span>
-                      Sol {p.sol}: {p.title.split(' ')[0]} {pIs360 ? '(360°)' : '(Photo)'}
+                      {p.locationName || p.title} {pIs360 ? '(360°)' : '(Photo)'}
                     </span>
                   </button>
                 );

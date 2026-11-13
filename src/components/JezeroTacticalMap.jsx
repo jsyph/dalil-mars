@@ -316,11 +316,11 @@ export default function JezeroTacticalMap({
               width:100%; padding:4px 8px; background:#334155; color:#cbd5e1;
               font-weight:700; font-size:10px; border-radius:6px; border:none; cursor:pointer;
             ">📍 SET AS STARTING ORIGIN</button>
-            <button onclick="window.dispatchMarsPano(${poi.sol})" style="
+            <button onclick="window.dispatchMarsPano('${poi.id}')" style="
               width:100%; padding:5px 8px; background:${bgColor}; color:#020617;
               font-weight:800; font-size:11px; border-radius:8px; border:none; cursor:pointer;
               display:flex; align-items:center; justify-content:center; gap:4px;
-            ">${(poi.sol === 3 || poi.sol === 68) ? '🌐 OPEN 360° PHOTOSPHERE' : '📷 VIEW SURFACE PHOTO'}</button>
+            ">${(poi.id === 'hab-alpha' || poi.id === 'seitah-ridge') ? '🌐 OPEN 360° PHOTOSPHERE' : '📷 VIEW SURFACE PHOTO'}</button>
           </div>
         </div>
       `);
