@@ -121,6 +121,8 @@ export default function App() {
   const [showLayersSheet, setShowLayersSheet] = useState(false);
   const [showLegendSheet, setShowLegendSheet] = useState(false);
   const [showSuitSettings, setShowSuitSettings] = useState(false);
+  const [showSimSheet, setShowSimSheet] = useState(false);
+  const [tripPanelCollapsed, setTripPanelCollapsed] = useState(false);
   const [activeLocationPicker, setActiveLocationPicker] = useState(null); // 'origin' | 'dest' | null
   const [locationPickerFilter, setLocationPickerFilter] = useState('all'); // 'all' | 'science' | 'charging' | 'landmark'
   const [locationSearchQuery, setLocationSearchQuery] = useState('');
@@ -955,11 +957,13 @@ export default function App() {
     setShowLayersSheet(false);
     setShowLegendSheet(false);
     setShowSuitSettings(false);
+    setShowSimSheet(false);
     setActiveLocationPicker(null);
   };
 
   const startNavigation = () => {
     setShowSuitSettings(false);
+    setShowSimSheet(false);
     setActiveLocationPicker(null);
     if (startId === endId && startId !== 'custom-origin') {
       showToast({
@@ -2041,9 +2045,9 @@ export default function App() {
                     </div>
                   </div>
                 ) : (
-                  /* SIMPLE EXPLORE BAR + WEATHER MODES + SCENARIO PRESETS */
-                  <div className="pointer-events-auto w-full max-w-2xl space-y-2">
-                    <div className="flex items-center justify-between gap-2 rounded-[6px] bg-[#13161c]/95 border border-[#353c4a] px-3 py-2">
+                  /* TOP HEADER: APP NAME, SOL, TIME, AMBIENT TEMP + 2 ACTION BUTTONS */
+                  <div className="pointer-events-auto w-full max-w-2xl">
+                    <div className="flex items-center justify-between gap-2 rounded-[6px] bg-[#13161c]/95 border border-[#353c4a] px-3 py-2 shadow-lg">
                       <div className="flex items-center gap-2.5 min-w-0">
                         <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[4px] bg-[#191d24] border border-[#353c4a] text-[#edf0f5]">
                           <Compass className="h-5 w-5" />
@@ -2073,6 +2077,7 @@ export default function App() {
                           onClick={() => {
                             setShowSuitSettings((v) => !v);
                             setActiveLocationPicker(null);
+                            setShowSimSheet(false);
                           }}
                           className={`glove-btn min-h-[42px] px-3 py-1.5 rounded-[4px] border text-xs font-mono font-bold uppercase flex items-center gap-1.5 cursor-pointer ${
                             showSuitSettings
@@ -2095,97 +2100,6 @@ export default function App() {
                           <span className="hidden sm:inline">DEV GUI</span>
                         </button>
                       </div>
-                    </div>
-
-                    {/* 3-Button Weather Mode Selector */}
-                    <div className="flex items-center gap-1 bg-[#13161c]/95 p-1 rounded-[6px] border border-[#242933]">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setWeatherKey('nominal');
-                          setIncomingDustAlert(false);
-                        }}
-                        className={`glove-btn flex-1 min-h-[38px] px-2.5 py-1 rounded-[4px] border text-xs font-mono font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
-                          weatherKey === 'nominal'
-                            ? 'bg-[#22c55e]/15 text-[#22c55e] border-[#22c55e]'
-                            : 'bg-transparent border-transparent text-[#9da5b4] hover:text-[#edf0f5] hover:bg-[#191d24]'
-                        }`}
-                      >
-                        <Sun className="h-4 w-4" />
-                        <span>Nominal Sol</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setWeatherKey('dust_storm');
-                          setIncomingDustAlert(true);
-                          setShowDustRadarCard(true);
-                        }}
-                        className={`glove-btn flex-1 min-h-[38px] px-2.5 py-1 rounded-[4px] border text-xs font-mono font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
-                          weatherKey === 'dust_storm'
-                            ? 'bg-[#ef4444]/15 text-[#ef4444] border-[#ef4444]'
-                            : 'bg-transparent border-transparent text-[#9da5b4] hover:text-[#edf0f5] hover:bg-[#191d24]'
-                        }`}
-                      >
-                        <Wind className="h-4 w-4" />
-                        <span>Dust Storm</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setWeatherKey('solar_storm');
-                          setIncomingDustAlert(false);
-                        }}
-                        className={`glove-btn flex-1 min-h-[38px] px-2.5 py-1 rounded-[4px] border text-xs font-mono font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
-                          weatherKey === 'solar_storm'
-                            ? 'bg-[#ef4444]/15 text-[#ef4444] border-[#ef4444]'
-                            : 'bg-transparent border-transparent text-[#9da5b4] hover:text-[#edf0f5] hover:bg-[#191d24]'
-                        }`}
-                      >
-                        <Zap className="h-4 w-4" />
-                        <span>Solar Flare</span>
-                      </button>
-                    </div>
-
-                    {/* 4-Button Quick Scenario Presets */}
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 py-0.5">
-                      <button
-                        type="button"
-                        onClick={() => applyPreset('hab-alpha', 'three-forks', 'light', 'nominal', 85, 90, 705)}
-                        className="glove-btn whitespace-nowrap min-h-[36px] px-2 py-1 rounded-[4px] text-[11px] font-mono font-semibold bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <Target className="h-3.5 w-3.5 shrink-0 text-[#22c55e]" />
-                        <span className="truncate">1. Direct Sample</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => applyPreset('hab-alpha', 'hawksbill-gap', 'heavy', 'nominal', 24, 34, 760)}
-                        className="glove-btn whitespace-nowrap min-h-[36px] px-2 py-1 rounded-[4px] text-[11px] font-mono font-semibold bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <BatteryCharging className="h-3.5 w-3.5 shrink-0 text-[#22c55e]" />
-                        <span className="truncate">2. Recharge Pit-Stop</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => applyPreset('kodiak-butte', 'belva-crater', 'light', 'dust_storm', 62, 70, 955)}
-                        className="glove-btn whitespace-nowrap min-h-[36px] px-2 py-1 rounded-[4px] text-[11px] font-mono font-semibold bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border border-[#ef4444]/60 flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <Wind className="h-3.5 w-3.5 shrink-0 text-[#ef4444]" />
-                        <span className="truncate">3. Dusk & Dust Front</span>
-                      </button>
-
-                      <button
-                        type="button"
-                        onClick={() => applyPreset('seitah-ridge', 'western-rim', 'rover', 'solar_storm', 90, 95, 840)}
-                        className="glove-btn whitespace-nowrap min-h-[36px] px-2 py-1 rounded-[4px] text-[11px] font-mono font-semibold bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border border-[#ef4444]/60 flex items-center justify-center gap-1.5 cursor-pointer"
-                      >
-                        <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-[#ef4444]" />
-                        <span className="truncate">4. Solar Flare Abort</span>
-                      </button>
                     </div>
                   </div>
                 )}
@@ -2246,6 +2160,29 @@ export default function App() {
                   aria-label="Toggle Storm Radar"
                 >
                   <Wind className="h-6 w-6" />
+                </button>
+
+                {/* 5. Mission & Environmental Simulation Sliding Panel Toggle */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowSimSheet((v) => !v);
+                    setShowLayersSheet(false);
+                    setShowLegendSheet(false);
+                    setShowSuitSettings(false);
+                  }}
+                  title="Mission Simulation Scenarios & Weather Hazards"
+                  className={`glove-btn relative flex h-12 w-12 items-center justify-center rounded-[6px] border cursor-pointer ${
+                    showSimSheet
+                      ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e]'
+                      : 'bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border-[#353c4a]'
+                  }`}
+                  aria-label="Simulation Scenarios"
+                >
+                  <Gauge className="h-6 w-6" />
+                  {(weatherKey !== 'nominal' || incomingDustAlert) && (
+                    <span className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-[#ef4444] border-2 border-[#0b0d11]" />
+                  )}
                 </button>
 
                 <button
@@ -2372,6 +2309,195 @@ export default function App() {
                       );
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* A7-0. SLIDING MISSION & ENVIRONMENTAL SIMULATION SIDE PANEL */}
+              {showSimSheet && (
+                <div className="absolute right-16 top-24 z-[750] w-[92vw] sm:w-[380px] max-h-[82vh] overflow-y-auto aerospace-scroll rounded-[6px] bg-[#13161c]/98 border border-[#353c4a] p-4 shadow-2xl space-y-4 backdrop-blur-xs">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#242933]">
+                    <div className="flex items-center gap-2">
+                      <span className="flex h-7 w-7 items-center justify-center rounded-[4px] bg-[#191d24] border border-[#353c4a]">
+                        <Gauge className="h-4 w-4 text-[#22c55e]" />
+                      </span>
+                      <div>
+                        <h3 className="text-xs font-mono font-bold uppercase text-[#edf0f5] tracking-wider">
+                          Simulation & Hazards
+                        </h3>
+                        <p className="text-[10px] font-mono text-[#9da5b4]">
+                          Atmospheric conditions & mission presets
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowSimSheet(false)}
+                      className="p-1.5 rounded-[4px] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] cursor-pointer"
+                      aria-label="Close Simulation Panel"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  {/* SECTION 1: WEATHER MODES */}
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-mono text-[#9da5b4] uppercase">
+                      Atmospheric Weather Mode
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWeatherKey('nominal');
+                          setIncomingDustAlert(false);
+                        }}
+                        className={`glove-btn min-h-[44px] px-2 py-1.5 rounded-[4px] border text-xs font-mono font-bold flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors ${
+                          weatherKey === 'nominal'
+                            ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e]'
+                            : 'bg-[#191d24] hover:bg-[#222731] border-[#353c4a] text-[#edf0f5]'
+                        }`}
+                      >
+                        <Sun className="h-4 w-4" />
+                        <span>Nominal Sol</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWeatherKey('dust_storm');
+                          setIncomingDustAlert(true);
+                          setShowDustRadarCard(true);
+                        }}
+                        className={`glove-btn min-h-[44px] px-2 py-1.5 rounded-[4px] border text-xs font-mono font-bold flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors ${
+                          weatherKey === 'dust_storm'
+                            ? 'bg-[#ef4444] text-[#0b0d11] border-[#ef4444]'
+                            : 'bg-[#191d24] hover:bg-[#222731] border-[#353c4a] text-[#ef4444]'
+                        }`}
+                      >
+                        <Wind className="h-4 w-4" />
+                        <span>Dust Storm</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWeatherKey('solar_storm');
+                          setIncomingDustAlert(false);
+                        }}
+                        className={`glove-btn min-h-[44px] px-2 py-1.5 rounded-[4px] border text-xs font-mono font-bold flex flex-col items-center justify-center gap-1 cursor-pointer transition-colors ${
+                          weatherKey === 'solar_storm'
+                            ? 'bg-[#ef4444] text-[#0b0d11] border-[#ef4444]'
+                            : 'bg-[#191d24] hover:bg-[#222731] border-[#353c4a] text-[#ef4444]'
+                        }`}
+                      >
+                        <Zap className="h-4 w-4" />
+                        <span>Solar Flare</span>
+                      </button>
+                    </div>
+
+                    <div className="rounded-[4px] bg-[#0b0d11] p-2.5 border border-[#242933] text-[10.5px] font-mono space-y-1">
+                      <div className="flex justify-between text-[#9da5b4]">
+                        <span>Solar Irradiance:</span>
+                        <strong className="text-[#edf0f5]">{weather.solarFlux} W/m²</strong>
+                      </div>
+                      <div className="flex justify-between text-[#9da5b4]">
+                        <span>Radiation Dose:</span>
+                        <strong className={weatherKey === 'solar_storm' ? 'text-[#ef4444]' : 'text-[#22c55e]'}>
+                          {weather.radiationDoseRate} mSv/h
+                        </strong>
+                      </div>
+                      <div className="flex justify-between text-[#9da5b4]">
+                        <span>Dust Optical Depth (tau):</span>
+                        <strong className={weatherKey === 'dust_storm' ? 'text-[#ef4444]' : 'text-[#edf0f5]'}>
+                          {weather.dustOpticalDepth}
+                        </strong>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* SECTION 2: 4 TACTICAL MISSION SCENARIOS */}
+                  <div className="space-y-2">
+                    <label className="block text-[10px] font-mono text-[#9da5b4] uppercase">
+                      Tactical Mission Presets (1-Tap Simulation)
+                    </label>
+                    <div className="space-y-2">
+                      {[
+                        {
+                          num: '1',
+                          title: 'Direct Sample Collection',
+                          sub: 'Hab Alpha -> Three Forks (3.2 km, Nominal, Solo Suit)',
+                          icon: Target,
+                          color: '#22c55e',
+                          fn: () => applyPreset('hab-alpha', 'three-forks', 'light', 'nominal', 85, 90, 705),
+                        },
+                        {
+                          num: '2',
+                          title: 'Recharge Pit-Stop Route',
+                          sub: 'Hab Alpha -> Hawksbill Gap (Heavy Kit, 24% Bat, Pit-Stop)',
+                          icon: BatteryCharging,
+                          color: '#22c55e',
+                          fn: () => applyPreset('hab-alpha', 'hawksbill-gap', 'heavy', 'nominal', 24, 34, 760),
+                        },
+                        {
+                          num: '3',
+                          title: 'Dusk & Dust Squall Front',
+                          sub: 'Kodiak Butte -> Belva Crater (Dust Alert, 62% Bat, 70% PLSS)',
+                          icon: Wind,
+                          color: '#ef4444',
+                          fn: () => applyPreset('kodiak-butte', 'belva-crater', 'light', 'dust_storm', 62, 70, 955),
+                        },
+                        {
+                          num: '4',
+                          title: 'Solar SPE Emergency Abort',
+                          sub: 'Séítah Ridge -> Western Rim (SPE Storm, Rover Mule, Abort)',
+                          icon: ShieldAlert,
+                          color: '#ef4444',
+                          fn: () => applyPreset('seitah-ridge', 'western-rim', 'rover', 'solar_storm', 90, 95, 840),
+                        },
+                      ].map((scen) => {
+                        const Icon = scen.icon;
+                        return (
+                          <button
+                            type="button"
+                            key={scen.num}
+                            onClick={() => {
+                              scen.fn();
+                              setShowSimSheet(false);
+                            }}
+                            className="glove-btn w-full min-h-[50px] p-2.5 rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] hover:border-[#22c55e] text-left cursor-pointer transition-colors flex items-center justify-between"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0">
+                              <span
+                                className="flex h-8 w-8 shrink-0 items-center justify-center rounded-[4px] bg-[#13161c] border border-[#353c4a]"
+                                style={{ color: scen.color }}
+                              >
+                                <Icon className="h-4 w-4" />
+                              </span>
+                              <div className="min-w-0">
+                                <div className="text-xs font-bold text-[#edf0f5] truncate">
+                                  {scen.num}. {scen.title}
+                                </div>
+                                <div className="text-[10px] font-mono text-[#9da5b4] truncate mt-0.5">
+                                  {scen.sub}
+                                </div>
+                              </div>
+                            </div>
+                            <span className="text-[10px] font-mono text-[#22c55e] font-bold shrink-0 ml-2">
+                              LOAD &rarr;
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowSimSheet(false)}
+                    className="glove-btn w-full min-h-[44px] rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] font-mono text-xs font-bold uppercase cursor-pointer"
+                  >
+                    Close Simulation
+                  </button>
                 </div>
               )}
 
@@ -2733,8 +2859,68 @@ export default function App() {
                 <div className="pointer-events-auto w-full max-w-xl rounded-[6px] bg-[#13161c]/95 border border-[#353c4a] overflow-hidden">
                   {navMode === 'navigating' ? (
                     /* STATE 1: ACTIVE EVA WALK CONTROLS */
-                    <div className="p-3.5 space-y-3">
-                      <div className="flex items-center justify-between gap-3">
+                    tripPanelCollapsed ? (
+                      <div className="p-2 sm:p-2.5 flex items-center justify-between gap-2.5 bg-[#13161c]">
+                        <button
+                          type="button"
+                          onClick={() => setTripPanelCollapsed(false)}
+                          className="flex-1 min-w-0 text-left flex items-center gap-2.5 p-1 rounded-[4px] hover:bg-[#191d24] transition-colors cursor-pointer group"
+                          title="Expand Active Walk Panel"
+                        >
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[4px] bg-[#16a34a] text-[#0b0d11]">
+                            <Navigation className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-[#edf0f5] truncate flex items-center gap-1.5">
+                              <span>EVA WALK IN PROGRESS</span>
+                              <span className="text-[#22c55e]">•</span>
+                              <span className="text-[#22c55e] font-mono">{liveNavState?.estTimeRemainingMin}m left</span>
+                            </div>
+                            <div className="text-[10px] font-mono text-[#9da5b4] flex items-center gap-2 truncate mt-0.5">
+                              <span>{liveNavState?.distRemainingKm} km rem</span>
+                              <span>•</span>
+                              <span>Bat {liveNavState?.currentBattery}%</span>
+                              <span>•</span>
+                              <span>O2 {liveNavState?.currentO2}%</span>
+                            </div>
+                          </div>
+                        </button>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setNavPlaying((p) => !p)}
+                            className="glove-btn min-h-[44px] px-3 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] font-mono text-xs font-bold uppercase flex items-center gap-1 cursor-pointer"
+                          >
+                            {navPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4 text-[#22c55e]" />}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setTripPanelCollapsed(false)}
+                            className="glove-btn h-[44px] w-[44px] rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#edf0f5] flex items-center justify-center cursor-pointer"
+                            title="Expand Active Walk Panel"
+                          >
+                            <ChevronUp className="h-5 w-5 text-[#22c55e]" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="p-3.5 space-y-3">
+                        <div className="flex items-center justify-between pb-1 border-b border-[#242933]">
+                          <span className="text-[10px] font-mono font-bold uppercase text-[#22c55e] flex items-center gap-1.5">
+                            <Navigation className="h-3.5 w-3.5" /> Active EVA Traversal
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => setTripPanelCollapsed(true)}
+                            className="glove-btn px-2.5 py-1 rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#9da5b4] hover:text-[#edf0f5] font-mono text-[10px] font-bold uppercase flex items-center gap-1 cursor-pointer"
+                            title="Shrink Active Walk Panel"
+                          >
+                            <span>Shrink</span>
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+                        <div className="flex items-center justify-between gap-3">
                         <div>
                           <div className="text-2xl font-bold text-[#edf0f5] font-mono flex items-baseline gap-1.5">
                             <span>{liveNavState?.estTimeRemainingMin}</span>
@@ -2828,7 +3014,7 @@ export default function App() {
                         </button>
                       )}
                     </div>
-                  ) : navMode === 'arrived' || (startId === endId && startId !== 'custom-origin') ? (
+                  )) : navMode === 'arrived' || (startId === endId && startId !== 'custom-origin') ? (
                     /* STATE 2: ARRIVED AT WAYPOINT — 1-TAP NEXT LEG SELECTOR */
                     <div className="p-3.5 space-y-3">
                       <div className="flex items-center justify-between gap-2">
@@ -2940,8 +3126,89 @@ export default function App() {
                     </div>
                   ) : (
                     /* STATE 3: EXPLORE & ROUTE PLANNING TRIP SHEET */
-                    <div className="p-3.5 space-y-3">
-                      {/* GLOVE-FRIENDLY ORIGIN & DESTINATION TOUCH TILES */}
+                    tripPanelCollapsed ? (
+                      /* COMPACT / SHRUNK BOTTOM HUD STRIP */
+                      <div className="p-2 sm:p-2.5 flex items-center justify-between gap-2.5 bg-[#13161c]">
+                        <button
+                          type="button"
+                          onClick={() => setTripPanelCollapsed(false)}
+                          className="flex-1 min-w-0 text-left flex items-center gap-2.5 p-1 rounded-[4px] hover:bg-[#191d24] transition-colors cursor-pointer group"
+                          title="Tap to expand route planning panel"
+                        >
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[4px] bg-[#191d24] border border-[#353c4a] group-hover:border-[#22c55e] text-[#22c55e]">
+                            <Navigation className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="text-xs font-bold text-[#edf0f5] truncate flex items-center gap-1.5">
+                              <span className="truncate">{startPOI.name.split(' ')[0]}</span>
+                              <span className="text-[#656d7d] font-normal">&rarr;</span>
+                              <span className="text-[#22c55e] truncate">{endPOI.name.replace(' [Landmark]', '')}</span>
+                            </div>
+                            <div className="text-[10px] font-mono text-[#9da5b4] flex items-center gap-1.5 truncate mt-0.5">
+                              <span className="text-[#edf0f5] font-semibold">{routeResult.distKm} km</span>
+                              <span>•</span>
+                              <span>{routeResult.durationMin} min</span>
+                              <span>•</span>
+                              <span className="capitalize">{loadout.name}</span>
+                              <span>•</span>
+                              <span
+                                className={
+                                  routeResult.rangeStatus === 'out_of_range'
+                                    ? 'text-[#ef4444]'
+                                    : 'text-[#22c55e]'
+                                }
+                              >
+                                {routeResult.rangeStatus === 'direct_clear'
+                                  ? 'Direct OK'
+                                  : routeResult.rangeStatus === 'recharged_ok'
+                                  ? '+15m Pit-Stop'
+                                  : 'Low Reserve'}
+                              </span>
+                            </div>
+                          </div>
+                        </button>
+
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={startNavigation}
+                            className="glove-btn min-h-[46px] px-3.5 rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] text-[#0b0d11] font-mono font-bold text-xs uppercase flex items-center gap-1.5 border border-[#22c55e] cursor-pointer"
+                          >
+                            <Navigation className="h-4 w-4" />
+                            <span className="hidden sm:inline">Start Nav</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => setTripPanelCollapsed(false)}
+                            className="glove-btn h-[46px] w-[46px] rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#edf0f5] flex items-center justify-center cursor-pointer"
+                            title="Expand Trip Panel"
+                            aria-label="Expand Trip Panel"
+                          >
+                            <ChevronUp className="h-5 w-5 text-[#22c55e]" />
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      /* EXPANDED FULL TRIP PLANNING PANEL */
+                      <div className="p-3.5 space-y-3">
+                        <div className="flex items-center justify-between pb-1 border-b border-[#242933]">
+                          <div className="text-[10px] font-mono font-bold uppercase text-[#9da5b4] flex items-center gap-1.5">
+                            <Navigation className="h-3.5 w-3.5 text-[#22c55e]" />
+                            <span>Traverse Leg Planner & Telemetry</span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => setTripPanelCollapsed(true)}
+                            className="glove-btn px-2.5 py-1 rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#9da5b4] hover:text-[#edf0f5] font-mono text-[10px] font-bold uppercase flex items-center gap-1 cursor-pointer"
+                            title="Shrink Trip Panel (Show Full Map)"
+                          >
+                            <span>Shrink</span>
+                            <ChevronDown className="h-3.5 w-3.5" />
+                          </button>
+                        </div>
+
+                        {/* GLOVE-FRIENDLY ORIGIN & DESTINATION TOUCH TILES */}
                       <div className="flex items-center justify-between gap-2 bg-[#191d24] p-2 rounded-[4px] border border-[#242933]">
                         <button
                           type="button"
@@ -3162,7 +3429,7 @@ export default function App() {
                         <button
                           type="button"
                           onClick={() => setBottomSheetExpanded((v) => !v)}
-                          title="Expand Route Details"
+                          title="Toggle Route Details"
                           className="glove-btn flex h-[56px] w-[56px] items-center justify-center rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] cursor-pointer shrink-0"
                           aria-label="Toggle Route Details"
                         >
@@ -3171,6 +3438,16 @@ export default function App() {
                           ) : (
                             <ChevronUp className="h-5 w-5" />
                           )}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setTripPanelCollapsed(true)}
+                          title="Shrink Panel to Minimal View"
+                          className="glove-btn flex h-[56px] w-[56px] items-center justify-center rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] border border-[#353c4a] cursor-pointer shrink-0"
+                          aria-label="Shrink Panel"
+                        >
+                          <ChevronDown className="h-5 w-5 text-[#22c55e]" />
                         </button>
                       </div>
 
@@ -3220,7 +3497,8 @@ export default function App() {
                         </div>
                       )}
                     </div>
-                  )}
+                  )
+                )}
                 </div>
               </div>
             </>
