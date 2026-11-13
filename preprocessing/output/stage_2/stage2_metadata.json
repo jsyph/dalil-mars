@@ -1,0 +1,12 @@
+{
+  "stage": 2,
+  "description": "Topographic slope gradient mask layer",
+  "pixel_resolution_m": 20.0,
+  "slope_stats": {
+    "min_slope_deg": 0.002663278952240944,
+    "max_slope_deg": 54.43021011352539,
+    "safe_pct": 92.94561635409225,
+    "caution_pct": 4.468300404822806,
+    "blocked_pct": 2.3912554487264575
+  }
+}
