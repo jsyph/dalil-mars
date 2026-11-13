@@ -512,16 +512,26 @@
     <div id="heuristics-panel" class="panel-section" style="border: 1px solid rgba(0, 229, 255, 0.4); background: rgba(0, 229, 255, 0.05); border-radius: 8px; padding: 12px;">
       <div class="section-title" style="color: #00e5ff; margin-bottom: 8px;">
         <span style="display: flex; align-items: center; gap: 6px;">
-          <span style="font-size: 14px;">🧭</span> Stage 6 | Heuristics & Paths
+          <span style="font-size: 14px;">🧭</span> Stage 6 | Arbitrary 2-Point Routing
         </span>
-        <span id="badge-heur-status" style="font-size: 10px; background: rgba(0, 229, 255, 0.2); color: #00e5ff; padding: 2px 6px; border-radius: 4px; font-family: var(--font-mono);">ACTIVE</span>
+        <span id="badge-heur-status" style="font-size: 10px; background: rgba(0, 229, 255, 0.2); color: #00e5ff; padding: 2px 6px; border-radius: 4px; font-family: var(--font-mono);">ALL-PAIRS</span>
+      </div>
+
+      <!-- Interactive Point A / Point B Pin Dropper -->
+      <div style="display: flex; gap: 6px; margin-bottom: 8px;">
+        <button id="btn-pick-start" class="btn-secondary" style="flex: 1; padding: 6px 4px; font-size: 11px; font-weight: 600; border: 1px solid #00e676; color: #00e676; background: rgba(0, 230, 118, 0.2); border-radius: 6px; cursor: pointer;">
+          📍 Pick Point A (Start)
+        </button>
+        <button id="btn-pick-goal" class="btn-secondary" style="flex: 1; padding: 6px 4px; font-size: 11px; font-weight: 600; border: 1px solid rgba(255, 214, 0, 0.3); color: #ffd600; background: rgba(255, 214, 0, 0.05); border-radius: 6px; cursor: pointer;">
+          🎯 Pick Point B (Goal)
+        </button>
       </div>
 
       <!-- Point to Point Selection -->
       <div style="display: flex; flex-direction: column; gap: 8px;">
         <div style="display: flex; flex-direction: column; gap: 3px;">
           <div style="display: flex; justify-content: space-between; align-items: center;">
-            <label style="font-size: 11px; color: var(--text-dim);">From (Origin):</label>
+            <label style="font-size: 11px; color: var(--text-dim);">From (Origin A):</label>
             <span id="label-from-hint" style="font-size: 10px; color: #00e676; font-family: var(--font-mono);"></span>
           </div>
           <select id="heur-from-select" style="font-size: 12px; padding: 5px 8px; width: 100%;">
@@ -532,12 +542,15 @@
             <option value="WP-03">[WP-03] Margin Carbonate Ancient Shoreline</option>
             <option value="WP-04">[WP-04] Séítah Dune Corridor</option>
             <option value="WP-06">[WP-06] Belva Crater Rim & Shock Breccia</option>
-            <option value="custom">🎯 Custom Point (Click 3D Terrain)</option>
+            <option value="custom">🎯 Custom Point A (Click 3D Terrain)</option>
           </select>
         </div>
 
         <div style="display: flex; flex-direction: column; gap: 3px;">
-          <label style="font-size: 11px; color: var(--text-dim);">To (Target / Goal):</label>
+          <div style="display: flex; justify-content: space-between; align-items: center;">
+            <label style="font-size: 11px; color: var(--text-dim);">To (Destination B):</label>
+            <span id="label-to-hint" style="font-size: 10px; color: #ffd600; font-family: var(--font-mono);"></span>
+          </div>
           <select id="heur-to-select" style="font-size: 12px; padding: 5px 8px; width: 100%;">
             <option value="WP-00" selected>[WP-00] Octavia E. Butler Landing (Base Camp)</option>
             <option value="WP-01">[WP-01] Kodiak Butte & Delta Front Clays</option>
@@ -546,6 +559,7 @@
             <option value="WP-04">[WP-04] Séítah Dune Corridor</option>
             <option value="WP-05">[WP-05] Neretva Vallis River Inlet Canyon</option>
             <option value="WP-06">[WP-06] Belva Crater Rim & Shock Breccia</option>
+            <option value="custom">🎯 Custom Point B (Click 3D Terrain)</option>
           </select>
         </div>
       </div>
@@ -554,7 +568,7 @@
       <div id="heur-metrics-card" style="background: rgba(10, 14, 23, 0.88); border: 1px solid rgba(0, 229, 255, 0.25); border-radius: 6px; padding: 10px; display: flex; flex-direction: column; gap: 6px; margin-top: 8px;">
         <div style="display: flex; justify-content: space-between; align-items: baseline;">
           <span style="font-size: 11px; color: var(--text-dim);">Obstacle-Aware Distance:</span>
-          <span id="stat-heur-dist" style="font-size: 16px; font-weight: 700; color: #00e5ff; font-family: var(--font-mono);">19.13 km</span>
+          <span id="stat-heur-dist" style="font-size: 16px; font-weight: 700; color: #00e5ff; font-family: var(--font-mono);">19.27 km</span>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 11px;">
           <span style="color: var(--text-dim);">Direct Euclidean:</span>
@@ -562,11 +576,11 @@
         </div>
         <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 11px;">
           <span style="color: var(--text-dim);">Terrain Detour Index:</span>
-          <span id="stat-detour-pct" style="color: #ffd600; font-family: var(--font-mono);">+8.1% (around cliffs)</span>
+          <span id="stat-detour-pct" style="color: #ffd600; font-family: var(--font-mono);">+8.9% (around cliffs)</span>
         </div>
         <div style="display: flex; justify-content: space-between; align-items: baseline; font-size: 11px;">
           <span style="color: var(--text-dim);">Trajectory Waypoints:</span>
-          <span id="stat-path-steps" style="color: #fff; font-family: var(--font-mono);">49 nodes</span>
+          <span id="stat-path-steps" style="color: #fff; font-family: var(--font-mono);">44 nodes</span>
         </div>
       </div>
 
@@ -584,7 +598,7 @@
 
       <!-- Interactive Quick Hint -->
       <div id="heur-hint" style="font-size: 10px; color: var(--text-dim); background: rgba(255, 255, 255, 0.04); padding: 5px 8px; border-radius: 4px; line-height: 1.4; margin-top: 6px;">
-        💡 <b>Click anywhere on 3D terrain</b> to inspect the heuristic distance and path from that point to the goal!
+        💡 <b>Arbitrary 2-Point Routing</b>: Click anywhere on 3D terrain to place Point A, then click again to place Point B. The visualizer instantly connects them with an obstacle-avoiding trajectory!
       </div>
     </div>
 
@@ -802,14 +816,19 @@
     let heuristicPathGroup = null;
     let currentHeuristicPathNodes = null;
     let customOrigin = null;
+    let customGoal = null;
+    let activePickTarget = 'start'; // 'start' or 'goal'
     let showHeurPath = true;
     let showHeurHeatmap = false;
     let availableHeuristicTargets = [];
 
     const heurPanel = document.getElementById('heuristics-panel');
+    const btnPickStart = document.getElementById('btn-pick-start');
+    const btnPickGoal = document.getElementById('btn-pick-goal');
     const heurFromSelect = document.getElementById('heur-from-select');
     const heurToSelect = document.getElementById('heur-to-select');
     const labelFromHint = document.getElementById('label-from-hint');
+    const labelToHint = document.getElementById('label-to-hint');
     const statHeurDist = document.getElementById('stat-heur-dist');
     const statEuclDist = document.getElementById('stat-eucl-dist');
     const statDetourPct = document.getElementById('stat-detour-pct');
@@ -1080,7 +1099,11 @@
         url += `&r_min=${roiParam.r_min}&r_max=${roiParam.r_max}&c_min=${roiParam.c_min}&c_max=${roiParam.c_max}`;
       }
       if (showHeurHeatmap && heurToSelect && heurToSelect.value) {
-        url += `&target=${encodeURIComponent(heurToSelect.value)}`;
+        if (heurToSelect.value === 'custom' && customGoal) {
+          url += `&target=custom&target_col=${customGoal.col}&target_row=${customGoal.row}`;
+        } else if (heurToSelect.value !== 'custom') {
+          url += `&target=${encodeURIComponent(heurToSelect.value)}`;
+        }
       }
 
       const t0 = performance.now();
@@ -1361,7 +1384,10 @@
           document.getElementById('tip-slope').textContent = `Slope: ${data.slope}°`;
 
           if (showHeurHeatmap && data.cost >= 0) {
-            document.getElementById('tip-cost').textContent = `Heuristic to [${heurToSelect.value}]: ${(data.cost / 1000).toFixed(2)} km`;
+            const destLabel = (heurToSelect.value === 'custom' && customGoal)
+              ? `Custom B (${Math.round(customGoal.col)}, ${Math.round(customGoal.row)})`
+              : (heurToSelect.value || 'Goal');
+            document.getElementById('tip-cost').textContent = `Heuristic to [${destLabel}]: ${(data.cost / 1000).toFixed(2)} km`;
           } else {
             document.getElementById('tip-cost').textContent = `Cost Weight: ${data.cost < 0 ? 'INF (Blocked)' : data.cost.toFixed(1)}`;
           }
@@ -1723,6 +1749,13 @@
       });
 
       // Stage 6 Heuristics UI Event Listeners
+      if (btnPickStart) {
+        btnPickStart.addEventListener('click', () => setActivePickTarget('start'));
+      }
+      if (btnPickGoal) {
+        btnPickGoal.addEventListener('click', () => setActivePickTarget('goal'));
+      }
+
       heurFromSelect.addEventListener('change', () => {
         if (heurFromSelect.value !== 'custom') {
           labelFromHint.textContent = '';
@@ -1732,6 +1765,10 @@
       });
 
       heurToSelect.addEventListener('change', () => {
+        if (heurToSelect.value !== 'custom') {
+          labelToHint.textContent = '';
+          customGoal = null;
+        }
         if (showHeurHeatmap) {
           fetchAndRenderStage();
         }
@@ -1792,6 +1829,26 @@
     }
 
     // Stage 6 Heuristics Core Functions
+    function setActivePickTarget(mode) {
+      activePickTarget = mode;
+      if (!btnPickStart || !btnPickGoal) return;
+      if (mode === 'start') {
+        btnPickStart.style.background = 'rgba(0, 230, 118, 0.35)';
+        btnPickStart.style.borderColor = '#00e676';
+        btnPickStart.style.boxShadow = '0 0 10px rgba(0, 230, 118, 0.45)';
+        btnPickGoal.style.background = 'rgba(255, 214, 0, 0.05)';
+        btnPickGoal.style.borderColor = 'rgba(255, 214, 0, 0.3)';
+        btnPickGoal.style.boxShadow = 'none';
+      } else {
+        btnPickGoal.style.background = 'rgba(255, 214, 0, 0.35)';
+        btnPickGoal.style.borderColor = '#ffd600';
+        btnPickGoal.style.boxShadow = '0 0 10px rgba(255, 214, 0, 0.45)';
+        btnPickStart.style.background = 'rgba(0, 230, 118, 0.05)';
+        btnPickStart.style.borderColor = 'rgba(0, 230, 118, 0.3)';
+        btnPickStart.style.boxShadow = 'none';
+      }
+    }
+
     function onCanvasClick(e) {
       if (!instancedMesh || !nodeDataArray) return;
       const rect = renderer.domElement.getBoundingClientRect();
@@ -1805,10 +1862,21 @@
         const id = intersects[0].instanceId;
         const node = nodeDataArray[id];
         if (node) {
-          customOrigin = { col: node.col, row: node.row, z: node.z };
-          heurFromSelect.value = 'custom';
-          labelFromHint.textContent = `(Col ${Math.round(node.col)}, Row ${Math.round(node.row)})`;
+          if (activePickTarget === 'start') {
+            customOrigin = { col: node.col, row: node.row, z: node.z };
+            heurFromSelect.value = 'custom';
+            labelFromHint.textContent = `(Col ${Math.round(node.col)}, Row ${Math.round(node.row)})`;
+            setActivePickTarget('goal');
+          } else {
+            customGoal = { col: node.col, row: node.row, z: node.z };
+            heurToSelect.value = 'custom';
+            labelToHint.textContent = `(Col ${Math.round(node.col)}, Row ${Math.round(node.row)})`;
+            setActivePickTarget('start');
+          }
           fetchAndRenderHeuristicPath();
+          if (showHeurHeatmap) {
+            fetchAndRenderStage();
+          }
         }
       }
     }
@@ -1845,10 +1913,16 @@
             heurToSelect.appendChild(optT);
           });
 
-          const optCustom = document.createElement('option');
-          optCustom.value = 'custom';
-          optCustom.textContent = '🎯 Custom Point (Click 3D Terrain)';
-          heurFromSelect.appendChild(optCustom);
+          // Add arbitrary custom point choices to both selectors
+          const optCustomFrom = document.createElement('option');
+          optCustomFrom.value = 'custom';
+          optCustomFrom.textContent = '🎯 Custom Point A (Click 3D Terrain)';
+          heurFromSelect.appendChild(optCustomFrom);
+
+          const optCustomTo = document.createElement('option');
+          optCustomTo.value = 'custom';
+          optCustomTo.textContent = '🎯 Custom Point B (Click 3D Terrain)';
+          heurToSelect.appendChild(optCustomTo);
 
           if (data.targets.includes(curFrom) || curFrom === 'custom') {
             heurFromSelect.value = curFrom;
@@ -1858,7 +1932,7 @@
             heurFromSelect.value = data.targets[0];
           }
 
-          if (data.targets.includes(curTo)) {
+          if (data.targets.includes(curTo) || curTo === 'custom') {
             heurToSelect.value = curTo;
           } else if (data.targets.includes('WP-00')) {
             heurToSelect.value = 'WP-00';
@@ -1896,12 +1970,14 @@
 
       const from = heurFromSelect.value;
       const to = heurToSelect.value;
-      if (!to) return;
+      if (!from || !to) return;
 
-      let url = `/api/heuristics/path?stage=${encodeURIComponent(currentStage)}&to=${encodeURIComponent(to)}`;
+      let url = `/api/heuristics/path?stage=${encodeURIComponent(currentStage)}`;
+
       if (from === 'custom') {
         if (!customOrigin) {
-          statHeurDist.textContent = 'Click terrain...';
+          statHeurDist.textContent = 'Pick Point A...';
+          statHeurDist.style.color = '#00e676';
           statEuclDist.textContent = '--';
           statDetourPct.textContent = '--';
           statPathSteps.textContent = '0 nodes';
@@ -1912,6 +1988,20 @@
         url += `&from=${encodeURIComponent(from)}`;
       }
 
+      if (to === 'custom') {
+        if (!customGoal) {
+          statHeurDist.textContent = 'Pick Point B...';
+          statHeurDist.style.color = '#ffd600';
+          statEuclDist.textContent = '--';
+          statDetourPct.textContent = '--';
+          statPathSteps.textContent = '0 nodes';
+          return;
+        }
+        url += `&to_col=${customGoal.col}&to_row=${customGoal.row}`;
+      } else {
+        url += `&to=${encodeURIComponent(to)}`;
+      }
+
       try {
         const res = await fetch(url);
         const data = await res.json();
@@ -1919,8 +2009,8 @@
         if (!data || !data.reachable) {
           statHeurDist.textContent = 'UNREACHABLE';
           statHeurDist.style.color = 'var(--accent-blocked)';
-          statEuclDist.textContent = data.euclidean_distance_km !== undefined ? `${data.euclidean_distance_km} km` : '--';
-          statDetourPct.textContent = 'Barrier Blocked';
+          statEuclDist.textContent = (data && data.euclidean_distance_km !== undefined) ? `${data.euclidean_distance_km.toFixed(2)} km` : '--';
+          statDetourPct.textContent = 'Terrain Blocked';
           statPathSteps.textContent = '0 nodes';
           return;
         }
