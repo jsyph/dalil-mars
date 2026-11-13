@@ -62,6 +62,7 @@ import {
   marsDistanceMeters,
   WEATHER_CONDITIONS,
 } from './utils/pathfinder';
+import { publishVisorState, subscribeVisorCommands } from './utils/visorSync';
 
 function formatLst(totalMinutes) {
   const wrapped = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
@@ -72,15 +73,19 @@ function formatLst(totalMinutes) {
 
 export default function App() {
   const { sciencePOIs, hazardZones } = scienceHazardsData;
-  const latestMeda = medaWeatherData[medaWeatherData.length - 1] || {
-    sol: '1133',
-    min_temp: -79.3,
-    max_temp: -24.7,
-    pressure: 778.9,
-    sunrise: '06:18:07',
-    sunset: '17:13:51',
-    season: 'late autumn',
-  };
+  const latestMeda = useMemo(
+    () =>
+      medaWeatherData[medaWeatherData.length - 1] || {
+        sol: '1133',
+        min_temp: -79.3,
+        max_temp: -24.7,
+        pressure: 778.9,
+        sunrise: '06:18:07',
+        sunset: '17:13:51',
+        season: 'late autumn',
+      },
+    []
+  );
 
   // App Navigation Modes: 'browse' (exploring/planning) vs 'navigating' (active turn-by-turn walking)
   const [navMode, setNavMode] = useState('browse');
@@ -644,6 +649,47 @@ export default function App() {
     });
   };
 
+  // Sync live EVA state to standalone AR Visor HUD (?mode=visor)
+  const triggerShelterDivertRef = useRef(triggerShelterDivert);
+
+  useEffect(() => {
+    triggerShelterDivertRef.current = triggerShelterDivert;
+  });
+
+  useEffect(() => {
+    publishVisorState({
+      navMode,
+      liveNavState,
+      martianEnv,
+      currentManeuver,
+      weatherCondition: WEATHER_CONDITIONS[weatherKey] || WEATHER_CONDITIONS.nominal,
+      dustFrontState,
+      nearestShelter,
+      endPOI,
+      loadout,
+      latestMeda,
+    });
+  }, [
+    navMode,
+    liveNavState,
+    martianEnv,
+    currentManeuver,
+    weatherKey,
+    dustFrontState,
+    nearestShelter,
+    endPOI,
+    loadout,
+    latestMeda,
+  ]);
+
+  useEffect(() => {
+    return subscribeVisorCommands((command) => {
+      if (command === 'SHELTER_DIVERT') {
+        triggerShelterDivertRef.current?.();
+      }
+    });
+  }, []);
+
   // Quick Preset Simulator Mode Applier
   const applyPreset = (sId, eId, lKey, wKey, batPct, o2Pct, solPreview, lstMin = 705) => {
     setAstronautLocId(sId);
@@ -989,7 +1035,15 @@ export default function App() {
               </div>
 
               {/* Quick Trip Selector & Settings toggle */}
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
+                <button
+                  onClick={() => window.open('?mode=visor', 'ares-eva-visor', 'noopener,noreferrer')}
+                  title="Open standalone AR Visor HUD"
+                  className="glove-btn min-h-[40px] px-3 py-1.5 rounded-xl border border-cyan-500/40 bg-cyan-950/60 text-cyan-200 hover:bg-cyan-900/70 text-xs font-semibold flex items-center gap-1.5 cursor-pointer"
+                >
+                  <Eye className="h-3.5 w-3.5 text-cyan-300" />
+                  <span>AR Visor</span>
+                </button>
                 <button
                   onClick={() => setShowRouteOptions((v) => !v)}
                   className={`glove-btn min-h-[40px] px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 cursor-pointer ${
