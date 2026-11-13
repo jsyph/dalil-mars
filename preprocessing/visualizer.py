@@ -321,6 +321,140 @@ class StageDataManager:
 
         return header + payload
 
+    def get_stage_landmarks(self, stage_id: str):
+        """Discovers landmarks from files in output/ and extracts key landmark nodes from stage matrices."""
+        landmarks = []
+        stage_dir = os.path.join(self.output_dir, stage_id)
+
+        # 1. Check for any explicit landmark/waypoint/poi JSON or GeoJSON inside output/
+        search_dirs = [stage_dir, self.output_dir]
+        for sdir in search_dirs:
+            if not os.path.exists(sdir):
+                continue
+            for f in sorted(os.listdir(sdir)):
+                fl = f.lower()
+                if (any(k in fl for k in ["landmark", "waypoint", "poi", "nomenclature"]) and fl.endswith((".json", ".geojson"))) or (fl.endswith(".geojson") and "elevation" not in fl):
+                    fp = os.path.join(sdir, f)
+                    try:
+                        with open(fp, "r") as jf:
+                            content = json.load(jf)
+                            if isinstance(content, dict) and "features" in content:
+                                for i, feat in enumerate(content["features"]):
+                                    props = feat.get("properties", {})
+                                    geom = feat.get("geometry", {})
+                                    coords = geom.get("coordinates", [])
+                                    if coords and len(coords) >= 2:
+                                        landmarks.append({
+                                            "id": f"geo_{i}",
+                                            "name": props.get("name") or props.get("title") or f"Waypoint {i+1}",
+                                            "type": props.get("class") or "waypoint",
+                                            "col": float(coords[0]),
+                                            "row": float(coords[1]),
+                                            "z": float(coords[2]) if len(coords) > 2 else None,
+                                            "description": props.get("desc") or props.get("description") or ""
+                                        })
+                            elif isinstance(content, list):
+                                for i, item in enumerate(content):
+                                    landmarks.append({
+                                        "id": f"item_{i}",
+                                        "name": item.get("name") or f"Landmark {i+1}",
+                                        "type": item.get("type") or "waypoint",
+                                        "col": float(item.get("col") or item.get("x", 0)),
+                                        "row": float(item.get("row") or item.get("y", 0)),
+                                        "z": float(item.get("z") or item.get("elevation_m", 0)),
+                                        "description": item.get("description", "")
+                                    })
+                    except Exception as e:
+                        print(f"Error loading landmark file {fp}: {e}")
+
+        # 2. Extract key landmark nodes directly from stage matrices in output/
+        try:
+            elev, cost, slope = self.load_stage_arrays(stage_id)
+            valid = ~np.isnan(elev)
+
+            # A. Deepest Basin Landmark
+            r_min, c_min = np.unravel_index(np.nanargmin(elev), elev.shape)
+            landmarks.append({
+                "id": "basin_deepest",
+                "name": "Deepest Basin Floor",
+                "type": "basin",
+                "col": int(c_min),
+                "row": int(r_min),
+                "z": round(float(elev[r_min, c_min]), 1),
+                "description": "Lowest lakebed elevation (-3,155.7m)"
+            })
+
+            # B. Highest Rim Summit Landmark
+            r_max, c_max = np.unravel_index(np.nanargmax(elev), elev.shape)
+            landmarks.append({
+                "id": "rim_summit",
+                "name": "Western Rim Summit",
+                "type": "summit",
+                "col": int(c_max),
+                "row": int(r_max),
+                "z": round(float(elev[r_max, c_max]), 1),
+                "description": "Highest topographic rim plateau (-1,471.6m)"
+            })
+
+            # C. Steepest Cliff Scarp Landmark
+            if slope is not None:
+                r_slp, c_slp = np.unravel_index(np.nanargmax(slope), slope.shape)
+                landmarks.append({
+                    "id": "cliff_scarp",
+                    "name": "Maximum Cliff Scarp",
+                    "type": "scarp",
+                    "col": int(c_slp),
+                    "row": int(r_slp),
+                    "z": round(float(elev[r_slp, c_slp]), 1),
+                    "description": f"Steepest topographic grade ({float(slope[r_slp, c_slp]):.1f}° slope)"
+                })
+
+            # D. River Delta Fan Landmark
+            delta_r, delta_c = 1800, 1000
+            if valid[delta_r, delta_c]:
+                landmarks.append({
+                    "id": "delta_fan",
+                    "name": "Jezero River Delta Fan",
+                    "type": "delta",
+                    "col": delta_c,
+                    "row": delta_r,
+                    "z": round(float(elev[delta_r, delta_c]), 1),
+                    "description": "Ancient fluvial sediment fan deposits"
+                })
+
+            # E. Western Canyon Inflow Breach
+            canyon_r, canyon_c = 1500, 800
+            if valid[canyon_r, canyon_c]:
+                landmarks.append({
+                    "id": "canyon_breach",
+                    "name": "Western Canyon Inflow Breach",
+                    "type": "canyon",
+                    "col": canyon_c,
+                    "row": canyon_r,
+                    "z": round(float(elev[canyon_r, canyon_c]), 1),
+                    "description": "Western rim river breach gorge"
+                })
+
+            # F. Impassable Barrier Landmark (if barrier/blocked nodes exist in cost matrix)
+            if cost is not None:
+                is_blk = np.isinf(cost) & valid
+                if np.any(is_blk):
+                    b_rows, b_cols = np.nonzero(is_blk)
+                    b_mid = len(b_rows) // 2
+                    landmarks.append({
+                        "id": "barrier_scarp",
+                        "name": "Impassable Cliff Barrier Zone",
+                        "type": "barrier",
+                        "col": int(b_cols[b_mid]),
+                        "row": int(b_rows[b_mid]),
+                        "z": round(float(elev[b_rows[b_mid], b_cols[b_mid]]), 1),
+                        "description": "Critical impassable structural cliff barrier"
+                    })
+        except Exception as e:
+            print(f"Error computing matrix landmarks: {e}")
+
+        return landmarks
+
 
 class VisualizerServerHandler(http.server.SimpleHTTPRequestHandler):
     """Handles HTTP requests for 3D viewer assets and binary data streams."""
@@ -355,6 +489,13 @@ class VisualizerServerHandler(http.server.SimpleHTTPRequestHandler):
                 self._send_json(info)
             else:
                 self._send_json({"error": "Stage not found"}, status=404)
+            return
+
+        # API: landmarks and waypoints
+        elif path == "/api/landmarks":
+            stage_id = query.get("stage", ["stage_1"])[0]
+            landmarks = self.data_manager.get_stage_landmarks(stage_id)
+            self._send_json(landmarks)
             return
 
         # API: binary stream of 3D block nodes
