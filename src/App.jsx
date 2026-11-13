@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
+  ArrowLeftRight,
   Battery,
   BatteryCharging,
   Camera,
@@ -104,6 +105,8 @@ export default function App() {
   // Route endpoints & mobility
   const [startId, setStartId] = useState('hab-alpha');
   const [endId, setEndId] = useState('three-forks');
+  // Astronaut's verified field position (starts at Hab Alpha, updates continuously upon reaching waypoints)
+  const [astronautLocId, setAstronautLocId] = useState('hab-alpha');
   const [loadoutKey, setLoadoutKey] = useState('light');
   const [weatherKey, setWeatherKey] = useState('nominal');
   const [startBatteryPct, setStartBatteryPct] = useState(85);
@@ -268,15 +271,22 @@ export default function App() {
           }
         }
 
-        // Arrival
+        // Arrival at destination waypoint
         if (next >= totalPoints - 1) {
           setNavPlaying(false);
+          setNavMode('arrived');
+          const finalBat = endPOI.isChargingStation ? 100 : Math.max(15, routeResult.finalArrivalBattery);
+          const finalO2 = endPOI.isChargingStation ? 100 : Math.max(20, routeResult.finalArrivalO2);
+          setAstronautLocId(endPOI.id);
+          setStartId(endPOI.id);
+          setStartBatteryPct(finalBat);
+          setStartO2Pct(finalO2);
           showToast({
             id: 'arrived',
             type: 'success',
             title: `🏁 Arrived at ${endPOI.name}`,
-            message: `Traverse complete (${routeResult.distKm} km). Scientific site logged.`,
-            duration: 8000,
+            message: `Traverse complete (${routeResult.distKm} km). Position locked at ${endPOI.name}. Ready for next leg!`,
+            duration: 9000,
           });
         }
 
@@ -540,6 +550,15 @@ export default function App() {
 
   // Start Navigation Button Click (Transitions to Android Google Maps Mode!)
   const startNavigation = () => {
+    if (startId === endId) {
+      showToast({
+        id: 'select-destination',
+        type: 'warning',
+        title: '📍 Already At Destination',
+        message: `You are currently at ${startPOI.name}. Please select a different waypoint on the map to begin your next leg!`,
+      });
+      return;
+    }
     setNavMode('navigating');
     setNavPlaying(true);
     setFollowAstronaut(true);
@@ -548,7 +567,7 @@ export default function App() {
       id: 'nav-started',
       type: 'info',
       title: '🚀 Marswalk Navigation Started',
-      message: `Navigating to ${endPOI.name} (${routeResult.distKm} km). Heading ${liveNavState?.heading || 0}°.`,
+      message: `Navigating from ${startPOI.name} to ${endPOI.name} (${routeResult.distKm} km). Heading ${liveNavState?.heading || 0}°.`,
     });
   };
 
@@ -580,6 +599,7 @@ export default function App() {
 
   // Quick Preset Simulator Mode Applier
   const applyPreset = (sId, eId, lKey, wKey, batPct, o2Pct, solPreview, lstMin = 705) => {
+    setAstronautLocId(sId);
     setStartId(sId);
     setEndId(eId);
     setLoadoutKey(lKey);
@@ -589,6 +609,9 @@ export default function App() {
     setAutoChargingStop(true);
     setSelectedSol(solPreview);
     setStartLstMinutes(lstMin);
+    setNavStepIdx(0);
+    setNavPlaying(false);
+    setNavMode('browse');
     setIncomingDustAlert(wKey === 'dust_storm');
     setShowDustRadarCard(true);
     showToast({
@@ -596,6 +619,70 @@ export default function App() {
       type: 'info',
       title: `Scenario Applied`,
       message: `${wKey === 'dust_storm' ? '🌪 Regional Dust Storm' : wKey === 'solar_storm' ? '⚡ Solar Flare' : '☀️ Nominal Sol'} • ${batPct}% Battery.`,
+    });
+  };
+
+  // Navigate directly to a target POI starting from current astronaut position!
+  const handleNavigateToPOI = (targetId) => {
+    const targetPOI = sciencePOIs.find((p) => p.id === targetId);
+    if (!targetPOI) return;
+
+    if (targetId === astronautLocId) {
+      showToast({
+        id: 'already-here',
+        type: 'info',
+        title: `📍 Current Position: ${targetPOI.name}`,
+        message: `You are already here. Tap another waypoint on the map to navigate from ${targetPOI.name}.`,
+      });
+      return;
+    }
+
+    // Always start from where the astronaut currently is!
+    setStartId(astronautLocId);
+    setEndId(targetId);
+    setSelectedSol(targetPOI.sol);
+    setNavMode('browse');
+    setNavStepIdx(0);
+    setNavPlaying(false);
+    showToast({
+      id: 'route-set',
+      type: 'info',
+      title: `🧭 Route Plotted: Next Leg`,
+      message: `Starting from ${sciencePOIs.find((p) => p.id === astronautLocId)?.name || 'Current Position'} ➔ ${targetPOI.name}`,
+    });
+  };
+
+  // Set any POI as the new starting origin / current location
+  const handleSetOrigin = (poiId) => {
+    setAstronautLocId(poiId);
+    setStartId(poiId);
+    setNavStepIdx(0);
+    setNavPlaying(false);
+    setNavMode('browse');
+    const p = sciencePOIs.find((item) => item.id === poiId);
+    showToast({
+      id: 'origin-updated',
+      type: 'info',
+      title: `📍 Origin Updated`,
+      message: `Current location set to ${p?.name || poiId}.`,
+    });
+  };
+
+  // Swap starting origin and destination
+  const handleSwapEndpoints = () => {
+    const prevStart = startId;
+    const prevEnd = endId;
+    setStartId(prevEnd);
+    setEndId(prevStart);
+    setAstronautLocId(prevEnd);
+    setNavStepIdx(0);
+    setNavPlaying(false);
+    setNavMode('browse');
+    showToast({
+      id: 'endpoints-swapped',
+      type: 'info',
+      title: `⇄ Direction Inverted`,
+      message: `Routing from ${sciencePOIs.find((p) => p.id === prevEnd)?.name} to ${sciencePOIs.find((p) => p.id === prevStart)?.name}.`,
     });
   };
 
@@ -656,16 +743,16 @@ export default function App() {
           locatePulse={locatePulse}
           dustFrontState={dustFrontState}
           solarPhase={martianEnv.solarPhase}
+          astronautLocId={astronautLocId}
           onSelectPOI={(poi) => {
-            setEndId(poi.id);
-            setSelectedSol(poi.sol);
-            handleOpenPanorama(poi.sol, [poi.lat, poi.lon], poi);
+            handleNavigateToPOI(poi.id);
           }}
           onSelectWaypointSol={(sol) => {
             setSelectedSol(sol);
-            handleOpenPanorama(sol);
           }}
           onOpenPanorama={handleOpenPanorama}
+          onNavigateToPOI={handleNavigateToPOI}
+          onSetOrigin={handleSetOrigin}
         />
       </div>
 
@@ -971,22 +1058,36 @@ export default function App() {
             </button>
           </div>
 
-          <div className="grid grid-cols-2 gap-2 text-xs">
-            <div>
-              <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1">Origin Point</label>
+          <div className="flex items-center gap-2 text-xs">
+            <div className="flex-1">
+              <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1">
+                Origin {startId === astronautLocId ? '📍 (Field Pos)' : ''}
+              </label>
               <select
                 value={startId}
-                onChange={(e) => setStartId(e.target.value)}
+                onChange={(e) => {
+                  setStartId(e.target.value);
+                  setAstronautLocId(e.target.value);
+                }}
                 className="w-full min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-slate-100"
               >
                 {sciencePOIs.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.isChargingStation ? '⚡ ' : ''}{p.name}
+                    {p.id === astronautLocId ? '📍 ' : ''}{p.isChargingStation ? '⚡ ' : ''}{p.name}
                   </option>
                 ))}
               </select>
             </div>
-            <div>
+
+            <button
+              onClick={handleSwapEndpoints}
+              title="Swap Origin and Destination"
+              className="glove-btn mt-4 h-11 w-11 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-300 flex items-center justify-center shrink-0 cursor-pointer active:scale-95 transition-transform"
+            >
+              <ArrowLeftRight className="h-4 w-4" />
+            </button>
+
+            <div className="flex-1">
               <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1">Destination</label>
               <select
                 value={endId}
@@ -1330,9 +1431,116 @@ export default function App() {
                 </button>
               )}
             </div>
+          ) : (navMode === 'arrived' || startId === endId) ? (
+            /* TRAVERSE LEG COMPLETE / SELECT NEXT WAYPOINT */
+            <div className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2.5">
+                  <span className="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/40">
+                    <CheckCircle2 className="h-6 w-6" />
+                  </span>
+                  <div>
+                    <div className="text-[10px] font-mono uppercase text-emerald-400 font-bold tracking-wider">
+                      Traverse Leg Complete
+                    </div>
+                    <div className="text-base font-black text-white flex items-center gap-1.5">
+                      <span>{startPOI.name}</span>
+                      {startPOI.isChargingStation && (
+                        <span className="rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
+                          <Zap className="h-3 w-3" /> Recharged 100%
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="text-right font-mono">
+                  <div className="text-[10px] text-slate-400">ELEVATION</div>
+                  <div className="text-xs font-bold text-slate-200">{startPOI.elev} m</div>
+                </div>
+              </div>
+
+              {/* Current Field Telemetry Reserve */}
+              <div className="grid grid-cols-2 gap-2 bg-slate-950/90 p-2.5 rounded-xl border border-slate-800 text-xs">
+                <div className="flex items-center justify-between font-mono">
+                  <span className="flex items-center gap-1.5 text-slate-400">
+                    <Battery className="h-3.5 w-3.5 text-cyan-400" /> Suit Battery
+                  </span>
+                  <span className="font-bold text-cyan-300">{startBatteryPct}%</span>
+                </div>
+                <div className="flex items-center justify-between font-mono">
+                  <span className="flex items-center gap-1.5 text-slate-400">
+                    <Droplets className="h-3.5 w-3.5 text-emerald-400" /> PLSS O2 Tank
+                  </span>
+                  <span className="font-bold text-emerald-300">{startO2Pct}%</span>
+                </div>
+              </div>
+
+              {/* One-Tap Next Waypoint Selector */}
+              <div className="space-y-1.5">
+                <div className="text-[11px] font-mono text-slate-400 uppercase tracking-wide flex items-center justify-between">
+                  <span>Select Next Waypoint to Continue:</span>
+                  <span className="text-[10px] text-cyan-400">Routes from {startPOI.name.split(' ')[0]}</span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 max-h-44 overflow-y-auto pr-0.5">
+                  {sciencePOIs
+                    .filter((p) => p.id !== astronautLocId)
+                    .map((dest) => {
+                      const dist = Number(
+                        (marsDistanceMeters(startPOI.lat, startPOI.lon, dest.lat, dest.lon) / 1000).toFixed(1)
+                      );
+                      return (
+                        <button
+                          key={dest.id}
+                          onClick={() => handleNavigateToPOI(dest.id)}
+                          className="glove-btn p-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 border border-slate-700/80 hover:border-cyan-500/60 text-left transition-all cursor-pointer flex flex-col justify-between group active:scale-95"
+                        >
+                          <div className="flex items-start justify-between gap-1">
+                            <span className="text-xs font-bold text-slate-100 group-hover:text-cyan-300 line-clamp-1">
+                              {dest.isChargingStation ? '⚡ ' : ''}{dest.name}
+                            </span>
+                            <span className="text-[10px] font-mono text-cyan-400 shrink-0 font-semibold">{dist} km</span>
+                          </div>
+                          <div className="mt-1 flex items-center justify-between text-[10px] text-slate-400">
+                            <span className="line-clamp-1">{dest.minerals || 'Scientific Site'}</span>
+                            <span className="text-emerald-400 font-bold group-hover:translate-x-0.5 transition-transform">➔</span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                </div>
+              </div>
+            </div>
           ) : (
             /* EXPLORE & ROUTE PLANNING TRIP SHEET */
             <div className="p-3.5 space-y-3">
+              {/* Origin and Destination header with Swap button */}
+              <div className="flex items-center justify-between gap-2 bg-slate-950/70 p-2.5 rounded-xl border border-slate-800/80">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-1.5 text-[10px] font-mono text-slate-400 uppercase">
+                    <span className="h-2 w-2 rounded-full bg-cyan-400"></span>
+                    <span>Origin {startId === astronautLocId ? '(Field Pos)' : ''}</span>
+                  </div>
+                  <div className="text-xs font-bold text-slate-200 truncate">{startPOI.name}</div>
+                </div>
+
+                <button
+                  onClick={handleSwapEndpoints}
+                  title="Swap Origin and Destination"
+                  className="glove-btn h-9 w-9 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-cyan-300 flex items-center justify-center shrink-0 cursor-pointer active:scale-90 transition-transform"
+                >
+                  <ArrowLeftRight className="h-4 w-4" />
+                </button>
+
+                <div className="flex-1 min-w-0 text-right">
+                  <div className="flex items-center justify-end gap-1.5 text-[10px] font-mono text-slate-400 uppercase">
+                    <span>Destination</span>
+                    <span className="h-2 w-2 rounded-full bg-emerald-400"></span>
+                  </div>
+                  <div className="text-xs font-bold text-slate-200 truncate">{endPOI.name}</div>
+                </div>
+              </div>
+
               <div className="flex items-start justify-between gap-3">
                 <div className="flex-1">
                   <div className="flex items-center gap-2">
@@ -1504,13 +1712,8 @@ export default function App() {
               (poi) => poi.name === p.associatedPOI || poi.sol === p.sol
             );
             if (matchingPOI) {
-              setEndId(matchingPOI.id);
-              showToast({
-                id: `dest-${Date.now()}`,
-                title: `🎯 Destination Set`,
-                message: `Route plotted to ${matchingPOI.name}`,
-                type: 'success',
-              });
+              handleNavigateToPOI(matchingPOI.id);
+              setActivePanorama(null);
             }
           }}
         />

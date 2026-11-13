@@ -16,9 +16,12 @@ export default function JezeroTacticalMap({
   locatePulse = null,
   dustFrontState = null,
   solarPhase = 'day',
+  astronautLocId = 'hab-alpha',
   onSelectPOI,
   onSelectWaypointSol,
   onOpenPanorama,
+  onNavigateToPOI,
+  onSetOrigin,
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -30,10 +33,20 @@ export default function JezeroTacticalMap({
     window.dispatchMarsPano = (sol) => {
       onOpenPanorama?.(sol);
     };
+    window.dispatchNavigateTo = (poiId) => {
+      mapInstanceRef.current?.closePopup();
+      onNavigateToPOI?.(poiId);
+    };
+    window.dispatchSetOrigin = (poiId) => {
+      mapInstanceRef.current?.closePopup();
+      onSetOrigin?.(poiId);
+    };
     return () => {
       delete window.dispatchMarsPano;
+      delete window.dispatchNavigateTo;
+      delete window.dispatchSetOrigin;
     };
-  }, [onOpenPanorama]);
+  }, [onOpenPanorama, onNavigateToPOI, onSetOrigin]);
 
   // Initialize Leaflet Map once
   useEffect(() => {
@@ -238,6 +251,17 @@ export default function JezeroTacticalMap({
         ? 'box-shadow: 0 0 12px rgba(34, 197, 94, 0.6);'
         : 'box-shadow: 0 2px 6px rgba(0,0,0,0.6);';
 
+      const isCurrentLoc = poi.id === astronautLocId;
+
+      const locBadgeHtml = isCurrentLoc
+        ? `<div style="
+            position:absolute; top:-20px; left:50%; transform:translateX(-50%);
+            white-space:nowrap; background:#0284c7; color:#f0f9ff;
+            font-size:9px; font-weight:800; padding:1px 6px; border-radius:999px;
+            box-shadow:0 2px 6px rgba(0,0,0,0.8); border:1px solid #38bdf8;
+          ">📍 YOU ARE HERE</div>`
+        : '';
+
       const badgeHtml = isActivePitStop
         ? `<div style="
             position:absolute; top:-24px; left:50%; transform:translateX(-50%);
@@ -245,7 +269,7 @@ export default function JezeroTacticalMap({
             font-size:10px; font-weight:800; padding:2px 8px; border-radius:999px;
             box-shadow:0 3px 8px rgba(0,0,0,0.7);
           ">⚡ PIT STOP: RECHARGE 100%</div>`
-        : '';
+        : locBadgeHtml;
 
       const customIcon = L.divIcon({
         className: 'custom-mars-poi',
@@ -274,23 +298,41 @@ export default function JezeroTacticalMap({
           <div><b>Composition:</b> ${poi.minerals}</div>
           ${isStation ? `<div style="margin-top:4px; color:#4ade80; font-weight:600;">⚡ Fast-Charge: 15 min to 100% Battery & O2</div>` : ''}
           <p style="margin:5px 0 0; color:#cbd5e1; font-size:11px;">${poi.description}</p>
-          <button onclick="window.dispatchMarsPano(${poi.sol})" style="
-            margin-top:8px; width:100%; padding:6px 10px; background:${bgColor}; color:#020617;
-            font-weight:800; font-size:11px; border-radius:8px; border:none; cursor:pointer;
-            display:flex; align-items:center; justify-content:center; gap:4px;
-          ">${(poi.sol === 3 || poi.sol === 68) ? '🌐 OPEN 360° PHOTOSPHERE' : '📷 VIEW SURFACE PHOTO'}</button>
+          
+          <div style="margin-top:8px; display:flex; flex-direction:column; gap:4px;">
+            ${!isCurrentLoc ? `
+              <button onclick="window.dispatchNavigateTo('${poi.id}')" style="
+                width:100%; padding:6px 10px; background:#10b981; color:#020617;
+                font-weight:800; font-size:11px; border-radius:8px; border:none; cursor:pointer;
+                display:flex; align-items:center; justify-content:center; gap:4px;
+              ">🎯 NAVIGATE HERE FROM CURRENT POSITION</button>
+            ` : `
+              <div style="
+                width:100%; padding:4px 8px; background:rgba(6,182,212,0.2); color:#38bdf8;
+                border:1px solid #0284c7; font-weight:700; font-size:10px; border-radius:6px; text-align:center;
+              ">📍 YOU ARE CURRENTLY HERE</div>
+            `}
+            <button onclick="window.dispatchSetOrigin('${poi.id}')" style="
+              width:100%; padding:4px 8px; background:#334155; color:#cbd5e1;
+              font-weight:700; font-size:10px; border-radius:6px; border:none; cursor:pointer;
+            ">📍 SET AS STARTING ORIGIN</button>
+            <button onclick="window.dispatchMarsPano(${poi.sol})" style="
+              width:100%; padding:5px 8px; background:${bgColor}; color:#020617;
+              font-weight:800; font-size:11px; border-radius:8px; border:none; cursor:pointer;
+              display:flex; align-items:center; justify-content:center; gap:4px;
+            ">${(poi.sol === 3 || poi.sol === 68) ? '🌐 OPEN 360° PHOTOSPHERE' : '📷 VIEW SURFACE PHOTO'}</button>
+          </div>
         </div>
       `);
 
       marker.on('click', () => {
         onSelectPOI?.(poi);
         onSelectWaypointSol?.(poi.sol);
-        onOpenPanorama?.(poi.sol, [poi.lat, poi.lon], poi);
       });
 
       marker.addTo(science);
     });
-  }, [sciencePOIs, layers.science, startPOI, endPOI, routeResult?.chargingStop, onSelectPOI, onSelectWaypointSol, onOpenPanorama]);
+  }, [sciencePOIs, layers.science, startPOI, endPOI, routeResult?.chargingStop, astronautLocId, onSelectPOI, onSelectWaypointSol, onOpenPanorama, onNavigateToPOI, onSetOrigin]);
 
   // Render A* Safe Marswalk Route (1-Leg or 2-Leg Recharged Route)
   useEffect(() => {
