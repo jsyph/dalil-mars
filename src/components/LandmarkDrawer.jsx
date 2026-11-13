@@ -53,9 +53,15 @@ export default function LandmarkDrawer({
   const samples = landmark.rover_samples || [];
 
   return (
-    <aside
-      className="fixed top-[48px] left-0 bottom-[56px] z-[980] w-full sm:w-[460px] md:w-[480px] max-w-[96vw] bg-[#13161c] border-r border-[#242933] flex flex-col overflow-hidden text-[#edf0f5] shadow-2xl"
-    >
+    <>
+      <div
+        className="fixed inset-0 bg-black/40 backdrop-blur-[1px] z-[975] transition-opacity duration-200"
+        onClick={onClose}
+        aria-hidden="true"
+      />
+      <aside
+        className="fixed top-[48px] left-0 bottom-[56px] z-[980] w-full sm:w-[460px] md:w-[480px] max-w-[96vw] bg-[#13161c] border-r border-[#242933] flex flex-col overflow-hidden text-[#edf0f5] shadow-2xl"
+      >
       {/* 1. Header */}
       <div className="flex items-center justify-between px-4 py-3 bg-[#191d24] border-b border-[#242933] shrink-0">
         <div className="flex items-center gap-3 min-w-0 pr-2">
@@ -295,5 +301,6 @@ export default function LandmarkDrawer({
         )}
       </div>
     </aside>
+  </>
   );
 }

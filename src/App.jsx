@@ -1880,7 +1880,7 @@ export default function App() {
             <>
               {/* A1. TOP-CENTER HEADS-UP NOTIFICATION POPUP */}
               {activeToast && (
-                <div className="android-toast-slide absolute top-3.5 left-1/2 z-[1000] w-[92%] max-w-md -translate-x-1/2">
+                <div className="android-toast-slide absolute top-[74px] sm:top-[78px] left-1/2 z-[1000] w-[92%] max-w-md -translate-x-1/2">
                   <div
                     className={`flex items-start justify-between gap-3 rounded-[6px] border p-3 bg-[#13161c]/95 ${
                       activeToast.type === 'warning'
@@ -2404,18 +2404,20 @@ export default function App() {
                     <div className="rounded-[4px] bg-[#0b0d11] p-2.5 border border-[#242933] text-[10.5px] font-mono space-y-1">
                       <div className="flex justify-between text-[#9da5b4]">
                         <span>Solar Irradiance:</span>
-                        <strong className="text-[#edf0f5]">{weather.solarFlux} W/m²</strong>
+                        <strong className="text-[#edf0f5]">
+                          {weather.solarFlux ?? (weatherKey === 'dust_storm' ? 140 : weatherKey === 'solar_storm' ? 680 : 590)} W/m²
+                        </strong>
                       </div>
                       <div className="flex justify-between text-[#9da5b4]">
                         <span>Radiation Dose:</span>
                         <strong className={weatherKey === 'solar_storm' ? 'text-[#ef4444]' : 'text-[#22c55e]'}>
-                          {weather.radiationDoseRate} mSv/h
+                          {weather.radiationDoseRate ?? weather.radRateMgyHr ?? 0.011} mSv/h
                         </strong>
                       </div>
                       <div className="flex justify-between text-[#9da5b4]">
                         <span>Dust Optical Depth (tau):</span>
                         <strong className={weatherKey === 'dust_storm' ? 'text-[#ef4444]' : 'text-[#edf0f5]'}>
-                          {weather.dustOpticalDepth}
+                          {weather.dustOpticalDepth ?? weather.dustTau ?? weather.tau ?? 0.45}
                         </strong>
                       </div>
                     </div>
@@ -2555,8 +2557,8 @@ export default function App() {
                       ))}
                     </div>
                     <div className="mt-1.5 text-[10px] font-mono text-[#9da5b4] flex justify-between">
-                      <span>Nominal Speed: <strong className="text-[#edf0f5]">{loadout.speedKmH} km/h</strong></span>
-                      <span>O2 Burn Rate: <strong className="text-[#edf0f5]">{loadout.o2Rate}x</strong></span>
+                      <span>Nominal Speed: <strong className="text-[#edf0f5]">{(loadout.speedKmh ?? loadout.speedKmH ?? 2.0)} km/h</strong></span>
+                      <span>O2 Burn Rate: <strong className="text-[#edf0f5]">{(loadout.o2RateLpm ?? loadout.o2Rate ?? 0.85)} L/min</strong></span>
                     </div>
                   </div>
 
