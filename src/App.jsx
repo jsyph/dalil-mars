@@ -1,30 +1,39 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Activity,
   AlertTriangle,
+  Battery,
   BatteryCharging,
+  Camera,
   CheckCircle2,
+  ChevronDown,
   ChevronLeft,
   ChevronRight,
+  ChevronUp,
   Clock,
   Compass,
   Crosshair,
   Droplets,
   Eye,
-  Flag,
+  EyeOff,
   Flame,
   Layers,
-  Map as MapIcon,
   MapPin,
   Navigation,
+  Navigation2,
   Pause,
   Play,
   Radio,
   RotateCcw,
+  Shield,
   ShieldAlert,
+  Sliders,
   Sun,
   Thermometer,
+  Volume2,
+  VolumeX,
   Wind,
+  X,
   Zap,
 } from 'lucide-react';
 import JezeroTacticalMap from './components/JezeroTacticalMap';
@@ -33,6 +42,7 @@ import medaWeatherData from './data/meda_weather.json';
 import povImagesData from './data/pov_images.json';
 import scienceHazardsData from './data/jezero_science_hazards.json';
 import {
+  calculateBearingDegrees,
   computeMarswalkRoute,
   LOADOUT_PROFILES,
   marsDistanceMeters,
@@ -58,9 +68,13 @@ export default function App() {
     season: 'late autumn',
   };
 
-  // Tablet UX Mode: Route Planner vs. Live EVA Field Mode
-  const [isLiveEvaMode, setIsLiveEvaMode] = useState(false);
+  // Google Maps App Modes: 'browse' (exploring/planning) vs 'navigating' (active turn-by-turn driving/walking)
+  const [navMode, setNavMode] = useState('browse');
   const [followAstronaut, setFollowAstronaut] = useState(true);
+  const [showLayersSheet, setShowLayersSheet] = useState(false);
+  const [showStreetViewPIP, setShowStreetViewPIP] = useState(false);
+  const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false);
+  const [showRouteOptions, setShowRouteOptions] = useState(false);
 
   // Layer visibility toggles
   const [layers, setLayers] = useState({
@@ -70,7 +84,7 @@ export default function App() {
     traverse: true,
   });
 
-  // Route planner & suit/rover starting state
+  // Route endpoints & mobility
   const [startId, setStartId] = useState('hab-alpha');
   const [endId, setEndId] = useState('three-forks');
   const [loadoutKey, setLoadoutKey] = useState('light');
@@ -78,13 +92,13 @@ export default function App() {
   const [startBatteryPct, setStartBatteryPct] = useState(85);
   const [startO2Pct, setStartO2Pct] = useState(90);
   const [autoChargingStop, setAutoChargingStop] = useState(true);
-  const [showDirectComparison, setShowDirectComparison] = useState(true);
+  const [showDirectComparison, setShowDirectComparison] = useState(false);
 
-  // Martian Time-of-Day & Sol State (06:00 = 360m to 19:00 = 1140m)
-  const [selectedMissionSol, setSelectedMissionSol] = useState(Number(latestMeda.sol) || 1133);
+  // Martian Time-of-Day & Sol State
+  const [selectedMissionSol] = useState(Number(latestMeda.sol) || 1133);
   const [startLstMinutes, setStartLstMinutes] = useState(705); // 11:45 LST
 
-  // Predictive Incoming Dust Storm Radar State
+  // Incoming Dust Storm State
   const [incomingDustAlert, setIncomingDustAlert] = useState(false);
 
   // Selected Sol for Astronaut POV image
@@ -96,6 +110,18 @@ export default function App() {
   const [navStepIdx, setNavStepIdx] = useState(0);
   const [rechargeTicksRemaining, setRechargeTicksRemaining] = useState(0);
   const [hasCompletedPitStop, setHasCompletedPitStop] = useState(false);
+
+  // Live Android Toast Notification Popups
+  const [activeToast, setActiveToast] = useState(null);
+  const toastTimerRef = useRef(null);
+
+  const showToast = (toast) => {
+    if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
+    setActiveToast(toast);
+    toastTimerRef.current = setTimeout(() => {
+      setActiveToast(null);
+    }, toast.duration || 5500);
+  };
 
   const startPOI = useMemo(
     () => sciencePOIs.find((p) => p.id === startId) || sciencePOIs[0],
@@ -135,12 +161,15 @@ export default function App() {
     autoChargingStop,
   ]);
 
-  // Reset live navigation whenever route inputs change
+  // Reset live navigation state on origin/dest change
   useEffect(() => {
     setNavPlaying(false);
     setNavStepIdx(0);
     setRechargeTicksRemaining(0);
     setHasCompletedPitStop(false);
+    if (navMode === 'navigating') {
+      setNavMode('browse');
+    }
   }, [startId, endId, loadoutKey, weatherKey, startBatteryPct, startO2Pct, autoChargingStop]);
 
   // Live Navigation Simulation Loop
@@ -155,6 +184,12 @@ export default function App() {
         setRechargeTicksRemaining((t) => {
           if (t <= 1) {
             setHasCompletedPitStop(true);
+            showToast({
+              id: 'recharge-done',
+              type: 'success',
+              title: '⚡ Fast-Charge Complete',
+              message: 'Suit/Rover Battery & Oxygen restored to 100% capacity.',
+            });
             return 0;
           }
           return t - 1;
@@ -164,37 +199,51 @@ export default function App() {
 
       setNavStepIdx((prev) => {
         const next = Math.min(totalPoints - 1, prev + navSpeed);
+
+        // Approaching Virtual Base Station Pit-Stop
         if (pitIdx !== null && !hasCompletedPitStop && prev < pitIdx && next >= pitIdx) {
           setRechargeTicksRemaining(12);
+          showToast({
+            id: 'docking',
+            type: 'charge',
+            title: `⚡ Docked at ${routeResult.chargingStop?.station?.name || 'Base'}`,
+            message: 'Initiating 25 kW inductive fast-charge & high-pressure O2 refill...',
+          });
           return pitIdx;
         }
+
+        // Mid-route slope hazard notifications
+        if (prev < Math.round(totalPoints * 0.45) && next >= Math.round(totalPoints * 0.45)) {
+          if (routeResult.maxSlopeAlongPath >= 12) {
+            showToast({
+              id: 'slope-warn',
+              type: 'warning',
+              title: `⚠ Steep Incline Ahead (${routeResult.maxSlopeAlongPath}°)`,
+              message: 'A* corridor holding optimal ridge contour to minimize slip risk.',
+            });
+          }
+        }
+
+        // Arrival
         if (next >= totalPoints - 1) {
           setNavPlaying(false);
+          showToast({
+            id: 'arrived',
+            type: 'success',
+            title: `🏁 Arrived at ${endPOI.name}`,
+            message: `Traverse complete (${routeResult.distKm} km). Scientific site logged.`,
+            duration: 8000,
+          });
         }
+
         return next;
       });
     }, 120);
 
     return () => clearInterval(timer);
-  }, [navPlaying, navSpeed, routeResult, rechargeTicksRemaining, hasCompletedPitStop]);
+  }, [navPlaying, navSpeed, routeResult, rechargeTicksRemaining, hasCompletedPitStop, endPOI]);
 
-  // Manual Glove-Friendly Step Controls (-100m / +100m)
-  const stepAlongRoute = (deltaSteps) => {
-    const totalPoints = routeResult?.pathCoords?.length || 1;
-    setNavPlaying(false);
-    setRechargeTicksRemaining(0);
-    setNavStepIdx((prev) => {
-      const next = Math.max(0, Math.min(totalPoints - 1, prev + deltaSteps));
-      if (routeResult?.pitStopIndex !== null && next >= routeResult.pitStopIndex) {
-        setHasCompletedPitStop(true);
-      } else {
-        setHasCompletedPitStop(false);
-      }
-      return next;
-    });
-  };
-
-  // Compute live astronaut telemetry along the route
+  // Compute live astronaut telemetry & exact heading azimuth
   const liveNavState = useMemo(() => {
     const coords = routeResult?.pathCoords || [];
     if (!coords.length) return null;
@@ -203,6 +252,24 @@ export default function App() {
     const currentLatLon = coords[idx];
     const isRecharging = rechargeTicksRemaining > 0;
     const pitIdx = routeResult.pitStopIndex;
+
+    // Calculate heading azimuth in degrees (0° = North, 90° = East, etc.)
+    let heading = 0;
+    if (idx < coords.length - 1) {
+      heading = calculateBearingDegrees(
+        coords[idx][0],
+        coords[idx][1],
+        coords[idx + 1][0],
+        coords[idx + 1][1]
+      );
+    } else if (idx > 0) {
+      heading = calculateBearingDegrees(
+        coords[idx - 1][0],
+        coords[idx - 1][1],
+        coords[idx][0],
+        coords[idx][1]
+      );
+    }
 
     let currentBattery = startBatteryPct;
     let currentO2 = startO2Pct;
@@ -239,38 +306,46 @@ export default function App() {
     const arrived = idx >= coords.length - 1 && !isRecharging;
     const progressPct = coords.length > 1 ? Math.round((idx / (coords.length - 1)) * 100) : 0;
 
+    const effectiveSpeed =
+      weatherKey === 'dust_storm' ? loadout.speedKmh * 0.65 : loadout.speedKmh;
+    const estTimeRemainingMin = Math.round((distRemainingKm / effectiveSpeed) * 60);
+
     return {
-      active: navPlaying || idx > 0 || isLiveEvaMode,
+      active: navMode === 'navigating' || navPlaying || idx > 0,
       idx,
       progressPct,
       currentLatLon,
+      heading: Math.round(heading),
       currentBattery: clampedBat,
       currentO2: clampedO2,
       distCoveredKm: Number(distCoveredKm.toFixed(2)),
       distRemainingKm,
+      estTimeRemainingMin,
       isRecharging,
       arrived,
-      heartRateBpm: isRecharging ? 74 : loadoutKey === 'heavy' ? 118 : 96,
+      speedKmh: isRecharging ? 0 : effectiveSpeed,
+      heartRateBpm: isRecharging ? 72 : loadoutKey === 'heavy' ? 120 : 96,
     };
   }, [
     routeResult,
     navStepIdx,
     navPlaying,
-    isLiveEvaMode,
+    navMode,
     rechargeTicksRemaining,
     hasCompletedPitStop,
     startBatteryPct,
     startO2Pct,
     loadoutKey,
+    weatherKey,
+    loadout.speedKmh,
   ]);
 
-  // Martian Time-of-Day Engine (advances live during Marswalk!)
+  // Martian Time-of-Day Engine
   const martianEnv = useMemo(() => {
     const elapsedMin = Math.round(((liveNavState?.progressPct || 0) / 100) * (routeResult?.durationMin || 0));
     const currentLstMin = startLstMinutes + elapsedMin;
     const lstText = formatLst(currentLstMin);
 
-    // Diurnal temperature curve: peaks around 13:00 LST (780m) at max_temp, troughs near dawn/night at min_temp
     const maxT = Number(latestMeda.max_temp ?? -24.7);
     const minT = Number(latestMeda.min_temp ?? -79.3);
     const hourOfDay = (currentLstMin % 1440) / 60;
@@ -278,10 +353,7 @@ export default function App() {
     const dustCooling = weatherKey === 'dust_storm' || incomingDustAlert ? -13.5 : 0;
     const ambientTempC = Number((minT + (maxT - minT) * solarCurve + dustCooling).toFixed(1));
 
-    // Suit thermal heater wattage increases dramatically below -50°C
     const suitHeaterWatts = Math.round(45 + Math.max(0, (-25 - ambientTempC) * 2.4));
-
-    // Sunset at 17:14 LST (1034 min)
     const sunsetMin = 17 * 60 + 14;
     const daylightRemainingMin = Math.max(0, sunsetMin - (currentLstMin % 1440));
 
@@ -307,14 +379,13 @@ export default function App() {
     incomingDustAlert,
   ]);
 
-  // Predictive Incoming Dust Storm Ahead Radar State
+  // Predictive Dust Front Radar
   const dustFrontState = useMemo(() => {
     const active = incomingDustAlert || weatherKey === 'dust_storm';
     if (!active) return { active: false };
 
     const progress = (liveNavState?.progressPct || 0) / 100;
-    // Storm approaches from NW toward route midpoint as astronaut walks
-    const distanceAheadKm = Number(Math.max(0.25, 2.4 - progress * 1.9).toFixed(2));
+    const distanceAheadKm = Number(Math.max(0.2, 2.4 - progress * 1.9).toFixed(2));
     const etaMin = Math.max(2, Math.round(distanceAheadKm * 7.5));
     const pressureDropPa = Number((Number(latestMeda.pressure || 778.9) - (14 + progress * 12)).toFixed(1));
 
@@ -334,7 +405,7 @@ export default function App() {
     };
   }, [incomingDustAlert, weatherKey, liveNavState?.progressPct, latestMeda.pressure, endPOI]);
 
-  // Nearest pressurized shelter to current astronaut position
+  // Nearest pressurized shelter
   const nearestShelter = useMemo(() => {
     const curLat = liveNavState?.currentLatLon?.[0] ?? startPOI.lat;
     const curLon = liveNavState?.currentLatLon?.[1] ?? startPOI.lon;
@@ -354,23 +425,7 @@ export default function App() {
     };
   }, [liveNavState?.currentLatLon, startPOI, sciencePOIs]);
 
-  // Active turn-by-turn instruction for Visor HUD
-  const currentTurnStep = useMemo(() => {
-    const steps = routeResult?.navigationSteps || [];
-    if (!steps.length) return null;
-    if (liveNavState?.isRecharging) {
-      return steps.find((s) => s.icon === 'charge') || steps[0];
-    }
-    if (liveNavState?.arrived) {
-      return steps[steps.length - 1];
-    }
-    if (hasCompletedPitStop) {
-      return steps.find((s) => s.icon === 'nav') || steps[0];
-    }
-    return steps[0];
-  }, [routeResult?.navigationSteps, liveNavState?.isRecharging, liveNavState?.arrived, hasCompletedPitStop]);
-
-  // Auto-sync POV Sol to live moving marker
+  // Sync closest NASA Mastcam ground POV
   useEffect(() => {
     if (!liveNavState?.active || !liveNavState.currentLatLon || !waypointsData.length) return;
     const [curLat, curLon] = liveNavState.currentLatLon;
@@ -389,7 +444,6 @@ export default function App() {
     }
   }, [liveNavState?.idx, liveNavState?.active, liveNavState?.currentLatLon]);
 
-  // Closest NASA POV image to selectedSol
   const activePOV = useMemo(() => {
     if (!povImagesData.length) return null;
     return povImagesData.reduce((prev, curr) =>
@@ -397,20 +451,63 @@ export default function App() {
     );
   }, [selectedSol]);
 
-  const toggleLayer = (key) => {
-    setLayers((prev) => ({ ...prev, [key]: !prev[key] }));
+  // Active navigation maneuver for Google Maps turn banner
+  const currentManeuver = useMemo(() => {
+    const steps = routeResult?.navigationSteps || [];
+    if (!steps.length) return null;
+
+    if (liveNavState?.isRecharging) {
+      return {
+        icon: 'charge',
+        distanceText: '0 m',
+        instruction: `Docked at ${routeResult.chargingStop?.station?.name}`,
+        subtitle: '⚡ Recharging battery to 100% & refilling O2...',
+      };
+    }
+    if (liveNavState?.arrived) {
+      return {
+        icon: 'arrive',
+        distanceText: '0 m',
+        instruction: `Arrived at ${endPOI.name}`,
+        subtitle: 'Marswalk objective accomplished.',
+      };
+    }
+    if (hasCompletedPitStop && steps.length > 3) {
+      return {
+        icon: 'turn',
+        distanceText: `${liveNavState?.distRemainingKm} km`,
+        instruction: steps[3]?.instruction || `Proceed toward ${endPOI.name}`,
+        subtitle: steps[4]?.instruction || 'Following A* traversability corridor',
+      };
+    }
+
+    return {
+      icon: 'straight',
+      distanceText: `${Math.round((liveNavState?.distRemainingKm || routeResult.distKm) * 1000)} m`,
+      instruction: steps[0]?.instruction || `Head toward ${endPOI.name}`,
+      subtitle: steps[1]?.instruction || 'Safe slope gradient route active',
+    };
+  }, [routeResult, liveNavState, hasCompletedPitStop, endPOI]);
+
+  // Start Navigation Button Click (Transitions to Android Google Maps Mode!)
+  const startNavigation = () => {
+    setNavMode('navigating');
+    setNavPlaying(true);
+    setFollowAstronaut(true);
+    showToast({
+      id: 'nav-started',
+      type: 'info',
+      title: '🚀 Marswalk Navigation Started',
+      message: `Navigating to ${endPOI.name} (${routeResult.distKm} km). Heading ${liveNavState?.heading || 0}°.`,
+    });
   };
 
-  const applyPreset = (sId, eId, lKey, wKey, batPct, o2Pct, solPreview, lstMin = 705) => {
-    setStartId(sId);
-    setEndId(eId);
-    setLoadoutKey(lKey);
-    setWeatherKey(wKey);
-    setStartBatteryPct(batPct);
-    setStartO2Pct(o2Pct);
-    setAutoChargingStop(true);
-    setSelectedSol(solPreview);
-    setStartLstMinutes(lstMin);
+  const stopNavigation = () => {
+    setNavPlaying(false);
+    setNavMode('browse');
+    setNavStepIdx(0);
+    setRechargeTicksRemaining(0);
+    setHasCompletedPitStop(false);
   };
 
   const triggerShelterDivert = () => {
@@ -423,669 +520,601 @@ export default function App() {
     }
     setLoadoutKey('light');
     setAutoChargingStop(true);
+    showToast({
+      id: 'shelter-divert',
+      type: 'warning',
+      title: '⚡ Route Diverted to Shelter',
+      message: `Emergency evacuation plotted to ${nearestShelter.station.name} (${nearestShelter.distKm} km).`,
+    });
   };
 
-  const resetNavigation = () => {
-    setNavPlaying(false);
-    setNavStepIdx(0);
-    setRechargeTicksRemaining(0);
-    setHasCompletedPitStop(false);
+  const toggleLayer = (key) => {
+    setLayers((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
   return (
-    <div className="flex flex-col h-screen w-screen bg-slate-950 text-slate-100 overflow-hidden select-none">
-      {/* TOP ASTRONAUT TABLET HUD BAR */}
-      <header className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 bg-slate-900/95 border-b border-slate-800 backdrop-blur-md z-20">
-        <div className="flex items-center gap-2.5">
-          <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-400">
-            <Compass className="h-5 w-5" />
-          </div>
-          <div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-sm font-bold tracking-wider uppercase text-slate-100">
-                MARS MAPS // EVA TABLET
-              </h1>
-              <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-mono text-emerald-400 border border-emerald-500/30">
-                JEZERO
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-400 hidden sm:block">
-              Glove-Ready UI • Live Martian Clock • Predictive Dust Radar
-            </p>
-          </div>
-        </div>
+    <div className="relative h-screen w-screen overflow-hidden bg-slate-950 font-sans text-slate-100 select-none">
+      {/* 1. FULL-BLEED MARTIAN LEAFLET MAP CANVAS */}
+      <div className="absolute inset-0 z-0">
+        <JezeroTacticalMap
+          waypoints={waypointsData}
+          sciencePOIs={sciencePOIs}
+          hazardZones={hazardZones}
+          layers={layers}
+          routeResult={routeResult}
+          startPOI={startPOI}
+          endPOI={endPOI}
+          showDirectComparison={showDirectComparison}
+          weatherCondition={weatherKey}
+          liveNavState={liveNavState}
+          followAstronaut={followAstronaut}
+          dustFrontState={dustFrontState}
+          solarPhase={martianEnv.solarPhase}
+          onSelectPOI={(poi) => {
+            setEndId(poi.id);
+            setSelectedSol(poi.sol);
+          }}
+          onSelectWaypointSol={(sol) => setSelectedSol(sol)}
+        />
+      </div>
 
-        {/* Live Martian Clock & Environmental Metrics */}
-        <div className="flex flex-wrap items-center gap-2.5 text-xs font-mono">
-          <div className="flex items-center gap-1.5 rounded-lg bg-slate-950/90 px-2.5 py-1.5 border border-slate-800 text-slate-200">
-            <Clock className="h-3.5 w-3.5 text-amber-400" />
-            <span>SOL {selectedMissionSol}</span>
-            <span className="text-slate-600">|</span>
-            <span className="text-emerald-400 font-bold">{martianEnv.lstText}</span>
-          </div>
-
-          <div className="hidden md:flex items-center gap-1.5 rounded-lg bg-slate-950/90 px-2.5 py-1.5 border border-slate-800 text-slate-200">
-            <Thermometer className="h-3.5 w-3.5 text-cyan-400" />
-            <span>{martianEnv.ambientTempC}°C</span>
-            <span className="text-slate-600">•</span>
-            <Flame className="h-3.5 w-3.5 text-orange-400" />
-            <span>{martianEnv.suitHeaterWatts}W</span>
-          </div>
-
-          {/* Incoming Dust Storm Radar Toggle (Glove Target >=44px height) */}
-          <button
-            onClick={() => setIncomingDustAlert((v) => !v)}
-            className={`glove-btn min-h-[40px] px-3 py-1.5 rounded-xl border text-xs font-sans font-bold flex items-center gap-1.5 cursor-pointer ${
-              incomingDustAlert || weatherKey === 'dust_storm'
-                ? 'bg-orange-500/25 border-orange-400 text-orange-200 shadow-[0_0_12px_rgba(249,115,22,0.35)]'
-                : 'bg-slate-950 border-slate-700 text-slate-300 hover:border-slate-500'
+      {/* 2. LIVE ANDROID HEADS-UP NOTIFICATION POPUP */}
+      {activeToast && (
+        <div className="android-toast-slide absolute top-4 left-1/2 z-[1000] w-[92%] max-w-md -translate-x-1/2">
+          <div
+            className={`flex items-start justify-between gap-3 rounded-2xl border p-3.5 shadow-2xl backdrop-blur-xl ${
+              activeToast.type === 'warning'
+                ? 'bg-amber-950/95 border-amber-400 text-amber-100 shadow-amber-900/50'
+                : activeToast.type === 'charge'
+                ? 'bg-emerald-950/95 border-emerald-400 text-emerald-100 shadow-emerald-900/50'
+                : activeToast.type === 'success'
+                ? 'bg-cyan-950/95 border-cyan-400 text-cyan-100 shadow-cyan-900/50'
+                : 'bg-slate-900/95 border-slate-700 text-slate-100 shadow-black/60'
             }`}
           >
-            <Wind className="h-4 w-4 text-orange-400" />
-            <span>{incomingDustAlert ? 'Storm Radar: ON' : 'Storm Radar'}</span>
-          </button>
-
-          {/* Tablet Mode Switcher: Route Planner vs. Live EVA Field Mode */}
-          <button
-            onClick={() => {
-              setIsLiveEvaMode((m) => !m);
-              if (!isLiveEvaMode) setFollowAstronaut(true);
-            }}
-            className={`glove-btn min-h-[40px] px-3.5 py-1.5 rounded-xl border text-xs font-sans font-bold flex items-center gap-1.5 cursor-pointer ${
-              isLiveEvaMode
-                ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-[0_0_16px_rgba(34,211,238,0.45)]'
-                : 'bg-slate-800 hover:bg-slate-700 text-cyan-300 border-cyan-500/40'
-            }`}
-          >
-            {isLiveEvaMode ? <MapIcon className="h-4 w-4" /> : <Navigation className="h-4 w-4" />}
-            <span>{isLiveEvaMode ? 'Route Planner' : 'Live EVA Mode'}</span>
-          </button>
-        </div>
-      </header>
-
-      {/* PREDICTIVE INCOMING DUST STORM AHEAD BANNER */}
-      {dustFrontState.active && (
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-gradient-to-r from-orange-950 via-red-950 to-orange-950 border-b border-orange-500/60 text-orange-100 text-xs z-20">
-          <div className="flex items-center gap-2.5 font-semibold">
-            <AlertTriangle className="h-5 w-5 text-orange-400 animate-pulse shrink-0" />
-            <div>
-              <span className="text-orange-300 font-bold uppercase tracking-wide">
-                INCOMING DUST STORM AHEAD:
-              </span>{' '}
-              <span>
-                Squall front <b>{dustFrontState.distanceAheadKm} km</b> NW • Closing ETA{' '}
-                <b>{dustFrontState.etaMin} min</b> • Barometer dropping ({dustFrontState.pressureDropPa} Pa)
-              </span>
+            <div className="flex items-start gap-3">
+              <div className="mt-0.5 rounded-xl bg-white/10 p-2">
+                {activeToast.type === 'warning' ? (
+                  <AlertTriangle className="h-5 w-5 text-amber-400 animate-pulse" />
+                ) : activeToast.type === 'charge' ? (
+                  <Zap className="h-5 w-5 text-yellow-400 animate-bounce" />
+                ) : (
+                  <CheckCircle2 className="h-5 w-5 text-cyan-400" />
+                )}
+              </div>
+              <div>
+                <div className="text-xs font-bold uppercase tracking-wider">{activeToast.title}</div>
+                <div className="text-[11px] leading-relaxed opacity-90 mt-0.5">{activeToast.message}</div>
+              </div>
             </div>
+            <button
+              onClick={() => setActiveToast(null)}
+              className="p-1 rounded-lg hover:bg-white/10 text-slate-400 hover:text-white cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </div>
-          <button
-            onClick={triggerShelterDivert}
-            className="glove-btn min-h-[42px] px-4 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-slate-950 font-extrabold text-xs flex items-center gap-1.5 cursor-pointer shrink-0 shadow-lg"
-          >
-            <Zap className="h-4 w-4" />
-            <span>DIVERT TO NEAREST SHELTER ({nearestShelter.station?.name.split(' ')[0]} • {nearestShelter.distKm} km)</span>
-          </button>
         </div>
       )}
 
-      {/* SOLAR FLARE RADIATION ALERT BANNER */}
-      {weatherKey === 'solar_storm' && (
-        <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2 bg-red-950/95 border-b border-red-500/60 text-red-100 text-xs z-20">
-          <div className="flex items-center gap-2 font-semibold">
-            <ShieldAlert className="h-5 w-5 text-red-400 animate-pulse shrink-0" />
-            <span>{weather.alert}</span>
-          </div>
-          <button
-            onClick={triggerShelterDivert}
-            className="glove-btn min-h-[42px] px-4 py-1.5 rounded-xl bg-red-500 hover:bg-red-400 text-slate-950 font-extrabold text-xs cursor-pointer shrink-0"
-          >
-            Plot Abort to Nearest Shelter
-          </button>
-        </div>
-      )}
-
-      {/* MAIN WORKSPACE */}
-      <div className="flex flex-1 min-h-0 overflow-hidden">
-        {/* LEFT SIDEBAR: GLOVE-FRIENDLY TRIP PLANNER (Hidden in Full-Screen Live EVA Mode) */}
-        {!isLiveEvaMode && (
-          <aside className="w-80 lg:w-96 flex flex-col bg-slate-900/85 border-r border-slate-800 overflow-y-auto z-10">
-            {/* Quick Demo Scenarios (Glove Tap Height >= 48px) */}
-            <div className="p-3 border-b border-slate-800">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-2">
-                Quick EVA Presets (Glove Tap)
-              </div>
-              <div className="grid grid-cols-3 gap-1.5">
-                <button
-                  onClick={() => applyPreset('hab-alpha', 'three-forks', 'light', 'nominal', 85, 90, 680, 705)}
-                  className="glove-btn min-h-[48px] px-2 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-[11px] text-left border border-slate-700 cursor-pointer"
-                >
-                  <div className="font-bold text-cyan-300">1. Direct</div>
-                  <div className="text-[10px] text-slate-400 truncate">Three Forks</div>
-                </button>
-                <button
-                  onClick={() => applyPreset('hab-alpha', 'belva-crater', 'light', 'nominal', 45, 75, 900, 720)}
-                  className="glove-btn min-h-[48px] px-2 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-[11px] text-left border border-emerald-500/40 cursor-pointer"
-                >
-                  <div className="font-bold text-emerald-300">2. Recharge</div>
-                  <div className="text-[10px] text-slate-400 truncate">45% Pit-Stop</div>
-                </button>
-                <button
-                  onClick={() => {
-                    applyPreset('belva-crater', 'western-rim', 'light', 'nominal', 85, 90, 2000, 940);
-                    setIncomingDustAlert(true);
-                  }}
-                  className="glove-btn min-h-[48px] px-2 py-2 rounded-xl bg-slate-800/90 hover:bg-slate-700 text-[11px] text-left border border-orange-500/40 cursor-pointer"
-                >
-                  <div className="font-bold text-orange-300">3. Dusk/Dust</div>
-                  <div className="text-[10px] text-slate-400 truncate">15:40 LST</div>
-                </button>
-              </div>
-            </div>
-
-            {/* Martian Time-of-Day & Space Weather Selector */}
-            <div className="p-3 border-b border-slate-800 space-y-2.5 text-xs">
-              <div className="flex items-center justify-between">
-                <span className="flex items-center gap-1.5 font-semibold uppercase tracking-wider text-slate-300">
-                  <Sun className="h-3.5 w-3.5 text-amber-400" />
-                  Martian Time & Conditions
-                </span>
-                <span className="text-[11px] font-mono text-amber-300 font-bold">
-                  {martianEnv.lstText}
-                </span>
-              </div>
-
-              <div className="rounded-xl bg-slate-950/80 border border-slate-800 p-2.5 space-y-2">
-                <div className="flex justify-between text-[10px] text-slate-400">
-                  <span>06:00 Dawn</span>
-                  <span className="text-cyan-300 font-mono">
-                    {martianEnv.ambientTempC}°C • {martianEnv.daylightRemainingMin}m daylight left
-                  </span>
-                  <span>19:00 Night</span>
-                </div>
-                <input
-                  type="range"
-                  min={360}
-                  max={1140}
-                  step={15}
-                  value={startLstMinutes}
-                  onChange={(e) => setStartLstMinutes(Number(e.target.value))}
-                  className="glove-slider w-full"
-                />
-                <div className="grid grid-cols-3 gap-1.5 pt-1">
-                  {Object.values(WEATHER_CONDITIONS).map((wc) => (
-                    <button
-                      key={wc.id}
-                      onClick={() => setWeatherKey(wc.id)}
-                      className={`glove-btn min-h-[40px] px-2 py-1.5 rounded-lg border text-[11px] font-semibold cursor-pointer ${
-                        weatherKey === wc.id
-                          ? wc.id === 'nominal'
-                            ? 'bg-emerald-500/20 text-emerald-300 border-emerald-500/50'
-                            : 'bg-red-500/25 text-red-300 border-red-500/50'
-                          : 'bg-slate-900 border-slate-800 text-slate-400 hover:text-slate-200'
-                      }`}
-                    >
-                      {wc.id === 'nominal' ? 'Nominal' : wc.id === 'dust_storm' ? 'Dust Storm' : 'Solar Flare'}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            {/* Route Origin, Destination & Mobility */}
-            <div className="p-3 border-b border-slate-800 space-y-2.5 text-xs">
-              <span className="flex items-center gap-1.5 font-semibold uppercase tracking-wider text-slate-300">
-                <Navigation className="h-3.5 w-3.5 text-cyan-400" />
-                Destination & Suit Charge
-              </span>
-
-              <div className="space-y-2">
-                <select
-                  value={startId}
-                  onChange={(e) => setStartId(e.target.value)}
-                  className="w-full min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-slate-100 focus:border-cyan-400 focus:outline-none"
-                >
-                  {sciencePOIs.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      Start: {p.isChargingStation ? '⚡ ' : ''}{p.name}
-                    </option>
-                  ))}
-                </select>
-
-                <select
-                  value={endId}
-                  onChange={(e) => {
-                    setEndId(e.target.value);
-                    const target = sciencePOIs.find((p) => p.id === e.target.value);
-                    if (target) setSelectedSol(target.sol);
-                  }}
-                  className="w-full min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-slate-100 focus:border-emerald-400 focus:outline-none"
-                >
-                  {sciencePOIs.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      Goal: {p.isChargingStation ? '⚡ ' : ''}{p.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="grid grid-cols-3 gap-1.5">
-                {Object.values(LOADOUT_PROFILES).map((prof) => (
-                  <button
-                    key={prof.id}
-                    onClick={() => setLoadoutKey(prof.id)}
-                    className={`glove-btn min-h-[44px] px-2 py-1.5 rounded-xl border text-[11px] font-semibold cursor-pointer ${
-                      loadoutKey === prof.id
-                        ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200'
-                        : 'bg-slate-950 border-slate-800 text-slate-400 hover:border-slate-700'
-                    }`}
-                  >
-                    {prof.id === 'light' ? 'Solo Suit' : prof.id === 'heavy' ? 'Heavy Kit' : 'Rover Mule'}
-                  </button>
-                ))}
-              </div>
-
-              {/* Glove-Sized Battery & O2 Sliders */}
-              <div className="rounded-xl bg-slate-950/80 border border-slate-800 p-3 space-y-3">
-                <div className="flex items-center justify-between text-[10px] font-mono uppercase">
-                  <span className="flex items-center gap-1 text-emerald-300">
-                    <BatteryCharging className="h-3.5 w-3.5" />
-                    Suit / Rover Reserves
-                  </span>
-                  <span className="text-slate-200 font-bold">{startBatteryPct}% Bat • {startO2Pct}% O₂</span>
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-[11px] text-slate-300 mb-1">
-                    <span>Battery Level</span>
-                    <span className="font-mono font-bold text-cyan-300">{startBatteryPct}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={15}
-                    max={100}
-                    value={startBatteryPct}
-                    onChange={(e) => setStartBatteryPct(Number(e.target.value))}
-                    className="glove-slider w-full"
-                  />
-                </div>
-
-                <div>
-                  <div className="flex justify-between text-[11px] text-slate-300 mb-1">
-                    <span>PLSS Oxygen Tank</span>
-                    <span className="font-mono font-bold text-emerald-300">{startO2Pct}%</span>
-                  </div>
-                  <input
-                    type="range"
-                    min={15}
-                    max={100}
-                    value={startO2Pct}
-                    onChange={(e) => setStartO2Pct(Number(e.target.value))}
-                    className="glove-slider w-full"
-                  />
-                </div>
-
-                <label className="flex items-center justify-between min-h-[36px] text-xs text-slate-200 cursor-pointer">
-                  <span>Auto-route via Virtual Base</span>
-                  <input
-                    type="checkbox"
-                    checked={autoChargingStop}
-                    onChange={(e) => setAutoChargingStop(e.target.checked)}
-                    className="w-5 h-5 accent-emerald-500 cursor-pointer"
-                  />
-                </label>
-              </div>
-            </div>
-
-            {/* "CAN I MAKE IT?" RANGE STATUS */}
-            <div className="p-3 border-b border-slate-800 space-y-2.5">
-              {routeResult.rangeStatus === 'direct_clear' && (
-                <div className="rounded-xl bg-emerald-950/50 border border-emerald-500/40 p-2.5 text-xs">
-                  <div className="flex items-center gap-1.5 font-bold text-emerald-300">
-                    <CheckCircle2 className="h-4 w-4 shrink-0" />
-                    <span>CAN MAKE IT DIRECTLY</span>
-                  </div>
-                  <p className="text-[11px] text-emerald-100/80 mt-1">
-                    Arrive with <b>{routeResult.finalArrivalBattery}%</b> Battery &{' '}
-                    <b>{routeResult.finalArrivalO2}%</b> O₂.
-                  </p>
-                </div>
-              )}
-
-              {routeResult.rangeStatus === 'recharged_ok' && routeResult.chargingStop && (
-                <div className="rounded-xl bg-amber-950/45 border border-amber-400/50 p-2.5 text-xs">
-                  <div className="flex items-center gap-1.5 font-bold text-amber-300">
-                    <Zap className="h-4 w-4 shrink-0 text-yellow-400" />
-                    <span>RECHARGE PIT-STOP ADDED</span>
-                  </div>
-                  <p className="text-[11px] text-amber-100/90 mt-1 leading-relaxed">
-                    Direct trip drops battery to <b>{routeResult.directArrivalBattery}%</b>. Routed via{' '}
-                    <b className="text-emerald-300">{routeResult.chargingStop.station.name}</b> (+15m charge to 100%).
-                  </p>
-                </div>
-              )}
-
-              {routeResult.rangeStatus === 'out_of_range' && (
-                <div className="rounded-xl bg-red-950/60 border border-red-500/50 p-2.5 text-xs">
-                  <div className="flex items-center gap-1.5 font-bold text-red-300">
-                    <AlertTriangle className="h-4 w-4 shrink-0" />
-                    <span>CRITICAL: OUT OF RANGE</span>
-                  </div>
-                  <p className="text-[11px] text-red-100/85 mt-1">
-                    Insufficient reserve ({routeResult.directArrivalBattery}% arrival). Switch to{' '}
-                    <b>Rover Mule</b> or recharge first.
-                  </p>
-                </div>
-              )}
-            </div>
-
-            {/* Turn-by-Turn Martian Directions */}
-            <div className="p-3 border-b border-slate-800">
-              <div className="text-[10px] font-mono uppercase tracking-wider text-slate-400 mb-2">
-                Turn-by-Turn Martian Directions
-              </div>
-              <div className="space-y-1.5">
-                {routeResult.navigationSteps?.map((step, i) => (
-                  <div
-                    key={step.id}
-                    className={`p-2.5 rounded-xl border text-[11px] ${
-                      step.icon === 'charge'
-                        ? 'bg-emerald-950/40 border-emerald-500/40 text-emerald-100'
-                        : step.icon === 'hazard'
-                        ? 'bg-amber-950/30 border-amber-500/30 text-amber-100'
-                        : 'bg-slate-950/60 border-slate-800 text-slate-200'
-                    }`}
-                  >
-                    <div className="flex items-center justify-between gap-2 font-semibold">
-                      <span>{i + 1}. {step.instruction}</span>
-                      {step.distanceKm > 0 && (
-                        <span className="font-mono text-[10px] text-cyan-300 shrink-0">
-                          {step.distanceKm} km
-                        </span>
-                      )}
-                    </div>
-                    <div className="text-[10px] text-slate-400 mt-0.5">{step.detail}</div>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Map Layer Toggles */}
-            <div className="p-3">
-              <div className="flex items-center justify-between mb-2">
-                <span className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-300">
-                  <Layers className="h-3.5 w-3.5 text-orange-400" />
-                  Map Layers
-                </span>
-                <label className="flex items-center gap-1.5 text-[11px] text-slate-300 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={showDirectComparison}
-                    onChange={(e) => setShowDirectComparison(e.target.checked)}
-                    className="w-4 h-4 accent-rose-500"
-                  />
-                  Direct Line
-                </label>
-              </div>
-              <div className="grid grid-cols-2 gap-1.5 text-[11px]">
-                {[
-                  { key: 'slope', label: 'Slope Heatmap' },
-                  { key: 'hazards', label: 'Hazard Zones' },
-                  { key: 'science', label: 'Bases & POIs' },
-                  { key: 'traverse', label: 'M20 Track' },
-                ].map((item) => (
-                  <label
-                    key={item.key}
-                    className="flex items-center gap-2 min-h-[38px] p-2 rounded-lg bg-slate-950/60 border border-slate-800 cursor-pointer"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={layers[item.key]}
-                      onChange={() => toggleLayer(item.key)}
-                      className="w-4 h-4 accent-orange-500"
+      {/* 3. TOP NAVIGATION HEADER (Google Maps Android Turn Card or Search Header) */}
+      <div className="absolute top-3 left-3 right-3 z-30 flex flex-col items-center pointer-events-none">
+        {navMode === 'navigating' ? (
+          /* GOOGLE MAPS ACTIVE NAVIGATION MANEUVER BANNER */
+          <div className="pointer-events-auto w-full max-w-xl rounded-2xl bg-emerald-900/95 border-2 border-emerald-400/80 p-3.5 shadow-2xl backdrop-blur-md text-slate-100 transition-all">
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-950 border border-emerald-400/60 shadow-inner">
+                  {currentManeuver?.icon === 'charge' ? (
+                    <Zap className="h-7 w-7 text-yellow-400 animate-pulse" />
+                  ) : currentManeuver?.icon === 'arrive' ? (
+                    <MapPin className="h-7 w-7 text-emerald-400" />
+                  ) : (
+                    <Navigation2
+                      className="h-7 w-7 text-emerald-300"
+                      style={{ transform: `rotate(${liveNavState?.heading || 0}deg)` }}
                     />
-                    <span className="truncate">{item.label}</span>
-                  </label>
-                ))}
+                  )}
+                </div>
+                <div>
+                  <div className="text-xl font-extrabold tracking-tight text-white flex items-center gap-2">
+                    <span>{currentManeuver?.distanceText}</span>
+                    <span className="text-xs font-mono font-normal text-emerald-200 uppercase bg-emerald-950/70 px-2 py-0.5 rounded-full border border-emerald-700/50">
+                      {liveNavState?.heading}° {martianEnv.lstText}
+                    </span>
+                  </div>
+                  <div className="text-xs font-semibold text-emerald-100 leading-snug line-clamp-1">
+                    {currentManeuver?.instruction}
+                  </div>
+                </div>
+              </div>
+
+              {/* Speedometer & Live Elevation */}
+              <div className="text-right font-mono shrink-0">
+                <div className="text-sm font-black text-cyan-300">
+                  {liveNavState?.speedKmh} <span className="text-[10px] font-normal text-slate-300">km/h</span>
+                </div>
+                <div className="text-[10px] text-emerald-200">{martianEnv.ambientTempC}°C</div>
               </div>
             </div>
-          </aside>
-        )}
 
-        {/* CENTER: INTERACTIVE JEZERO MAP + VISOR HUD + GLOVE BOTTOM DOCK */}
-        <main className="flex-1 relative min-w-0">
-          <JezeroTacticalMap
-            waypoints={waypointsData}
-            sciencePOIs={sciencePOIs}
-            hazardZones={hazardZones}
-            layers={layers}
-            routeResult={routeResult}
-            startPOI={startPOI}
-            endPOI={endPOI}
-            showDirectComparison={showDirectComparison}
-            weatherCondition={weatherKey}
-            liveNavState={liveNavState}
-            followAstronaut={followAstronaut}
-            dustFrontState={dustFrontState}
-            solarPhase={martianEnv.solarPhase}
-            onSelectPOI={(poi) => setEndId(poi.id)}
-            onSelectWaypointSol={(sol) => setSelectedSol(sol)}
-          />
-
-          {/* FLOATING ASTRONAUT VISOR HUD (Top-Left of Map) */}
-          <div className="absolute top-3 left-3 z-[450] max-w-sm rounded-2xl bg-slate-950/90 border border-slate-700/90 p-3 backdrop-blur-md shadow-2xl">
-            <div className="flex items-center justify-between gap-3 mb-2">
-              <div className="flex items-center gap-2">
-                <span className="h-2.5 w-2.5 rounded-full bg-emerald-400 animate-pulse" />
-                <span className="text-[11px] font-mono font-bold text-cyan-300 uppercase">
-                  {isLiveEvaMode ? 'LIVE EVA VISOR HUD' : 'NEXT WAYPOINT'}
+            {/* Next maneuver preview subtitle */}
+            {currentManeuver?.subtitle && (
+              <div className="mt-2 pt-2 border-t border-emerald-800/80 text-[11px] text-emerald-200/90 flex items-center justify-between">
+                <span className="truncate">{currentManeuver.subtitle}</span>
+                <span className="text-[10px] font-mono text-emerald-300 font-bold ml-2 shrink-0">
+                  PLSS {liveNavState?.currentO2}% • BAT {liveNavState?.currentBattery}%
                 </span>
               </div>
-              <span className="text-[11px] font-mono text-amber-300 font-bold">
-                {martianEnv.lstText} • {martianEnv.ambientTempC}°C
-              </span>
-            </div>
-
-            {currentTurnStep && (
-              <div className="text-xs font-semibold text-slate-100 leading-snug mb-2.5">
-                {liveNavState?.isRecharging
-                  ? '⚡ Docking at Virtual Base... Fast-charging to 100%!'
-                  : liveNavState?.arrived
-                  ? `🏁 Arrived at ${endPOI.name}`
-                  : currentTurnStep.instruction}
-              </div>
-            )}
-
-            {/* Live Visor Biometrics & Suit Bars */}
-            {liveNavState && (
-              <div className="grid grid-cols-3 gap-2 text-[11px] font-mono">
-                <div className="rounded-lg bg-slate-900/90 px-2 py-1.5 border border-slate-800">
-                  <div className="text-[9px] text-slate-400">BATTERY</div>
-                  <div
-                    className={`font-bold ${
-                      liveNavState.currentBattery < 20 ? 'text-red-400' : 'text-cyan-300'
-                    }`}
-                  >
-                    {liveNavState.currentBattery}%
-                  </div>
-                </div>
-                <div className="rounded-lg bg-slate-900/90 px-2 py-1.5 border border-slate-800">
-                  <div className="text-[9px] text-slate-400">PLSS O₂</div>
-                  <div
-                    className={`font-bold ${
-                      liveNavState.currentO2 < 20 ? 'text-red-400' : 'text-emerald-300'
-                    }`}
-                  >
-                    {liveNavState.currentO2}%
-                  </div>
-                </div>
-                <div className="rounded-lg bg-slate-900/90 px-2 py-1.5 border border-slate-800">
-                  <div className="text-[9px] text-slate-400">DIST LEFT</div>
-                  <div className="font-bold text-slate-100">{liveNavState.distRemainingKm} km</div>
-                </div>
-              </div>
             )}
           </div>
+        ) : (
+          /* GOOGLE MAPS EXPLORE & SEARCH BAR */
+          <div className="pointer-events-auto w-full max-w-xl space-y-2">
+            <div className="flex items-center justify-between gap-2 rounded-2xl bg-slate-900/95 border border-slate-700/80 px-3 py-2 shadow-2xl backdrop-blur-md">
+              <div className="flex items-center gap-2.5">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-orange-500/20 border border-orange-500/40 text-orange-400 font-bold">
+                  <Compass className="h-5 w-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-black tracking-wider uppercase text-slate-100">
+                      Dalil Mars
+                    </span>
+                    <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[9px] font-mono text-emerald-400 border border-emerald-500/30">
+                      JEZERO
+                    </span>
+                  </div>
+                  <div className="text-[10px] font-mono text-slate-400 flex items-center gap-1.5">
+                    <span>SOL {selectedMissionSol}</span>
+                    <span>•</span>
+                    <span className="text-emerald-400 font-bold">{martianEnv.lstText}</span>
+                    <span>•</span>
+                    <span>{martianEnv.ambientTempC}°C</span>
+                  </div>
+                </div>
+              </div>
 
-          {/* BOTTOM GLOVE-COMPATIBLE NAVIGATION DOCK */}
-          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-[450] flex flex-wrap items-center justify-center gap-2 rounded-2xl bg-slate-950/92 border border-slate-700/90 px-3 py-2.5 backdrop-blur-md shadow-2xl max-w-[95%]">
-            <button
-              onClick={() => stepAlongRoute(-3)}
-              title="Step Back ~100m"
-              className="glove-btn min-h-[48px] px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1 border border-slate-700 cursor-pointer"
-            >
-              <ChevronLeft className="h-4 w-4" />
-              <span>-100m</span>
-            </button>
-
-            <button
-              onClick={() => {
-                if (liveNavState?.arrived) resetNavigation();
-                setNavPlaying((p) => !p);
-              }}
-              className={`glove-btn min-h-[48px] px-5 rounded-xl font-extrabold text-xs flex items-center gap-2 cursor-pointer shadow-lg ${
-                navPlaying
-                  ? 'bg-amber-400 hover:bg-amber-300 text-slate-950'
-                  : 'bg-emerald-400 hover:bg-emerald-300 text-slate-950'
-              }`}
-            >
-              {navPlaying ? <Pause className="h-4 w-4" /> : <Play className="h-4 w-4" />}
-              <span>
-                {navPlaying ? 'PAUSE WALK' : liveNavState?.arrived ? 'REPLAY WALK' : 'START MARSWALK'}
-              </span>
-            </button>
-
-            <button
-              onClick={() => stepAlongRoute(3)}
-              title="Step Forward ~100m"
-              className="glove-btn min-h-[48px] px-3 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs flex items-center gap-1 border border-slate-700 cursor-pointer"
-            >
-              <span>+100m</span>
-              <ChevronRight className="h-4 w-4" />
-            </button>
-
-            <button
-              onClick={() => setNavSpeed((s) => (s === 1 ? 3 : 1))}
-              className="glove-btn min-h-[48px] px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-cyan-300 font-mono font-bold text-xs border border-slate-700 cursor-pointer"
-            >
-              {navSpeed}x
-            </button>
-
-            <button
-              onClick={() => setFollowAstronaut((f) => !f)}
-              className={`glove-btn min-h-[48px] px-3 rounded-xl font-bold text-xs flex items-center gap-1.5 border cursor-pointer ${
-                followAstronaut
-                  ? 'bg-cyan-500/20 border-cyan-400 text-cyan-200'
-                  : 'bg-slate-900 border-slate-700 text-slate-400'
-              }`}
-            >
-              <Crosshair className="h-4 w-4" />
-              <span className="hidden sm:inline">Follow</span>
-            </button>
-
-            <button
-              onClick={resetNavigation}
-              title="Reset Marswalk"
-              className="glove-btn min-h-[48px] px-3 rounded-xl bg-slate-900 hover:bg-slate-800 text-slate-300 border border-slate-700 cursor-pointer"
-            >
-              <RotateCcw className="h-4 w-4" />
-            </button>
-          </div>
-        </main>
-
-        {/* RIGHT PANEL: MARTIAN "STREET VIEW" POV & LIVE BIOMETRICS */}
-        <aside className="hidden lg:flex w-80 flex-col bg-slate-900/80 border-l border-slate-800 overflow-y-auto z-10">
-          <div className="p-3.5 border-b border-slate-800">
-            <div className="flex items-center justify-between mb-1">
-              <span className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wider text-slate-300">
-                <Eye className="h-3.5 w-3.5 text-emerald-400" />
-                Martian "Street View" POV
-              </span>
-              <span className="text-[10px] font-mono text-orange-400">
-                SOL {activePOV?.sol ?? selectedSol}
-              </span>
+              {/* Quick Trip Selector & Settings toggle */}
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setShowRouteOptions((v) => !v)}
+                  className={`glove-btn min-h-[40px] px-3 py-1.5 rounded-xl border text-xs font-semibold flex items-center gap-1.5 cursor-pointer ${
+                    showRouteOptions
+                      ? 'bg-cyan-500 text-slate-950 border-cyan-400'
+                      : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+                  }`}
+                >
+                  <Sliders className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Route Setup</span>
+                </button>
+              </div>
             </div>
-            <p className="text-[11px] text-slate-400">
-              Live ground perspective synced to your helmet position.
-            </p>
+
+            {/* Quick Filter POI Chips */}
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+              {[
+                { id: 'three-forks', label: '🔬 Three Forks Depot', sol: 680 },
+                { id: 'station-delta-solar', label: '⚡ Delta Solar Base', sol: 400 },
+                { id: 'hawksbill-gap', label: '💧 Water Clays', sol: 450 },
+                { id: 'belva-crater', label: '🌋 Belva Crater', sol: 780 },
+                { id: 'western-rim', label: '🛡 Western Rim Shelter', sol: 2022 },
+              ].map((chip) => (
+                <button
+                  key={chip.id}
+                  onClick={() => {
+                    setEndId(chip.id);
+                    setSelectedSol(chip.sol);
+                  }}
+                  className={`glove-btn whitespace-nowrap min-h-[34px] px-3 py-1 rounded-full text-xs font-medium border shadow-md cursor-pointer transition-all ${
+                    endId === chip.id
+                      ? 'bg-cyan-500 text-slate-950 border-cyan-300 font-bold shadow-cyan-500/25'
+                      : 'bg-slate-900/90 text-slate-300 border-slate-700/80 hover:bg-slate-800'
+                  }`}
+                >
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* 4. EXPANDABLE ROUTE OPTIONS MODAL (When Tapped) */}
+      {showRouteOptions && (
+        <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-lg rounded-2xl bg-slate-900/95 border-2 border-slate-700 p-4 shadow-2xl backdrop-blur-xl space-y-3.5">
+          <div className="flex items-center justify-between pb-2 border-b border-slate-800">
+            <span className="text-xs font-bold uppercase tracking-wider text-cyan-400 flex items-center gap-2">
+              <Sliders className="h-4 w-4" /> Trip Settings & Mobility
+            </span>
+            <button
+              onClick={() => setShowRouteOptions(false)}
+              className="p-1 rounded-lg text-slate-400 hover:text-white cursor-pointer"
+            >
+              <X className="h-5 w-5" />
+            </button>
           </div>
 
-          {activePOV && (
-            <div className="p-3.5 space-y-3">
-              <div className="overflow-hidden rounded-xl border border-slate-700 bg-slate-950">
-                <img
-                  src={activePOV.url}
-                  alt={activePOV.title}
-                  className="w-full h-48 object-cover"
-                  loading="lazy"
+          <div className="grid grid-cols-2 gap-2 text-xs">
+            <div>
+              <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1">Origin Point</label>
+              <select
+                value={startId}
+                onChange={(e) => setStartId(e.target.value)}
+                className="w-full min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-slate-100"
+              >
+                {sciencePOIs.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.isChargingStation ? '⚡ ' : ''}{p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1">Destination</label>
+              <select
+                value={endId}
+                onChange={(e) => {
+                  setEndId(e.target.value);
+                  const p = sciencePOIs.find((item) => item.id === e.target.value);
+                  if (p) setSelectedSol(p.sol);
+                }}
+                className="w-full min-h-[44px] rounded-xl bg-slate-950 border border-slate-700 px-3 py-2 text-xs text-slate-100"
+              >
+                {sciencePOIs.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.isChargingStation ? '⚡ ' : ''}{p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label className="block text-[10px] font-mono text-slate-400 uppercase mb-1.5">Astronaut Mobility Mode</label>
+            <div className="grid grid-cols-3 gap-1.5">
+              {Object.values(LOADOUT_PROFILES).map((prof) => (
+                <button
+                  key={prof.id}
+                  onClick={() => setLoadoutKey(prof.id)}
+                  className={`glove-btn min-h-[44px] px-2 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer ${
+                    loadoutKey === prof.id
+                      ? 'bg-cyan-500 text-slate-950 border-cyan-300 font-bold'
+                      : 'bg-slate-950 border-slate-800 text-slate-300'
+                  }`}
+                >
+                  {prof.id === 'light' ? 'Solo Suit' : prof.id === 'heavy' ? 'Heavy Kit' : 'Rover Mule'}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl bg-slate-950/80 border border-slate-800 p-3 space-y-2.5">
+            <div className="flex justify-between text-xs text-slate-300">
+              <span>Starting Battery</span>
+              <span className="font-mono font-bold text-cyan-300">{startBatteryPct}%</span>
+            </div>
+            <input
+              type="range"
+              min={15}
+              max={100}
+              value={startBatteryPct}
+              onChange={(e) => setStartBatteryPct(Number(e.target.value))}
+              className="glove-slider w-full"
+            />
+
+            <div className="flex justify-between text-xs text-slate-300 pt-1">
+              <span>Martian Departure Time</span>
+              <span className="font-mono font-bold text-amber-300">{formatLst(startLstMinutes)}</span>
+            </div>
+            <input
+              type="range"
+              min={360}
+              max={1140}
+              step={15}
+              value={startLstMinutes}
+              onChange={(e) => setStartLstMinutes(Number(e.target.value))}
+              className="glove-slider w-full"
+            />
+          </div>
+
+          <button
+            onClick={() => setShowRouteOptions(false)}
+            className="glove-btn w-full min-h-[46px] rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs uppercase tracking-wider cursor-pointer"
+          >
+            Apply Route Settings
+          </button>
+        </div>
+      )}
+
+      {/* 5. FLOATING ACTION BUTTONS (ANDROID GOOGLE MAPS FABs ON RIGHT) */}
+      <div className="absolute right-3.5 top-28 z-20 flex flex-col items-center gap-2.5">
+        {/* Compass / Heading Indicator */}
+        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900/90 border border-slate-700 shadow-xl backdrop-blur-md text-cyan-400 font-mono text-[11px] font-bold">
+          <Compass
+            className="h-6 w-6 transition-transform duration-300"
+            style={{ transform: `rotate(${liveNavState?.heading || 0}deg)` }}
+          />
+        </div>
+
+        {/* Recenter / Follow GPS FAB */}
+        <button
+          onClick={() => setFollowAstronaut((v) => !v)}
+          title="Recenter on Astronaut Location"
+          className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border shadow-xl backdrop-blur-md cursor-pointer transition-all ${
+            followAstronaut
+              ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-cyan-500/40'
+              : 'bg-slate-900/90 text-slate-300 border-slate-700 hover:bg-slate-800'
+          }`}
+        >
+          <Crosshair className="h-6 w-6" />
+        </button>
+
+        {/* Martian "Street View" POV Picture-in-Picture Toggle */}
+        <button
+          onClick={() => setShowStreetViewPIP((v) => !v)}
+          title="Martian Street View Ground Photo"
+          className={`glove-btn relative flex h-12 w-12 items-center justify-center rounded-2xl border shadow-xl backdrop-blur-md cursor-pointer transition-all ${
+            showStreetViewPIP
+              ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-amber-500/40'
+              : 'bg-slate-900/90 text-slate-300 border-slate-700 hover:bg-slate-800'
+          }`}
+        >
+          <Camera className="h-6 w-6" />
+          <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-emerald-400 border-2 border-slate-950 animate-pulse" />
+        </button>
+
+        {/* Storm Radar Alert FAB */}
+        <button
+          onClick={() => setIncomingDustAlert((v) => !v)}
+          title="Toggle Predictive Storm Radar"
+          className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border shadow-xl backdrop-blur-md cursor-pointer transition-all ${
+            incomingDustAlert || weatherKey === 'dust_storm'
+              ? 'bg-orange-500 text-slate-950 border-orange-300 animate-pulse shadow-orange-500/40'
+              : 'bg-slate-900/90 text-slate-300 border-slate-700 hover:bg-slate-800'
+          }`}
+        >
+          <Wind className="h-6 w-6" />
+        </button>
+
+        {/* Map Layers Switcher FAB */}
+        <button
+          onClick={() => setShowLayersSheet((v) => !v)}
+          title="Map Layers"
+          className="glove-btn flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900/90 border border-slate-700 text-slate-300 hover:bg-slate-800 shadow-xl backdrop-blur-md cursor-pointer"
+        >
+          <Layers className="h-6 w-6 text-orange-400" />
+        </button>
+      </div>
+
+      {/* 6. FLOATING MARTIAN "STREET VIEW" PICTURE-IN-PICTURE (PIP) CARD */}
+      {showStreetViewPIP && activePOV && (
+        <div className="absolute top-20 left-4 z-40 w-72 sm:w-80 overflow-hidden rounded-2xl bg-slate-950/95 border-2 border-slate-700 shadow-2xl backdrop-blur-xl transition-all">
+          <div className="flex items-center justify-between p-2.5 bg-slate-900/90 border-b border-slate-800">
+            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 uppercase font-mono">
+              <Camera className="h-4 w-4" /> Sol {activePOV.sol} POV
+            </span>
+            <button
+              onClick={() => setShowStreetViewPIP(false)}
+              className="p-1 rounded-md text-slate-400 hover:text-white cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <img
+            src={activePOV.url}
+            alt={activePOV.title}
+            className="w-full h-44 object-cover"
+            loading="lazy"
+          />
+          <div className="p-2.5 text-[11px] bg-slate-950 space-y-1">
+            <div className="font-semibold text-slate-200 line-clamp-1">{activePOV.title}</div>
+            <div className="text-[10px] font-mono text-cyan-400 uppercase">Camera: {activePOV.camera}</div>
+            <div className="text-[10px] text-slate-400">Ground landmark matching your GPS coordinates.</div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. FLOATING LAYERS SHEET (When FAB is Tapped) */}
+      {showLayersSheet && (
+        <div className="absolute right-16 top-52 z-40 w-64 rounded-2xl bg-slate-900/95 border-2 border-slate-700 p-3 shadow-2xl backdrop-blur-xl space-y-2">
+          <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 text-xs font-bold uppercase text-orange-400">
+            <span>Map Layers</span>
+            <button onClick={() => setShowLayersSheet(false)} className="text-slate-400 hover:text-white">
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+          <div className="space-y-1 text-xs">
+            {[
+              { key: 'slope', label: 'Slope Safety Heatmap' },
+              { key: 'hazards', label: 'Terrain Hazards (Sand/Cliffs)' },
+              { key: 'science', label: 'Bases & Science POIs' },
+              { key: 'traverse', label: 'Perseverance Rover Track' },
+            ].map((item) => (
+              <label
+                key={item.key}
+                className="flex items-center justify-between min-h-[38px] px-2 rounded-lg hover:bg-slate-800 cursor-pointer"
+              >
+                <span>{item.label}</span>
+                <input
+                  type="checkbox"
+                  checked={layers[item.key]}
+                  onChange={() => toggleLayer(item.key)}
+                  className="w-4 h-4 accent-orange-500"
                 />
-                <div className="p-2.5 bg-slate-950/90 border-t border-slate-800">
-                  <div className="text-[10px] font-mono text-cyan-400 uppercase">
-                    Camera: {activePOV.camera}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 8. BOTTOM GOOGLE MAPS NAVIGATION & TRIP BAR */}
+      <div className="absolute bottom-3 left-3 right-3 z-30 flex flex-col items-center">
+        <div className="w-full max-w-xl rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-xl overflow-hidden transition-all">
+          {navMode === 'navigating' ? (
+            /* ACTIVE NAVIGATION CONTROLS (Google Maps Android Drive Bar) */
+            <div className="p-3.5 space-y-3">
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-2xl font-black text-cyan-300 font-mono flex items-baseline gap-1.5">
+                    <span>{liveNavState?.estTimeRemainingMin}</span>
+                    <span className="text-xs font-sans font-bold text-slate-300">min</span>
                   </div>
-                  <div className="text-xs font-semibold text-slate-100 mt-0.5">
-                    {activePOV.title}
+                  <div className="text-xs text-slate-400 flex items-center gap-2">
+                    <span>{liveNavState?.distRemainingKm} km remaining</span>
+                    <span>•</span>
+                    <span className="text-emerald-400 font-bold">Sol {selectedMissionSol}</span>
+                  </div>
+                </div>
+
+                {/* Big Live Suit/Rover Battery & O2 Status Pills */}
+                <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5 rounded-xl bg-slate-950 px-3 py-1.5 border border-slate-800 text-xs font-mono font-bold">
+                    <Battery className={`h-4 w-4 ${liveNavState?.currentBattery < 25 ? 'text-red-400' : 'text-cyan-400'}`} />
+                    <span className={liveNavState?.currentBattery < 25 ? 'text-red-400' : 'text-cyan-300'}>
+                      {liveNavState?.currentBattery}%
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 rounded-xl bg-slate-950 px-3 py-1.5 border border-slate-800 text-xs font-mono font-bold">
+                    <Droplets className="h-4 w-4 text-emerald-400" />
+                    <span className="text-emerald-300">{liveNavState?.currentO2}%</span>
                   </div>
                 </div>
               </div>
 
-              {/* Live Astronaut Suit Biometrics Card */}
-              {liveNavState && (
-                <div className="rounded-xl bg-slate-950/80 border border-slate-800 p-3 text-xs space-y-2">
-                  <div className="flex items-center justify-between font-semibold text-slate-200">
-                    <span className="flex items-center gap-1.5">
-                      <Activity className="h-3.5 w-3.5 text-rose-400" />
-                      Suit Life Support
-                    </span>
-                    <span className="font-mono text-[11px] text-rose-300">
-                      {liveNavState.heartRateBpm} BPM
-                    </span>
+              {/* Big Glove-Friendly Android Action Buttons */}
+              <div className="grid grid-cols-4 gap-2 pt-1">
+                <button
+                  onClick={() => setNavPlaying((p) => !p)}
+                  className={`glove-btn col-span-2 min-h-[52px] rounded-xl text-slate-950 font-black text-sm uppercase flex items-center justify-center gap-2 cursor-pointer shadow-lg ${
+                    navPlaying ? 'bg-amber-400 hover:bg-amber-300' : 'bg-emerald-400 hover:bg-emerald-300'
+                  }`}
+                >
+                  {navPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                  <span>{navPlaying ? 'Pause Walk' : 'Resume Walk'}</span>
+                </button>
+
+                <button
+                  onClick={() => setNavSpeed((s) => (s === 1 ? 3 : 1))}
+                  className="glove-btn min-h-[52px] rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono font-bold text-xs border border-slate-700 flex flex-col items-center justify-center cursor-pointer"
+                >
+                  <span className="text-sm">{navSpeed}x</span>
+                  <span className="text-[9px] text-slate-400">Speed</span>
+                </button>
+
+                <button
+                  onClick={stopNavigation}
+                  className="glove-btn min-h-[52px] rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-200 font-bold text-xs flex flex-col items-center justify-center cursor-pointer"
+                >
+                  <X className="h-5 w-5 text-rose-400" />
+                  <span className="text-[10px]">Exit</span>
+                </button>
+              </div>
+
+              {/* Emergency Divert to Nearest Shelter Option */}
+              {(incomingDustAlert || weatherKey === 'dust_storm' || liveNavState?.currentBattery < 25) && (
+                <button
+                  onClick={triggerShelterDivert}
+                  className="glove-btn w-full min-h-[44px] rounded-xl bg-gradient-to-r from-red-600 to-amber-600 text-white font-extrabold text-xs uppercase flex items-center justify-center gap-2 shadow-lg cursor-pointer animate-pulse"
+                >
+                  <ShieldAlert className="h-4 w-4" />
+                  <span>Divert to {nearestShelter.station.name} ({nearestShelter.distKm} km)</span>
+                </button>
+              )}
+            </div>
+          ) : (
+            /* EXPLORE & ROUTE PLANNING TRIP SHEET */
+            <div className="p-3.5 space-y-3">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="text-base font-bold text-white line-clamp-1">{endPOI.name}</span>
+                    {endPOI.isChargingStation && (
+                      <span className="rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-bold">
+                        ⚡ Virtual Base
+                      </span>
+                    )}
                   </div>
-                  <div className="grid grid-cols-2 gap-2 text-[11px] font-mono">
-                    <div className="rounded bg-slate-900 p-2">
-                      <div className="text-[9px] text-slate-400">SUIT HEATER</div>
-                      <div className="text-orange-300 font-bold">{martianEnv.suitHeaterWatts} W</div>
+                  <div className="text-xs text-slate-400 mt-0.5 flex items-center gap-2">
+                    <span className="font-mono text-cyan-300 font-bold">{routeResult.distKm} km</span>
+                    <span>•</span>
+                    <span>{routeResult.durationMin} min walk</span>
+                    <span>•</span>
+                    <span>Elev {endPOI.elev}m</span>
+                  </div>
+                </div>
+
+                {/* Range Status Pill */}
+                <div className="shrink-0 text-right">
+                  {routeResult.rangeStatus === 'direct_clear' && (
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Can Reach
+                    </span>
+                  )}
+                  {routeResult.rangeStatus === 'recharged_ok' && (
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 text-[11px] font-bold text-amber-300">
+                      <Zap className="h-3.5 w-3.5" /> +15m Recharge
+                    </span>
+                  )}
+                  {routeResult.rangeStatus === 'out_of_range' && (
+                    <span className="inline-flex items-center gap-1 rounded-lg bg-red-500/15 border border-red-500/30 px-2.5 py-1 text-[11px] font-bold text-red-400">
+                      <AlertTriangle className="h-3.5 w-3.5" /> Low Reserve
+                    </span>
+                  )}
+                </div>
+              </div>
+
+              {/* Big Google Maps Emerald "START NAVIGATION" Button */}
+              <div className="flex items-center gap-2">
+                <button
+                  onClick={startNavigation}
+                  className="glove-btn flex-1 min-h-[56px] rounded-2xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 font-black text-base uppercase tracking-wider flex items-center justify-center gap-2.5 shadow-xl shadow-emerald-500/25 cursor-pointer"
+                >
+                  <Navigation className="h-6 w-6 fill-slate-950" />
+                  <span>Start Navigation</span>
+                </button>
+
+                <button
+                  onClick={() => setBottomSheetExpanded((v) => !v)}
+                  title="Expand Route Details"
+                  className="glove-btn flex h-[56px] w-[56px] items-center justify-center rounded-2xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 cursor-pointer shrink-0"
+                >
+                  {bottomSheetExpanded ? <ChevronDown className="h-6 w-6" /> : <ChevronUp className="h-6 w-6" />}
+                </button>
+              </div>
+
+              {/* Expandable Route Details & Step list */}
+              {bottomSheetExpanded && (
+                <div className="pt-2 border-t border-slate-800 space-y-2.5 text-xs max-h-48 overflow-y-auto pr-1">
+                  <div className="grid grid-cols-3 gap-2 text-center text-[11px] font-mono">
+                    <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                      <div className="text-[9px] text-slate-400">ARRIVAL BATTERY</div>
+                      <div className="font-bold text-cyan-300">{routeResult.finalArrivalBattery}%</div>
                     </div>
-                    <div className="rounded bg-slate-900 p-2">
-                      <div className="text-[9px] text-slate-400">DAYLIGHT LEFT</div>
-                      <div className="text-amber-300 font-bold">{martianEnv.daylightRemainingMin} min</div>
+                    <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                      <div className="text-[9px] text-slate-400">PEAK INCLINE</div>
+                      <div className="font-bold text-amber-300">{routeResult.maxSlopeAlongPath}°</div>
                     </div>
+                    <div className="p-2 rounded-xl bg-slate-950 border border-slate-800">
+                      <div className="text-[9px] text-slate-400">HAZARDS BYPASSED</div>
+                      <div className="font-bold text-emerald-300">{routeResult.hazardsAvoided} zones</div>
+                    </div>
+                  </div>
+
+                  <div className="space-y-1.5 pt-1">
+                    <div className="text-[10px] font-mono uppercase text-slate-400">Turn-by-Turn Preview</div>
+                    {routeResult.navigationSteps?.slice(0, 4).map((step, idx) => (
+                      <div key={step.id} className="p-2 rounded-lg bg-slate-950 border border-slate-800 text-[11px]">
+                        <span className="font-bold text-slate-200">{idx + 1}. {step.instruction}</span>
+                        {step.detail && <div className="text-[10px] text-slate-400">{step.detail}</div>}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )}
-
-              <div className="rounded-xl bg-slate-950/60 border border-slate-800 p-3 text-xs space-y-2">
-                <div className="flex items-center gap-1.5 text-amber-300 font-semibold">
-                  <MapPin className="h-3.5 w-3.5" />
-                  <span>Destination: {endPOI.name}</span>
-                </div>
-                <div className="text-[11px] text-slate-300 leading-relaxed">
-                  {endPOI.description}
-                </div>
-                <div className="pt-1 flex items-center gap-1.5 text-[11px] text-emerald-400 font-mono">
-                  <Droplets className="h-3.5 w-3.5" />
-                  <span>Minerals: {endPOI.minerals}</span>
-                </div>
-              </div>
-
-              {/* Comms Relay Card */}
-              <div className="rounded-xl bg-slate-950/60 border border-slate-800 p-3 text-xs space-y-1.5">
-                <div className="flex items-center justify-between">
-                  <span className="flex items-center gap-1.5 font-semibold text-slate-200">
-                    <Radio className="h-3.5 w-3.5 text-cyan-400" />
-                    Orbital Relay Window
-                  </span>
-                  <span className="text-[10px] font-mono text-emerald-400">LOCKED</span>
-                </div>
-                <div className="text-[11px] text-slate-400">
-                  MRO UHF Pass: <span className="text-slate-200 font-mono">Active (14m rem)</span>
-                </div>
-                <div className="text-[11px] text-slate-400">
-                  Earth One-Way Light Time: <span className="text-slate-200 font-mono">12m 18s</span>
-                </div>
-              </div>
             </div>
           )}
-        </aside>
+        </div>
       </div>
     </div>
   );

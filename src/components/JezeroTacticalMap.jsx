@@ -28,14 +28,15 @@ export default function JezeroTacticalMap({
     if (!mapContainerRef.current || mapInstanceRef.current) return;
 
     const map = L.map(mapContainerRef.current, {
-      center: [18.458, 77.385],
+      center: [18.455, 77.39],
       zoom: 12,
       minZoom: 4,
       maxZoom: 16,
       zoomControl: false,
     });
 
-    L.control.zoom({ position: 'topright' }).addTo(map);
+    // Custom positioned Zoom Control on the right
+    L.control.zoom({ position: 'bottomright' }).addTo(map);
 
     const opmBasemap = L.tileLayer(
       'https://cartocdn-gusc.global.ssl.fastly.net/opmbuilder/api/v1/map/named/opm-mars-basemap-v0-2/all/{z}/{x}/{y}.png',
@@ -198,21 +199,21 @@ export default function JezeroTacticalMap({
       }
 
       const ringStyle = isStart
-        ? 'box-shadow: 0 0 0 3px #22d3ee, 0 0 14px #22d3ee;'
+        ? 'box-shadow: 0 0 0 3px #22d3ee, 0 0 16px #22d3ee;'
         : isEnd
-        ? 'box-shadow: 0 0 0 3px #34d399, 0 0 14px #34d399;'
+        ? 'box-shadow: 0 0 0 3px #34d399, 0 0 16px #34d399;'
         : isActivePitStop
-        ? 'box-shadow: 0 0 0 3px #facc15, 0 0 16px #facc15;'
+        ? 'box-shadow: 0 0 0 3px #facc15, 0 0 18px #facc15;'
         : isStation
-        ? 'box-shadow: 0 0 10px rgba(34, 197, 94, 0.55);'
+        ? 'box-shadow: 0 0 12px rgba(34, 197, 94, 0.6);'
         : 'box-shadow: 0 2px 6px rgba(0,0,0,0.6);';
 
       const badgeHtml = isActivePitStop
         ? `<div style="
-            position:absolute; top:-22px; left:50%; transform:translateX(-50%);
+            position:absolute; top:-24px; left:50%; transform:translateX(-50%);
             white-space:nowrap; background:#facc15; color:#020617;
-            font-size:9px; font-weight:800; padding:1px 6px; border-radius:999px;
-            box-shadow:0 2px 6px rgba(0,0,0,0.7);
+            font-size:10px; font-weight:800; padding:2px 8px; border-radius:999px;
+            box-shadow:0 3px 8px rgba(0,0,0,0.7);
           ">⚡ PIT STOP: RECHARGE 100%</div>`
         : '';
 
@@ -221,22 +222,22 @@ export default function JezeroTacticalMap({
         html: `<div style="position:relative;">
           ${badgeHtml}
           <div style="
-            width: ${isStation ? 30 : 27}px; height: ${isStation ? 30 : 27}px; border-radius: 50%;
+            width: ${isStation ? 32 : 28}px; height: ${isStation ? 32 : 28}px; border-radius: 50%;
             background: ${bgColor}; color: #020617;
             display: flex; align-items: center; justify-content: center;
-            font-weight: 800; font-size: 14px; border: 2px solid #f8fafc;
+            font-weight: 800; font-size: 14px; border: 2.5px solid #ffffff;
             ${ringStyle}
           ">${iconChar}</div>
         </div>`,
-        iconSize: [30, 30],
-        iconAnchor: [15, 15],
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
       });
 
       const marker = L.marker([poi.lat, poi.lon], { icon: customIcon });
       marker.bindPopup(`
         <div style="font-size:12px; max-width:250px;">
           <div style="font-weight:700; color:${bgColor}; text-transform:uppercase; font-size:10px;">
-            ${isStation ? `⚡ Virtual Charging & O2 Base (${poi.powerOutputKw || 25} kW)` : poi.type === 'isru' ? 'ISRU Resource Target' : 'Science Target'}
+            ${isStation ? `⚡ Virtual Charging Base (${poi.powerOutputKw || 25} kW)` : poi.type === 'isru' ? 'ISRU Resource Target' : 'Science Target'}
           </div>
           <div style="font-weight:700; font-size:13px; margin:2px 0 4px;">${poi.name}</div>
           <div><b>Elevation:</b> ${poi.elev} m | <b>Sol:</b> ${poi.sol}</div>
@@ -277,7 +278,7 @@ export default function JezeroTacticalMap({
     if (routeResult.chargingStop && routeResult.leg1Coords && routeResult.leg2Coords) {
       L.polyline(routeResult.leg1Coords, {
         color: '#38bdf8',
-        weight: 4.5,
+        weight: 5,
         opacity: 0.95,
         lineJoin: 'round',
       })
@@ -289,7 +290,7 @@ export default function JezeroTacticalMap({
 
       L.polyline(routeResult.leg2Coords, {
         color: '#34d399',
-        weight: 4.5,
+        weight: 5.5,
         opacity: 0.95,
         lineJoin: 'round',
       })
@@ -308,7 +309,7 @@ export default function JezeroTacticalMap({
 
       L.polyline(routeResult.pathCoords, {
         color: routeColor,
-        weight: 4.5,
+        weight: 5,
         opacity: 0.95,
         lineJoin: 'round',
       })
@@ -361,7 +362,7 @@ export default function JezeroTacticalMap({
     L.marker([lat, lon], { icon: stormBadge, interactive: false }).addTo(dustFront);
   }, [dustFrontState]);
 
-  // Smooth Live Astronaut/Rover GPS Marker & Follow-Me Camera Lock
+  // Google Maps Android-Style Live Astronaut Navigation Arrow & Directional Beam Cone
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -374,43 +375,56 @@ export default function JezeroTacticalMap({
       return;
     }
 
-    const { currentLatLon, currentBattery, isRecharging, active } = liveNavState;
-    const batColor = isRecharging
-      ? '#4ade80'
+    const { currentLatLon, heading = 0, currentBattery = 85, isRecharging, active } = liveNavState;
+    const arrowColor = isRecharging
+      ? '#22c55e'
       : currentBattery < 20
       ? '#ef4444'
-      : currentBattery < 45
-      ? '#f59e0b'
-      : '#22d3ee';
+      : '#0284c7'; // Google Maps blue navigation arrow!
+
+    const pillBg = isRecharging
+      ? 'background: #15803d; color: #f0fdf4;'
+      : currentBattery < 20
+      ? 'background: #b91c1c; color: #fef2f2;'
+      : 'background: rgba(15, 23, 42, 0.92); color: #38bdf8;';
 
     const puckHtml = `
-      <div style="position:relative; display:flex; flex-direction:column; align-items:center;">
+      <div class="google-maps-astronaut-puck">
+        <!-- Floating Status Pill above Navigation Arrow -->
         <div style="
-          position:absolute; top:-26px; white-space:nowrap;
-          background:rgba(2,6,23,0.92); color:${batColor};
-          border:1.5px solid ${batColor}; font-family:monospace;
-          font-size:11px; font-weight:700; padding:2px 7px; border-radius:6px;
-          box-shadow:0 2px 8px rgba(0,0,0,0.85);
-        ">${isRecharging ? '⚡ CHARGING 100%' : `👨‍🚀 ${Math.round(currentBattery)}%`}</div>
-        <div style="
-          width:20px; height:20px; border-radius:50%;
-          background:${batColor}; border:3px solid #ffffff;
-          box-shadow:0 0 18px ${batColor}, 0 0 4px #000;
-        "></div>
+          position: absolute; top: -30px; left: 50%; transform: translateX(-50%);
+          white-space: nowrap; ${pillBg}
+          border: 1px solid rgba(255, 255, 255, 0.25); font-family: monospace;
+          font-size: 10px; font-weight: 700; padding: 2px 7px; border-radius: 999px;
+          box-shadow: 0 3px 10px rgba(0, 0, 0, 0.85); z-index: 10;
+        ">${isRecharging ? '⚡ CHARGING 100%' : `🔋 ${Math.round(currentBattery)}%`}</div>
+
+        <!-- Pulse Ring -->
+        <div class="nav-pulse-ring"></div>
+
+        <!-- Directional Beam Light Cone (radiates toward heading) -->
+        <div class="nav-heading-beam" style="transform: translateX(-50%) rotate(${heading}deg); transform-origin: bottom center;"></div>
+
+        <!-- Google Maps 3D Navigation Chevron Arrow (Rotated to exact Heading Azimuth) -->
+        <div style="transform: rotate(${heading}deg); transform-origin: center center; display: flex; align-items: center; justify-content: center;">
+          <svg viewBox="0 0 24 24" class="nav-chevron-arrow">
+            <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" fill="${arrowColor}" stroke="#ffffff" stroke-width="2.2" stroke-linejoin="round"/>
+          </svg>
+        </div>
       </div>
     `;
 
     const icon = L.divIcon({
-      className: 'live-astronaut-puck',
+      className: 'google-maps-nav-icon',
       html: puckHtml,
-      iconSize: [20, 20],
-      iconAnchor: [10, 10],
+      iconSize: [48, 48],
+      iconAnchor: [24, 24],
     });
 
     if (!liveMarkerRef.current) {
       liveMarkerRef.current = L.marker(currentLatLon, {
         icon,
-        zIndexOffset: 1000,
+        zIndexOffset: 1200,
       }).addTo(map);
     } else {
       liveMarkerRef.current.setLatLng(currentLatLon);
@@ -418,7 +432,7 @@ export default function JezeroTacticalMap({
     }
 
     if (followAstronaut && active) {
-      map.panTo(currentLatLon, { animate: true, duration: 0.25 });
+      map.panTo(currentLatLon, { animate: true, duration: 0.35 });
     }
   }, [liveNavState, followAstronaut]);
 
