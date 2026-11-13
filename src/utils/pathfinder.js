@@ -246,8 +246,11 @@ function getCellHazardPenalty(
 }
 
 /**
- * Runs A* search for a single leg from `start` to `end`
+ * Runs A* search for a single leg from `start` to `end` (with LRU memoization)
  */
+const legCache = new Map();
+const MAX_LEG_CACHE_SIZE = 120;
+
 export function computeSingleLeg({
   start,
   end,
@@ -257,6 +260,19 @@ export function computeSingleLeg({
   weather,
   customExclusionZones = [],
 }) {
+  if (!start || !end) return null;
+
+  const startKey = `${Number(start.lat).toFixed(4)},${Number(start.lon).toFixed(4)}`;
+  const endKey = `${Number(end.lat).toFixed(4)},${Number(end.lon).toFixed(4)}`;
+  const lKey = loadout?.id || loadout?.name || 'def';
+  const wKey = weather?.id || weather?.name || 'def';
+  const zKey = customExclusionZones?.map((z) => `${z.id || ''}:${z.coords?.length || 0}`).join(';') || '';
+  const cacheKey = `${startKey}->${endKey}__${lKey}__${wKey}__${zKey}`;
+
+  if (legCache.has(cacheKey)) {
+    return legCache.get(cacheKey);
+  }
+
   const bounds = computeDynamicBounds(start, end);
   const startCell = latLonToGrid(start.lat, start.lon, bounds);
   const endCell = latLonToGrid(end.lat, end.lon, bounds);
@@ -438,7 +454,7 @@ export function computeSingleLeg({
 
   const radiationDoseMgy = Number((durationHours * weather.radRateMgyHr).toFixed(3));
 
-  return {
+  const result = {
     pathCoords,
     elevProfile,
     minElevationM: Number(minElevationM.toFixed(1)),
@@ -456,6 +472,14 @@ export function computeSingleLeg({
     bypassedHazardNames,
     radiationDoseMgy,
   };
+
+  if (legCache.size >= MAX_LEG_CACHE_SIZE) {
+    const oldestKey = legCache.keys().next().value;
+    legCache.delete(oldestKey);
+  }
+  legCache.set(cacheKey, result);
+
+  return result;
 }
 
 function buildNavigationSteps({ start, end, leg1, leg2, chargingStation }) {

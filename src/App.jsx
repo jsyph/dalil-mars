@@ -80,6 +80,12 @@ function normalizeKey(value) {
     .replace(/[^a-z0-9]/g, '');
 }
 
+function getGaugeGradient(val, min = 15, max = 100, isAlert = false) {
+  const pct = Math.max(0, Math.min(100, ((val - min) / (max - min)) * 100));
+  const fillColor = isAlert ? '#ef4444' : '#22c55e';
+  return `linear-gradient(to right, ${fillColor} 0%, ${fillColor} ${pct}%, #0b0d11 ${pct}%, #0b0d11 100%)`;
+}
+
 const BASEMAP_OPTIONS = [
   { id: 'satellite', label: 'CTX SATELLITE', short: 'SAT', desc: 'NASA CTX 6m/px Orbital Imagery' },
   { id: 'terrain', label: 'HRSC TERRAIN', short: 'TER', desc: 'ESA HRSC Shaded Topographic Relief' },
@@ -2567,7 +2573,10 @@ export default function App() {
                       max={100}
                       value={startBatteryPct}
                       onChange={(e) => setStartBatteryPct(Number(e.target.value))}
-                      className="glove-slider w-full"
+                      style={{
+                        background: getGaugeGradient(startBatteryPct, 15, 100, startBatteryPct < 25),
+                      }}
+                      className="fill-gauge-slider w-full"
                     />
 
                     <div className="flex justify-between text-xs font-mono text-[#9da5b4] pt-1">
@@ -2582,7 +2591,10 @@ export default function App() {
                       max={100}
                       value={startO2Pct}
                       onChange={(e) => setStartO2Pct(Number(e.target.value))}
-                      className="glove-slider w-full"
+                      style={{
+                        background: getGaugeGradient(startO2Pct, 15, 100, startO2Pct < 25),
+                      }}
+                      className="fill-gauge-slider w-full"
                     />
 
                     <div className="flex justify-between text-xs font-mono text-[#9da5b4] pt-1">
@@ -3344,7 +3356,7 @@ export default function App() {
                         ))}
                       </div>
 
-                      {/* Prominent Battery & PLSS O2 Tank Simulation Sliders */}
+                      {/* Prominent Battery & PLSS O2 Tank Simulation Sliders (Aerospace Fill Gauges) */}
                       <div className="grid grid-cols-2 gap-2.5 bg-[#191d24] p-2.5 rounded-[4px] border border-[#242933]">
                         <div>
                           <div className="flex items-center justify-between text-[11px] font-mono text-[#9da5b4] mb-1.5">
@@ -3358,19 +3370,32 @@ export default function App() {
                               </span>
                             </span>
                           </div>
-                          <input
-                            type="range"
-                            min="15"
-                            max="100"
-                            step="1"
-                            value={startBatteryPct}
-                            onChange={(e) => setStartBatteryPct(Number(e.target.value))}
-                            className="glove-slider w-full"
-                            aria-label="Starting Battery Percentage"
-                          />
+                          <div className="relative flex items-center">
+                            <input
+                              type="range"
+                              min="15"
+                              max="100"
+                              step="1"
+                              value={startBatteryPct}
+                              onChange={(e) => setStartBatteryPct(Number(e.target.value))}
+                              style={{
+                                background: getGaugeGradient(startBatteryPct, 15, 100, startBatteryPct < 25),
+                              }}
+                              className="fill-gauge-slider"
+                              aria-label="Starting Battery Percentage"
+                            />
+                            {/* Tactical calibration ticks */}
+                            <div className="absolute inset-y-0 left-2 right-2 pointer-events-none flex justify-between items-center opacity-25">
+                              <span className="w-px h-2 bg-[#edf0f5]" />
+                              <span className="w-px h-1.5 bg-[#edf0f5]" />
+                              <span className="w-px h-2.5 bg-[#edf0f5]" />
+                              <span className="w-px h-1.5 bg-[#edf0f5]" />
+                              <span className="w-px h-2 bg-[#edf0f5]" />
+                            </div>
+                          </div>
                           <div className="flex justify-between items-center text-[9px] font-mono text-[#656d7d] mt-1">
                             <span>15%</span>
-                            <span className="text-[#9da5b4]">SIMULATOR</span>
+                            <span className="text-[#9da5b4]">FILL GAUGE</span>
                             <span>100%</span>
                           </div>
                         </div>
@@ -3387,19 +3412,32 @@ export default function App() {
                               </span>
                             </span>
                           </div>
-                          <input
-                            type="range"
-                            min="15"
-                            max="100"
-                            step="1"
-                            value={startO2Pct}
-                            onChange={(e) => setStartO2Pct(Number(e.target.value))}
-                            className="glove-slider w-full"
-                            aria-label="Starting PLSS Oxygen Percentage"
-                          />
+                          <div className="relative flex items-center">
+                            <input
+                              type="range"
+                              min="15"
+                              max="100"
+                              step="1"
+                              value={startO2Pct}
+                              onChange={(e) => setStartO2Pct(Number(e.target.value))}
+                              style={{
+                                background: getGaugeGradient(startO2Pct, 15, 100, startO2Pct < 25),
+                              }}
+                              className="fill-gauge-slider"
+                              aria-label="Starting PLSS Oxygen Percentage"
+                            />
+                            {/* Tactical calibration ticks */}
+                            <div className="absolute inset-y-0 left-2 right-2 pointer-events-none flex justify-between items-center opacity-25">
+                              <span className="w-px h-2 bg-[#edf0f5]" />
+                              <span className="w-px h-1.5 bg-[#edf0f5]" />
+                              <span className="w-px h-2.5 bg-[#edf0f5]" />
+                              <span className="w-px h-1.5 bg-[#edf0f5]" />
+                              <span className="w-px h-2 bg-[#edf0f5]" />
+                            </div>
+                          </div>
                           <div className="flex justify-between items-center text-[9px] font-mono text-[#656d7d] mt-1">
                             <span>15%</span>
-                            <span className="text-[#9da5b4]">SIMULATOR</span>
+                            <span className="text-[#9da5b4]">FILL GAUGE</span>
                             <span>100%</span>
                           </div>
                         </div>
