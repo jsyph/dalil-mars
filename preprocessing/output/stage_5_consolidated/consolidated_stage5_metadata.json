@@ -1,0 +1,9 @@
+{
+  "stage": 5,
+  "description": "Consolidated Mission Waypoints Registry & Grid Snapping Module",
+  "total_waypoints": 7,
+  "base_camp_id": "WP-00",
+  "science_stations_count": 5,
+  "landmarks_count": 1,
+  "all_points_safe": false
+}

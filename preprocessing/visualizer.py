@@ -10,6 +10,7 @@ import sys
 import glob
 import json
 import time
+import math
 import struct
 import argparse
 import http.server
@@ -40,9 +41,13 @@ class StageDataManager:
             if not os.path.isdir(stage_path):
                 continue
 
+            clean_name = entry.replace("_", " ").title()
+            if "Consolidated" in clean_name:
+                clean_name = clean_name.replace("Consolidated", "(Consolidated)").strip()
+
             stage_info = {
                 "id": entry,
-                "name": entry.replace("_", " ").title(),
+                "name": clean_name,
                 "path": stage_path,
                 "has_elevation": False,
                 "has_costmap": False,
@@ -82,7 +87,7 @@ class StageDataManager:
         return stages
 
     def _find_elevation_file(self, stage_id: str) -> str:
-        """Finds elevation matrix in stage directory or falls back to stage_1."""
+        """Finds elevation matrix in stage directory or falls back to stage_1 / stage_1_consolidated."""
         stage_dir = os.path.join(self.output_dir, stage_id)
         if os.path.exists(stage_dir):
             for f in sorted(os.listdir(stage_dir)):
@@ -93,33 +98,72 @@ class StageDataManager:
                         continue
                     if any(k in fl for k in ["elevation", "dtm", "height"]):
                         return os.path.join(stage_dir, f)
-        # Fallback to stage_1 base elevation
-        fallback = os.path.join(self.output_dir, "stage_1", "base_elevation_matrix.npy")
-        if os.path.exists(fallback):
-            return fallback
+
+        # Fallback to stage 1 (consolidated or standard)
+        for s1_cand in ["stage_1_consolidated", "stage_1"]:
+            s1_dir = os.path.join(self.output_dir, s1_cand)
+            if os.path.exists(s1_dir):
+                for f in sorted(os.listdir(s1_dir)):
+                    fl = f.lower()
+                    if fl.endswith(".npy") and any(k in fl for k in ["elevation", "dtm", "height"]):
+                        if not any(bad in fl for bad in ["cost", "hazard", "slope", "barrier", "master", "grid"]):
+                            return os.path.join(s1_dir, f)
+
+        # Search any stage directory for elevation .npy
+        for root, _, files in os.walk(self.output_dir):
+            for f in sorted(files):
+                fl = f.lower()
+                if fl.endswith(".npy") and any(k in fl for k in ["elevation", "dtm"]):
+                    if not any(bad in fl for bad in ["cost", "hazard", "slope", "barrier", "master", "grid"]):
+                        return os.path.join(root, f)
+
         return ""
 
     def _find_cost_file(self, stage_id: str) -> str:
         """Finds cost, hazard, barrier, or preprocessed master grid file."""
-        stage_dir = os.path.join(self.output_dir, stage_id)
-        if not os.path.exists(stage_dir):
+        if "stage_1" in stage_id.lower():
             return ""
-        # 1. Search priority patterns
-        patterns = ["*master*.npy", "*hazard*.npy", "*barrier*.npy", "*cost*.npy", "*mask*.npy", "*grid*.npy"]
-        for pat in patterns:
-            matches = glob.glob(os.path.join(stage_dir, pat))
-            if matches:
-                return matches[0]
-        # 2. Any .npy in directory that is not elevation and not slope
-        for f in sorted(os.listdir(stage_dir)):
-            fl = f.lower()
-            if fl.endswith(".npy") and not any(k in fl for k in ["elevation", "dtm", "height", "slope", "angle"]):
-                return os.path.join(stage_dir, f)
+        stage_dir = os.path.join(self.output_dir, stage_id)
+        if os.path.exists(stage_dir):
+            # 1. Search priority patterns in stage dir
+            patterns = [
+                "*master*.npy",
+                "*hazard*cost*.npy",
+                "*slope*cost*.npy",
+                "*barrier*.npy",
+                "*hazard*.npy",
+                "*cost*.npy",
+                "*mask*.npy",
+                "*grid*.npy"
+            ]
+            for pat in patterns:
+                matches = glob.glob(os.path.join(stage_dir, pat))
+                if matches:
+                    return matches[0]
+            # 2. Any .npy in directory that is not elevation and not slope
+            for f in sorted(os.listdir(stage_dir)):
+                fl = f.lower()
+                if fl.endswith(".npy") and not any(k in fl for k in ["elevation", "dtm", "height", "slope", "angle"]):
+                    return os.path.join(stage_dir, f)
+
+        # 3. Fallback to preceding stage's master grid (e.g. stage 5 uses stage 4 master grid)
+        for prev in [
+            "stage_4_consolidated", "stage_4",
+            "stage_3_consolidated", "stage_3",
+            "stage_2_consolidated", "stage_2"
+        ]:
+            prev_dir = os.path.join(self.output_dir, prev)
+            if os.path.exists(prev_dir):
+                patterns = ["*master*.npy", "*hazard*.npy", "*barrier*.npy", "*cost*.npy", "*mask*.npy", "*grid*.npy"]
+                for pat in patterns:
+                    matches = glob.glob(os.path.join(prev_dir, pat))
+                    if matches:
+                        return matches[0]
         return ""
 
     def _find_slope_file(self, stage_id: str) -> str:
         # Stage 1 is pure unconstrained baseline elevation with zero obstacles
-        if stage_id == "stage_1":
+        if "stage_1" in stage_id.lower():
             return ""
         stage_dir = os.path.join(self.output_dir, stage_id)
         if os.path.exists(stage_dir):
@@ -130,32 +174,41 @@ class StageDataManager:
                         continue
                     if any(k in fl for k in ["slope", "angle", "deg"]):
                         return os.path.join(stage_dir, f)
+
         # Fallback to stage_2 slope angles if available
-        fallback = os.path.join(self.output_dir, "stage_2", "slope_angles_deg.npy")
-        if os.path.exists(fallback):
-            return fallback
+        for s2_cand in ["stage_2_consolidated", "stage_2"]:
+            s2_dir = os.path.join(self.output_dir, s2_cand)
+            if os.path.exists(s2_dir):
+                for f in sorted(os.listdir(s2_dir)):
+                    fl = f.lower()
+                    if fl.endswith(".npy") and any(k in fl for k in ["slope", "angle", "deg"]):
+                        if not any(bad in fl for bad in ["cost", "hazard", "barrier", "master", "grid"]):
+                            return os.path.join(s2_dir, f)
         return ""
 
     def load_stage_arrays(self, stage_id: str):
-        """Loads and returns (elevation_matrix, cost_matrix, slope_matrix)."""
-        cache_key = stage_id
-        if cache_key in self._cache:
-            return self._cache[cache_key]
-
+        """Loads and returns (elevation_matrix, cost_matrix, slope_matrix) with mtime auto-invalidation."""
         elev_path = self._find_elevation_file(stage_id)
         if not elev_path or not os.path.exists(elev_path):
             raise FileNotFoundError(f"No elevation data found for stage '{stage_id}'")
 
-        elev = np.load(elev_path, mmap_mode="r").astype(np.float32)
-
-        # Cost map
         cost_path = self._find_cost_file(stage_id)
-        cost = np.load(cost_path, mmap_mode="r").astype(np.float32) if (cost_path and os.path.exists(cost_path)) else None
-
-        # Slopes
         slope_path = self._find_slope_file(stage_id)
+
+        elev_mtime = os.path.getmtime(elev_path)
+        cost_mtime = os.path.getmtime(cost_path) if (cost_path and os.path.exists(cost_path)) else 0
+        slope_mtime = os.path.getmtime(slope_path) if (slope_path and os.path.exists(slope_path)) else 0
+
+        cache_key = (stage_id, elev_mtime, cost_mtime, slope_mtime)
+        if cache_key in self._cache:
+            return self._cache[cache_key]
+
+        elev = np.load(elev_path, mmap_mode="r").astype(np.float32)
+        cost = np.load(cost_path, mmap_mode="r").astype(np.float32) if (cost_path and os.path.exists(cost_path)) else None
         slope = np.load(slope_path, mmap_mode="r").astype(np.float32) if (slope_path and os.path.exists(slope_path)) else None
 
+        # Clean old keys for this stage
+        self._cache = {k: v for k, v in self._cache.items() if k[0] != stage_id}
         self._cache[cache_key] = (elev, cost, slope)
         return elev, cost, slope
 
@@ -321,18 +374,122 @@ class StageDataManager:
 
         return header + payload
 
+    @staticmethod
+    def _latlon_to_grid(lat, lon):
+        """Projects Martian geographic lat/lon to Jezero 6560x2951 grid (col, row)."""
+        try:
+            R = 3396190.0
+            x_orig = -6117387.581178606
+            y_orig = 1145171.1668435
+            pix = 20.203946064176
+            x_proj = R * (float(lon) - 180.0) * (math.pi / 180.0)
+            y_proj = R * float(lat) * (math.pi / 180.0)
+            col = (x_proj - x_orig) / pix
+            row = (y_orig - y_proj) / pix
+            if 0 <= col < 2951 and 0 <= row < 6560:
+                return round(col, 1), round(row, 1)
+        except Exception:
+            pass
+        return None
+
     def get_stage_landmarks(self, stage_id: str):
-        """Discovers landmarks from files in output/ and extracts key landmark nodes from stage matrices."""
+        """Discovers landmarks and waypoints from files in output/ and extracts key landmark nodes from stage matrices."""
         landmarks = []
+        seen_ids = set()
         stage_dir = os.path.join(self.output_dir, stage_id)
 
-        # 1. Check for any explicit landmark/waypoint/poi JSON or GeoJSON inside output/
+        # 1. Authoritative Stage 5 Waypoint Registry Check (Priority)
+        reg_file = None
+        for pat in ["*waypoints_registry*.json", "*waypoints*.json", "*registry*.json"]:
+            m = glob.glob(os.path.join(stage_dir, pat))
+            if m:
+                reg_file = m[0]
+                break
+
+        if not reg_file:
+            for s5_cand in ["stage_5_consolidated", "stage_5"]:
+                s5_dir = os.path.join(self.output_dir, s5_cand)
+                if os.path.exists(s5_dir):
+                    for pat in ["*waypoints_registry*.json", "*waypoints*.json"]:
+                        m = glob.glob(os.path.join(s5_dir, pat))
+                        if m:
+                            reg_file = m[0]
+                            break
+                if reg_file:
+                    break
+
+        if not reg_file:
+            for root, _, files in os.walk(self.output_dir):
+                for f in files:
+                    if "waypoints_registry" in f.lower() and f.endswith(".json"):
+                        reg_file = os.path.join(root, f)
+                        break
+                if reg_file:
+                    break
+
+        # Load elevation array for accurate waypoint terrain snapping
+        elev_arr = None
+        try:
+            elev_arr, _, _ = self.load_stage_arrays(stage_id)
+        except Exception:
+            pass
+
+        if reg_file and os.path.exists(reg_file):
+            try:
+                with open(reg_file, "r") as jf:
+                    wps = json.load(jf)
+                    if isinstance(wps, list):
+                        for item in wps:
+                            wid = item.get("waypoint_id") or item.get("id")
+                            gp = item.get("grid_position", {})
+                            col = float(gp.get("col", 0))
+                            row = float(gp.get("row", 0))
+
+                            lat = item.get("lat")
+                            lon = item.get("lon")
+                            if lat is not None and lon is not None:
+                                proj_coords = self._latlon_to_grid(lat, lon)
+                                if proj_coords:
+                                    col, row = proj_coords
+
+                            # Sample actual ground elevation from elevation matrix
+                            z_val = float(item.get("elevation_m", -2500.0))
+                            if elev_arr is not None:
+                                r_idx = max(0, min(elev_arr.shape[0] - 1, int(round(row))))
+                                c_idx = max(0, min(elev_arr.shape[1] - 1, int(round(col))))
+                                cell_z = float(elev_arr[r_idx, c_idx])
+                                if not np.isnan(cell_z):
+                                    z_val = round(cell_z, 1)
+
+                            landmarks.append({
+                                "id": wid,
+                                "waypoint_id": wid,
+                                "name": item.get("name"),
+                                "type": item.get("type", "science_station"),
+                                "priority": item.get("priority", "HIGH"),
+                                "geologic_unit": item.get("geologic_unit", ""),
+                                "col": col,
+                                "row": row,
+                                "z": z_val,
+                                "description": item.get("description", ""),
+                                "cost": float(item.get("cell_traversal_cost", 1.0)),
+                                "is_waypoint": True
+                            })
+                            if wid:
+                                seen_ids.add(wid)
+            except Exception as e:
+                print(f"Error loading waypoints registry {reg_file}: {e}")
+
+        # 2. Check for other explicit landmark/waypoint/poi JSON or GeoJSON inside output/
         search_dirs = [stage_dir, self.output_dir]
         for sdir in search_dirs:
             if not os.path.exists(sdir):
                 continue
             for f in sorted(os.listdir(sdir)):
                 fl = f.lower()
+                # Skip waypoints_registry and jezero_waypoints if registry already loaded
+                if "waypoints_registry" in fl or ("jezero_waypoints" in fl and len(seen_ids) > 0):
+                    continue
                 if (any(k in fl for k in ["landmark", "waypoint", "poi", "nomenclature"]) and fl.endswith((".json", ".geojson"))) or (fl.endswith(".geojson") and "elevation" not in fl):
                     fp = os.path.join(sdir, f)
                     try:
@@ -343,61 +500,76 @@ class StageDataManager:
                                     props = feat.get("properties", {})
                                     geom = feat.get("geometry", {})
                                     coords = geom.get("coordinates", [])
-                                    if coords and len(coords) >= 2:
-                                        landmarks.append({
-                                            "id": f"geo_{i}",
-                                            "name": props.get("name") or props.get("title") or f"Waypoint {i+1}",
-                                            "type": props.get("class") or "waypoint",
-                                            "col": float(coords[0]),
-                                            "row": float(coords[1]),
-                                            "z": float(coords[2]) if len(coords) > 2 else None,
-                                            "description": props.get("desc") or props.get("description") or ""
-                                        })
-                            elif isinstance(content, list):
-                                for i, item in enumerate(content):
+                                    wid = props.get("waypoint_id") or f"geo_{i}"
+                                    if wid in seen_ids:
+                                        continue
+                                    col = float(props.get("grid_col") if "grid_col" in props else 0)
+                                    row = float(props.get("grid_row") if "grid_row" in props else 0)
+                                    if len(coords) >= 2:
+                                        proj_coords = self._latlon_to_grid(coords[1], coords[0])
+                                        if proj_coords:
+                                            col, row = proj_coords
+                                    z_val = None
+                                    if elev_arr is not None:
+                                        r_idx = max(0, min(elev_arr.shape[0] - 1, int(round(row))))
+                                        c_idx = max(0, min(elev_arr.shape[1] - 1, int(round(col))))
+                                        cell_z = float(elev_arr[r_idx, c_idx])
+                                        if not np.isnan(cell_z):
+                                            z_val = round(cell_z, 1)
+                                    if z_val is None:
+                                        z_val = float(props.get("elevation_m", -2500.0))
                                     landmarks.append({
-                                        "id": f"item_{i}",
-                                        "name": item.get("name") or f"Landmark {i+1}",
-                                        "type": item.get("type") or "waypoint",
-                                        "col": float(item.get("col") or item.get("x", 0)),
-                                        "row": float(item.get("row") or item.get("y", 0)),
-                                        "z": float(item.get("z") or item.get("elevation_m", 0)),
-                                        "description": item.get("description", "")
+                                        "id": wid,
+                                        "waypoint_id": props.get("waypoint_id"),
+                                        "name": props.get("name") or props.get("title") or f"Waypoint {i+1}",
+                                        "type": props.get("type") or props.get("class") or "waypoint",
+                                        "priority": props.get("priority", "HIGH"),
+                                        "geologic_unit": props.get("geologic_unit", ""),
+                                        "col": float(col),
+                                        "row": float(row),
+                                        "z": z_val,
+                                        "description": props.get("description") or props.get("desc") or "",
+                                        "is_waypoint": True
                                     })
+                                    seen_ids.add(wid)
                     except Exception as e:
                         print(f"Error loading landmark file {fp}: {e}")
 
-        # 2. Extract key landmark nodes directly from stage matrices in output/
+        # 3. Extract key topographic landmarks directly from stage matrices in output/
         try:
             elev, cost, slope = self.load_stage_arrays(stage_id)
             valid = ~np.isnan(elev)
 
-            # A. Deepest Basin Landmark
-            r_min, c_min = np.unravel_index(np.nanargmin(elev), elev.shape)
-            landmarks.append({
-                "id": "basin_deepest",
-                "name": "Deepest Basin Floor",
-                "type": "basin",
-                "col": int(c_min),
-                "row": int(r_min),
-                "z": round(float(elev[r_min, c_min]), 1),
-                "description": "Lowest lakebed elevation (-3,155.7m)"
-            })
+            elev_min = float(np.nanmin(elev))
+            elev_max = float(np.nanmax(elev))
 
-            # B. Highest Rim Summit Landmark
-            r_max, c_max = np.unravel_index(np.nanargmax(elev), elev.shape)
-            landmarks.append({
-                "id": "rim_summit",
-                "name": "Western Rim Summit",
-                "type": "summit",
-                "col": int(c_max),
-                "row": int(r_max),
-                "z": round(float(elev[r_max, c_max]), 1),
-                "description": "Highest topographic rim plateau (-1,471.6m)"
-            })
+            if elev_max > elev_min:
+                # A. Deepest Basin Landmark
+                r_min, c_min = np.unravel_index(np.nanargmin(elev), elev.shape)
+                landmarks.append({
+                    "id": "basin_deepest",
+                    "name": "Deepest Basin Floor",
+                    "type": "basin",
+                    "col": int(c_min),
+                    "row": int(r_min),
+                    "z": round(float(elev[r_min, c_min]), 1),
+                    "description": f"Lowest lakebed elevation ({round(float(elev[r_min, c_min]), 1)}m)"
+                })
+
+                # B. Highest Rim Summit Landmark
+                r_max, c_max = np.unravel_index(np.nanargmax(elev), elev.shape)
+                landmarks.append({
+                    "id": "rim_summit",
+                    "name": "Western Rim Summit",
+                    "type": "summit",
+                    "col": int(c_max),
+                    "row": int(r_max),
+                    "z": round(float(elev[r_max, c_max]), 1),
+                    "description": f"Highest topographic rim plateau ({round(float(elev[r_max, c_max]), 1)}m)"
+                })
 
             # C. Steepest Cliff Scarp Landmark
-            if slope is not None:
+            if slope is not None and np.nanmax(slope) > 0.0:
                 r_slp, c_slp = np.unravel_index(np.nanargmax(slope), slope.shape)
                 landmarks.append({
                     "id": "cliff_scarp",
@@ -406,38 +578,13 @@ class StageDataManager:
                     "col": int(c_slp),
                     "row": int(r_slp),
                     "z": round(float(elev[r_slp, c_slp]), 1),
+                    "slope_deg": round(float(slope[r_slp, c_slp]), 1),
                     "description": f"Steepest topographic grade ({float(slope[r_slp, c_slp]):.1f}° slope)"
                 })
 
-            # D. River Delta Fan Landmark
-            delta_r, delta_c = 1800, 1000
-            if valid[delta_r, delta_c]:
-                landmarks.append({
-                    "id": "delta_fan",
-                    "name": "Jezero River Delta Fan",
-                    "type": "delta",
-                    "col": delta_c,
-                    "row": delta_r,
-                    "z": round(float(elev[delta_r, delta_c]), 1),
-                    "description": "Ancient fluvial sediment fan deposits"
-                })
-
-            # E. Western Canyon Inflow Breach
-            canyon_r, canyon_c = 1500, 800
-            if valid[canyon_r, canyon_c]:
-                landmarks.append({
-                    "id": "canyon_breach",
-                    "name": "Western Canyon Inflow Breach",
-                    "type": "canyon",
-                    "col": canyon_c,
-                    "row": canyon_r,
-                    "z": round(float(elev[canyon_r, canyon_c]), 1),
-                    "description": "Western rim river breach gorge"
-                })
-
-            # F. Impassable Barrier Landmark (if barrier/blocked nodes exist in cost matrix)
+            # D. Impassable Barrier Landmark
             if cost is not None:
-                is_blk = np.isinf(cost) & valid
+                is_blk = (np.isinf(cost) | (cost >= 999.0)) & valid
                 if np.any(is_blk):
                     b_rows, b_cols = np.nonzero(is_blk)
                     b_mid = len(b_rows) // 2
@@ -474,16 +621,18 @@ class VisualizerServerHandler(http.server.SimpleHTTPRequestHandler):
             self.end_headers()
             return
 
+        # Helper to get requested or default stage id
+        stages = self.data_manager.get_stages()
+        default_stage = stages[0]["id"] if stages else "stage_1_consolidated"
+
         # API: list available stages
         if path == "/api/stages":
-            stages = self.data_manager.get_stages()
             self._send_json(stages)
             return
 
         # API: stage detailed metadata
         elif path == "/api/stage_info":
-            stage_id = query.get("stage", ["stage_1"])[0]
-            stages = self.data_manager.get_stages()
+            stage_id = query.get("stage", [default_stage])[0]
             info = next((s for s in stages if s["id"] == stage_id), None)
             if info:
                 self._send_json(info)
@@ -493,15 +642,15 @@ class VisualizerServerHandler(http.server.SimpleHTTPRequestHandler):
 
         # API: landmarks and waypoints
         elif path == "/api/landmarks":
-            stage_id = query.get("stage", ["stage_1"])[0]
+            stage_id = query.get("stage", [default_stage])[0]
             landmarks = self.data_manager.get_stage_landmarks(stage_id)
             self._send_json(landmarks)
             return
 
         # API: binary stream of 3D block nodes
         elif path == "/api/data":
-            stage_id = query.get("stage", ["stage_1"])[0]
-            step = int(query.get("step", [4])[0])
+            stage_id = query.get("stage", [default_stage])[0]
+            step = int(query.get("step", [8])[0])
             filter_mode = query.get("filter", ["all"])[0]
 
             roi = None

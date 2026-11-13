@@ -1,6 +1,10 @@
 {
   "stage": 3,
-  "description": "Surface Hazard Overlays (Sand Dunes & Megabreccia Boulders)",
+  "description": "Consolidated Surface Hazard Overlays (Sand Dunes & Megabreccia Boulders)",
+  "grid_shape": [
+    6560,
+    2950
+  ],
   "hazard_multipliers": {
     "sand_dunes_aeb_tars": 3.0,
     "megabreccia_boulder_fields": 2.0,

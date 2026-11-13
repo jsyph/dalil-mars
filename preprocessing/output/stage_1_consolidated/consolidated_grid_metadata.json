@@ -1,0 +1,29 @@
+{
+  "stage": 1,
+  "description": "Consolidated multi-DTM elevation grid with VRT on-the-fly CRS alignment",
+  "source_rasters": [
+    "sim3464_JezeroNili/Rasters/USGS_CTX_Stereo_DTMs/B18_016575_1978_B17_016219_1978_20m_DTM.tif",
+    "sim3464_JezeroNili/Rasters/USGS_CTX_Stereo_DTMs/J03_045994_1986_J03_046060_1986_20m_DTM.tif",
+    "sim3464_JezeroNili/Rasters/HRSC/nili_h0988_0000_da4_clip.tif"
+  ],
+  "grid_shape": [
+    6560,
+    2950
+  ],
+  "transform": [
+    20.203946064176,
+    0.0,
+    -6117387.581178606,
+    0.0,
+    -20.203946064176,
+    1145171.1668435,
+    0.0,
+    0.0,
+    1.0
+  ],
+  "elevation_range_m": [
+    -3155.71630859375,
+    -1371.84521484375
+  ],
+  "mosaic_geotiff": "consolidated_dtm_mosaic.tif"
+}

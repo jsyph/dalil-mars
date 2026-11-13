@@ -460,10 +460,11 @@
       <div class="control-item">
         <label for="density-select">Density:</label>
         <select id="density-select">
-          <option value="8">Fast Overview (Step 8 ~75k)</option>
-          <option value="4" selected>Balanced (Step 4 ~300k)</option>
-          <option value="2">High Density (Step 2 ~1.2M)</option>
-          <option value="1">Ultra (Step 1 Full Res)</option>
+          <option value="16">Fast Overview (Step 16 ~75k)</option>
+          <option value="8" selected>Balanced (Step 8 ~300k)</option>
+          <option value="4">High Density (Step 4 ~1.2M)</option>
+          <option value="2">Ultra Density (Step 2 ~4.8M)</option>
+          <option value="1">Full Resolution (Step 1 ~19.4M)</option>
         </select>
       </div>
 
@@ -481,17 +482,6 @@
 
       <!-- Reload button -->
       <button id="btn-reload" class="btn-primary">↻ Reload Stage</button>
-    <!-- Landmarks & Waypoints Section -->
-    <div class="panel-section">
-      <div class="section-title">
-        <span>Landmarks & Waypoints</span>
-        <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; text-transform: none; cursor: pointer;">
-          <input type="checkbox" id="toggle-landmarks" checked> Visible
-        </label>
-      </div>
-      <div id="landmarks-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;">
-        <!-- Dynamically populated from stage output nodes -->
-      </div>
     </div>
   </div>
 
@@ -599,7 +589,8 @@
           <span>Terrain Palette:</span>
         </div>
         <select id="palette-select">
-          <option value="mars" selected>Mars Rust Topography</option>
+          <option value="mars" selected>Jezero DTM Elevation (USGS Colormap)</option>
+          <option value="rust">Mars Classical Rust Gradient</option>
           <option value="emerald">Emerald Contrast Palette</option>
           <option value="dark">Stealth Carbon Matrix</option>
         </select>
@@ -611,8 +602,8 @@
       <div class="section-title">Camera Perspectives</div>
       <div class="btn-grid">
         <button id="cam-iso" class="btn-secondary">3D Isometric</button>
-        <button id="cam-top" class="btn-secondary">Top-Down 2D</button>
-        <button id="cam-rim" class="btn-secondary">Crater Rim Profile</button>
+        <button id="cam-top" class="btn-secondary">Top-Down DTM</button>
+        <button id="cam-rim" class="btn-secondary">Western Rim Profile</button>
         <button id="cam-delta" class="btn-secondary">Jezero Delta</button>
       </div>
     </div>
@@ -621,20 +612,28 @@
     <div class="panel-section">
       <div class="section-title">Region of Interest (ROI)</div>
       <select id="roi-select">
-        <option value="full" selected>Full Grid (100% Extent)</option>
-        <option value="delta">Jezero River Delta Sector</option>
-        <option value="crater_rim">Western Crater Rim Wall</option>
-        <option value="crater_floor">Deep Lakebed Basin</option>
+        <option value="full" selected>Full Consolidated Extent (100%)</option>
+        <option value="jezero_delta">Jezero Crater Basin & Delta Fan</option>
+        <option value="north_channel">Northern Fluvial Inlet Channel</option>
+        <option value="western_rim">Western Rim Scarp & Cliff Wall</option>
+        <option value="south_basin">Southern Depression & Crater Floor</option>
       </select>
-    <!-- Landmarks & Waypoints Section -->
+    </div>
+
+    <!-- Landmarks & Mission Waypoints Section -->
     <div class="panel-section">
       <div class="section-title">
-        <span>Landmarks & Waypoints</span>
-        <label style="display: flex; align-items: center; gap: 4px; font-size: 11px; text-transform: none; cursor: pointer;">
-          <input type="checkbox" id="toggle-landmarks" checked> Visible
-        </label>
+        <span>Waypoints & Landmarks</span>
+        <div style="display: flex; gap: 8px;">
+          <label style="display: flex; align-items: center; gap: 3px; font-size: 11px; text-transform: none; cursor: pointer;">
+            <input type="checkbox" id="toggle-landmarks" checked> Pins
+          </label>
+          <label style="display: flex; align-items: center; gap: 3px; font-size: 11px; text-transform: none; cursor: pointer;">
+            <input type="checkbox" id="toggle-route" checked> Route
+          </label>
+        </div>
       </div>
-      <div id="landmarks-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 180px; overflow-y: auto;">
+      <div id="landmarks-list" style="display: flex; flex-direction: column; gap: 6px; max-height: 200px; overflow-y: auto;">
         <!-- Dynamically populated from stage output nodes -->
       </div>
     </div>
@@ -672,8 +671,8 @@
     let wireframeMesh = null;
     let raycaster, mouse;
 
-    let currentStage = 'stage_2';
-    let currentStep = 4;
+    let currentStage = 'stage_5_consolidated';
+    let currentStep = 8;
     let currentFilter = 'all';
     let currentRoi = 'full';
     let heightMultiplier = 2.5;
@@ -713,17 +712,23 @@
     const landmarksList = document.getElementById('landmarks-list');
 
     let landmarksGroup = null;
+    let routeGroup = null;
     let currentLandmarks = [];
     let showLandmarks = true;
+    let showRoute = true;
+    const toggleRoute = document.getElementById('toggle-route');
 
-    // Landmark Colors
+    // Landmark & Waypoint Colors
     const LANDMARK_COLORS = {
-      summit: '#ffb300',
-      basin: '#00b0ff',
-      scarp: '#ff007f',
-      delta: '#00e5ff',
-      canyon: '#00e676',
-      barrier: '#ff1744',
+      base_camp: '#ffd700',       // Gold
+      science_station: '#00e5ff', // Cyan
+      landmark: '#ff9100',        // Amber
+      summit: '#ffb300',          // Gold
+      basin: '#00b0ff',           // Blue
+      scarp: '#ff007f',           // Magenta
+      delta: '#00e5ff',           // Cyan
+      canyon: '#00e676',          // Emerald
+      barrier: '#ff1744',         // Red
       default: '#00e5ff'
     };
 
@@ -744,17 +749,60 @@
     const hudNodes = document.getElementById('hud-nodes');
     const hudTransfer = document.getElementById('hud-transfer');
 
-    // Preset Regions of Interest (ROI)
-    const ROI_PRESETS = {
-      full: null,
-      delta: { r_min: 1400, r_max: 2200, c_min: 700, c_max: 1300 },
-      crater_rim: { r_min: 1000, r_max: 2600, c_min: 100, c_max: 600 },
-      crater_floor: { r_min: 1800, r_max: 2800, c_min: 900, c_max: 1600 }
-    };
+    // Dynamic Region of Interest (ROI) calculation based on active grid dimensions
+    function getRoiBounds(roiType, totalRows, totalCols) {
+      if (!roiType || roiType === 'full') return null;
+      const rows = totalRows || 6560;
+      const cols = totalCols || 2950;
+      const propPresets = {
+        jezero_delta: { r0: 0.28, r1: 0.58, c0: 0.28, c1: 0.92 },
+        north_channel: { r0: 0.00, r1: 0.35, c0: 0.20, c1: 0.80 },
+        western_rim: { r0: 0.25, r1: 0.65, c0: 0.03, c1: 0.55 },
+        south_basin: { r0: 0.60, r1: 1.00, c0: 0.15, c1: 0.88 }
+      };
+      const p = propPresets[roiType];
+      if (!p) return null;
+      return {
+        r_min: Math.floor(p.r0 * rows),
+        r_max: Math.floor(p.r1 * rows),
+        c_min: Math.floor(p.c0 * cols),
+        c_max: Math.floor(p.c1 * cols)
+      };
+    }
 
-    // Color definitions
+    // Hazard Color Definitions
     const COLOR_BLOCKED = new THREE.Color('#ff2222');
     const COLOR_DANGEROUS = new THREE.Color('#ffd600');
+
+    // Multi-Stop Jezero DTM Colormap (Matches USGS/HRSC Jezero Crater Reference)
+    const DTM_STOPS = [
+      { t: 0.00, color: new THREE.Color('#0f2b82') }, // Deep impact depression (-3155m)
+      { t: 0.12, color: new THREE.Color('#1963c6') }, // Cobalt blue (-2940m)
+      { t: 0.24, color: new THREE.Color('#00b4d8') }, // Lakebed cyan (-2725m)
+      { t: 0.38, color: new THREE.Color('#10b981') }, // Crater floor emerald (-2475m)
+      { t: 0.52, color: new THREE.Color('#84cc16') }, // Delta deposit lime (-2230m)
+      { t: 0.64, color: new THREE.Color('#eab308') }, // Lower rim transition yellow (-2015m)
+      { t: 0.76, color: new THREE.Color('#c27803') }, // Ochre slope transition (-1800m)
+      { t: 0.86, color: new THREE.Color('#8b4513') }, // Western rim scarp brown (-1620m)
+      { t: 0.94, color: new THREE.Color('#a89f91') }, // Upper rim plateau tan/slate (-1480m)
+      { t: 1.00, color: new THREE.Color('#ffffff') }  // Summit peaks pure white (-1372m)
+    ];
+
+    function getDtmColor(t, outColor) {
+      const val = Math.max(0, Math.min(1, t));
+      for (let i = 0; i < DTM_STOPS.length - 1; i++) {
+        const s0 = DTM_STOPS[i];
+        const s1 = DTM_STOPS[i + 1];
+        if (val >= s0.t && val <= s1.t) {
+          const ratio = (val - s0.t) / (s1.t - s0.t);
+          outColor.copy(s0.color).lerp(s1.color, ratio);
+          return outColor;
+        }
+      }
+      outColor.copy(DTM_STOPS[DTM_STOPS.length - 1].color);
+      return outColor;
+    }
+
     const COLOR_SAFE_MARS_MIN = new THREE.Color('#662d18');
     const COLOR_SAFE_MARS_MAX = new THREE.Color('#f39c12');
     const COLOR_SAFE_EMERALD_MIN = new THREE.Color('#145a32');
@@ -807,6 +855,10 @@
       landmarksGroup = new THREE.Group();
       scene.add(landmarksGroup);
 
+      // Waypoint Traverse Route Line Container
+      routeGroup = new THREE.Group();
+      scene.add(routeGroup);
+
       // Raycaster for hover inspection
       raycaster = new THREE.Raycaster();
       mouse = new THREE.Vector2(-999, -999);
@@ -853,13 +905,16 @@
         stages.forEach(st => {
           const opt = document.createElement('option');
           opt.value = st.id;
-          opt.textContent = `${st.id.toUpperCase()}: ${st.name}`;
+          opt.textContent = `${st.name}`;
           stageSelect.appendChild(opt);
         });
 
-        // Default to stage_2 if exists, otherwise first stage
-        const hasStage2 = stages.some(s => s.id === 'stage_2');
-        currentStage = hasStage2 ? 'stage_2' : stages[0].id;
+        // Automatically select Stage 5 Consolidated (or Stage 4, or latest stage available)
+        const preferred = stages.find(s => s.id === 'stage_5_consolidated') ||
+                          stages.find(s => s.id.includes('stage_5')) ||
+                          stages.find(s => s.id === 'stage_4_consolidated') ||
+                          stages[stages.length - 1];
+        currentStage = preferred ? preferred.id : stages[0].id;
         stageSelect.value = currentStage;
 
         fetchAndRenderStage();
@@ -873,7 +928,7 @@
     async function fetchAndRenderStage() {
       showLoading(true, `Loading ${currentStage.toUpperCase()} data...`);
 
-      const roiParam = ROI_PRESETS[currentRoi];
+      const roiParam = getRoiBounds(currentRoi, gridBounds.rows, gridBounds.cols);
       let url = `/api/data?stage=${encodeURIComponent(currentStage)}&step=${currentStep}&filter=${currentFilter}`;
       if (roiParam) {
         url += `&r_min=${roiParam.r_min}&r_max=${roiParam.r_max}&c_min=${roiParam.c_min}&c_max=${roiParam.c_max}`;
@@ -1045,6 +1100,8 @@
           // Safe Terrain -> Mars Topo Gradient or Selected Palette
           const t = Math.max(0, Math.min(1, (z - minZ) / zRange));
           if (currentPalette === 'mars') {
+            getDtmColor(t, tempColor);
+          } else if (currentPalette === 'rust') {
             tempColor.copy(COLOR_SAFE_MARS_MIN).lerp(COLOR_SAFE_MARS_MAX, t);
           } else if (currentPalette === 'emerald') {
             tempColor.copy(COLOR_SAFE_EMERALD_MIN).lerp(COLOR_SAFE_EMERALD_MAX, t);
@@ -1114,6 +1171,8 @@
         } else {
           const t = Math.max(0, Math.min(1, (node.z - minZ) / zRange));
           if (currentPalette === 'mars') {
+            getDtmColor(t, tempColor);
+          } else if (currentPalette === 'rust') {
             tempColor.copy(COLOR_SAFE_MARS_MIN).lerp(COLOR_SAFE_MARS_MAX, t);
           } else if (currentPalette === 'emerald') {
             tempColor.copy(COLOR_SAFE_EMERALD_MIN).lerp(COLOR_SAFE_EMERALD_MAX, t);
@@ -1223,6 +1282,14 @@
           }
         }
 
+        // Clear existing route line objects
+        while (routeGroup.children.length > 0) {
+          const obj = routeGroup.children[0];
+          routeGroup.remove(obj);
+          if (obj.geometry) obj.geometry.dispose();
+          if (obj.material) obj.material.dispose();
+        }
+
         // Clear and populate sidebar UI list
         landmarksList.innerHTML = '';
 
@@ -1244,44 +1311,69 @@
           const posY = (elev - datumBaseline) * normScale.scaleZ * heightMultiplier;
 
           // 1. Vertical Glowing Beacon Column
-          const beaconHeight = 24.0;
-          const beaconGeo = new THREE.CylinderGeometry(0.35, 0.35, beaconHeight, 8);
+          const beaconHeight = lm.is_waypoint ? 28.0 : 22.0;
+          const beaconRadius = lm.type === 'base_camp' ? 0.6 : (lm.is_waypoint ? 0.45 : 0.35);
+          const beaconGeo = new THREE.CylinderGeometry(beaconRadius, beaconRadius, beaconHeight, 8);
           const beaconMat = new THREE.MeshBasicMaterial({
             color: lmColor,
             transparent: true,
-            opacity: 0.70,
+            opacity: 0.75,
             depthWrite: false
           });
           const beacon = new THREE.Mesh(beaconGeo, beaconMat);
           beacon.position.set(posX, posY + beaconHeight / 2, posZ);
           landmarksGroup.add(beacon);
 
-          // 2. Floating Diamond Marker Top
-          const diamondGeo = new THREE.OctahedronGeometry(1.6, 0);
+          // 2. Base Camp Special Landing Pad Ring
+          if (lm.type === 'base_camp') {
+            const ringGeo = new THREE.RingGeometry(1.5, 4.5, 32);
+            ringGeo.rotateX(-Math.PI / 2);
+            const ringMat = new THREE.MeshBasicMaterial({
+              color: lmColor,
+              side: THREE.DoubleSide,
+              transparent: true,
+              opacity: 0.8
+            });
+            const ringMesh = new THREE.Mesh(ringGeo, ringMat);
+            ringMesh.position.set(posX, posY + 0.3, posZ);
+            ringMesh.userData = { isRing: true };
+            landmarksGroup.add(ringMesh);
+          }
+
+          // 3. Floating Diamond Marker Top
+          const diamondSize = lm.type === 'base_camp' ? 2.2 : (lm.is_waypoint ? 1.8 : 1.5);
+          const diamondGeo = new THREE.OctahedronGeometry(diamondSize, 0);
           const diamondMat = new THREE.MeshStandardMaterial({
             color: lmColor,
             emissive: lmColor,
-            emissiveIntensity: 0.85,
-            roughness: 0.2
+            emissiveIntensity: 0.9,
+            roughness: 0.15
           });
           const diamond = new THREE.Mesh(diamondGeo, diamondMat);
           diamond.position.set(posX, posY + beaconHeight, posZ);
           diamond.userData = { isDiamond: true, rotateSpeed: 0.02 + (idx * 0.005) };
           landmarksGroup.add(diamond);
 
-          // 3. Floating 2D Billboard Text Label
-          const subtext = `${elev.toFixed(1)} m` + (lm.slope_deg ? ` | ${lm.slope_deg}°` : '');
-          const label = makeLandmarkLabel(lm.name, subtext, colorHex);
+          // 4. Floating 2D Billboard Text Label
+          const displayName = lm.waypoint_id ? `[${lm.waypoint_id}] ${lm.name}` : lm.name;
+          const subparts = [`${elev.toFixed(1)} m`];
+          if (lm.priority) subparts.push(lm.priority);
+          if (lm.geologic_unit) subparts.push(`[${lm.geologic_unit}]`);
+          if (lm.slope_deg) subparts.push(`${lm.slope_deg}°`);
+          const subtext = subparts.join(' | ');
+
+          const label = makeLandmarkLabel(displayName, subtext, colorHex);
           label.position.set(posX, posY + beaconHeight + 6.5, posZ);
           landmarksGroup.add(label);
 
-          // 4. Add to Sidebar List
+          // 5. Add to Sidebar List
           const item = document.createElement('div');
           item.className = 'landmark-item';
+          const icon = lm.type === 'base_camp' ? '🚀' : (lm.is_waypoint ? '🔬' : '📍');
           item.innerHTML = `
             <div class="landmark-title">
-              <span style="color: ${colorHex};">📍</span>
-              <span>${lm.name}</span>
+              <span style="color: ${colorHex};">${icon}</span>
+              <span>${displayName}</span>
             </div>
             <div class="landmark-elev">${subtext}</div>
           `;
@@ -1291,9 +1383,49 @@
           landmarksList.appendChild(item);
         });
 
+        // 6. Build Mission Traverse Route Line between Waypoints
+        buildRouteLine();
+
         landmarksGroup.visible = showLandmarks;
+        routeGroup.visible = showRoute;
       } catch (err) {
         console.error('Error fetching landmarks:', err);
+      }
+    }
+
+    // Connect mission waypoints with a 3D glowing traverse route
+    function buildRouteLine() {
+      while (routeGroup.children.length > 0) {
+        const obj = routeGroup.children[0];
+        routeGroup.remove(obj);
+        if (obj.geometry) obj.geometry.dispose();
+        if (obj.material) obj.material.dispose();
+      }
+
+      const datumBaseline = (currentDatumMode === 'mean') ? ((gridBounds.minZ + gridBounds.maxZ) / 2.0) : gridBounds.minZ;
+
+      const waypoints = currentLandmarks
+        .filter(lm => lm.is_waypoint && lm.col !== undefined && lm.row !== undefined)
+        .sort((a, b) => (a.waypoint_id || '').localeCompare(b.waypoint_id || ''));
+
+      if (waypoints.length >= 2) {
+        const points = waypoints.map(lm => {
+          const posX = normScale.offsetX + lm.col * normScale.scaleX;
+          const posZ = normScale.offsetY + lm.row * normScale.scaleY;
+          const elev = (lm.z !== undefined && lm.z !== null) ? lm.z : gridBounds.minZ;
+          const posY = (elev - datumBaseline) * normScale.scaleZ * heightMultiplier + 1.2;
+          return new THREE.Vector3(posX, posY, posZ);
+        });
+
+        const lineGeo = new THREE.BufferGeometry().setFromPoints(points);
+        const lineMat = new THREE.LineBasicMaterial({
+          color: 0x00e5ff,
+          linewidth: 3,
+          transparent: true,
+          opacity: 0.95
+        });
+        const routeLine = new THREE.Line(lineGeo, lineMat);
+        routeGroup.add(routeLine);
       }
     }
 
@@ -1301,7 +1433,6 @@
     function updateLandmarksPositions() {
       if (!currentLandmarks || currentLandmarks.length === 0 || !landmarksGroup) return;
       const datumBaseline = (currentDatumMode === 'mean') ? ((gridBounds.minZ + gridBounds.maxZ) / 2.0) : gridBounds.minZ;
-      const beaconHeight = 24.0;
 
       let childIdx = 0;
       currentLandmarks.forEach((lm) => {
@@ -1309,23 +1440,37 @@
         const posZ = normScale.offsetY + lm.row * normScale.scaleY;
         const elev = (lm.z !== undefined && lm.z !== null) ? lm.z : gridBounds.minZ;
         const posY = (elev - datumBaseline) * normScale.scaleZ * heightMultiplier;
+        const beaconHeight = lm.is_waypoint ? 28.0 : 22.0;
 
         // 1. Beacon
         if (landmarksGroup.children[childIdx]) {
           landmarksGroup.children[childIdx].position.set(posX, posY + beaconHeight / 2, posZ);
         }
         childIdx++;
-        // 2. Diamond
+
+        // 2. Base Camp Landing Ring (if present)
+        if (lm.type === 'base_camp') {
+          if (landmarksGroup.children[childIdx] && landmarksGroup.children[childIdx].userData.isRing) {
+            landmarksGroup.children[childIdx].position.set(posX, posY + 0.3, posZ);
+            childIdx++;
+          }
+        }
+
+        // 3. Diamond
         if (landmarksGroup.children[childIdx]) {
           landmarksGroup.children[childIdx].position.set(posX, posY + beaconHeight, posZ);
         }
         childIdx++;
-        // 3. Label
+
+        // 4. Label
         if (landmarksGroup.children[childIdx]) {
           landmarksGroup.children[childIdx].position.set(posX, posY + beaconHeight + 6.5, posZ);
         }
         childIdx++;
       });
+
+      // Update route line
+      buildRouteLine();
     }
 
     // Smoothly fly camera to focus on landmark
@@ -1408,21 +1553,27 @@
         if (landmarksGroup) landmarksGroup.visible = showLandmarks;
       });
 
-      // Camera Presets
+      // Toggle Mission Route Path Visibility
+      toggleRoute.addEventListener('change', (e) => {
+        showRoute = e.target.checked;
+        if (routeGroup) routeGroup.visible = showRoute;
+      });
+
+      // Camera Presets for Expanded Map
       document.getElementById('cam-iso').addEventListener('click', () => {
-        tweenCamera(220, 260, 320, 0, 0, 0);
+        tweenCamera(170, 210, 250, 0, 0, 0);
       });
 
       document.getElementById('cam-top').addEventListener('click', () => {
-        tweenCamera(0, 480, 0.01, 0, 0, 0);
+        tweenCamera(0, 340, 0.01, 0, 0, 0);
       });
 
       document.getElementById('cam-rim').addEventListener('click', () => {
-        tweenCamera(-280, 80, 0, 0, 20, 0);
+        tweenCamera(-90, 60, -25, -20, 15, -25);
       });
 
       document.getElementById('cam-delta').addEventListener('click', () => {
-        tweenCamera(30, 90, 80, 10, 15, 20);
+        tweenCamera(45, 60, 5, 14, 10, -27);
       });
     }
 
