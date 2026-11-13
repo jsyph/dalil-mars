@@ -1,0 +1,156 @@
+[
+  {
+    "waypoint_id": "WP-00",
+    "name": "Octavia E. Butler Landing (Base Camp)",
+    "type": "base_camp",
+    "lat": 18.4447,
+    "lon": 77.4508,
+    "geologic_unit": "Njf",
+    "description": "Perseverance touchdown site (Sol 0). Mission hub & primary EVA egress airlock.",
+    "priority": "HIGH",
+    "grid_position": {
+      "row": 6559,
+      "col": 2949
+    },
+    "original_grid_position": {
+      "row": 56679,
+      "col": 302785
+    },
+    "snap_offset_cells": -1,
+    "elevation_m": -2500.0,
+    "cell_traversal_cost": 999.0,
+    "is_safe_departure_point": false
+  },
+  {
+    "waypoint_id": "WP-01",
+    "name": "Kodiak Butte & Delta Front Clays",
+    "type": "science_station",
+    "lat": 18.452,
+    "lon": 77.441,
+    "geologic_unit": "NHjf1",
+    "description": "Delta bottomset smectite clay mudstones. Prime biosignature preservation target.",
+    "priority": "CRITICAL",
+    "grid_position": {
+      "row": 6559,
+      "col": 2949
+    },
+    "original_grid_position": {
+      "row": 56679,
+      "col": 302785
+    },
+    "snap_offset_cells": -1,
+    "elevation_m": -2500.0,
+    "cell_traversal_cost": 999.0,
+    "is_safe_departure_point": false
+  },
+  {
+    "waypoint_id": "WP-02",
+    "name": "Hawksbill Gap & Delta Topset Conglomerates",
+    "type": "science_station",
+    "lat": 18.458,
+    "lon": 77.432,
+    "geologic_unit": "NHjf2",
+    "description": "High-energy fluvial gravel beds with prominent cross-bedding.",
+    "priority": "HIGH",
+    "grid_position": {
+      "row": 6559,
+      "col": 2949
+    },
+    "original_grid_position": {
+      "row": 56679,
+      "col": 302785
+    },
+    "snap_offset_cells": -1,
+    "elevation_m": -2500.0,
+    "cell_traversal_cost": 999.0,
+    "is_safe_departure_point": false
+  },
+  {
+    "waypoint_id": "WP-03",
+    "name": "Margin Carbonate Unit (Ancient Shoreline)",
+    "type": "science_station",
+    "lat": 18.461,
+    "lon": 77.415,
+    "geologic_unit": "Nle",
+    "description": "Alkaline lake shoreline deposits rich in Mg-carbonates and hydrated silica.",
+    "priority": "CRITICAL",
+    "grid_position": {
+      "row": 6559,
+      "col": 2949
+    },
+    "original_grid_position": {
+      "row": 56679,
+      "col": 302785
+    },
+    "snap_offset_cells": -1,
+    "elevation_m": -2500.0,
+    "cell_traversal_cost": 999.0,
+    "is_safe_departure_point": false
+  },
+  {
+    "waypoint_id": "WP-04",
+    "name": "S\u00e9\u00edtah Formation & Dune Corridor",
+    "type": "science_station",
+    "lat": 18.432,
+    "lon": 77.462,
+    "geologic_unit": "Njf",
+    "description": "Olivine-cumulate volcanic basement rocks flanked by active aeolian dunes (Aeb).",
+    "priority": "MEDIUM",
+    "grid_position": {
+      "row": 6559,
+      "col": 2949
+    },
+    "original_grid_position": {
+      "row": 56679,
+      "col": 302785
+    },
+    "snap_offset_cells": -1,
+    "elevation_m": -2500.0,
+    "cell_traversal_cost": 999.0,
+    "is_safe_departure_point": false
+  },
+  {
+    "waypoint_id": "WP-05",
+    "name": "Neretva Vallis River Inlet Breach Canyon",
+    "type": "landmark",
+    "lat": 18.59,
+    "lon": 77.19,
+    "geologic_unit": "channel",
+    "description": "Deep fluvial breach canyon where ancient floodwaters sliced into Jezero Crater.",
+    "priority": "MEDIUM",
+    "grid_position": {
+      "row": 6559,
+      "col": 2949
+    },
+    "original_grid_position": {
+      "row": 56679,
+      "col": 302785
+    },
+    "snap_offset_cells": -1,
+    "elevation_m": -2500.0,
+    "cell_traversal_cost": 999.0,
+    "is_safe_departure_point": false
+  },
+  {
+    "waypoint_id": "WP-06",
+    "name": "Belva Crater Rim & Shock Megabreccia",
+    "type": "science_station",
+    "lat": 18.485,
+    "lon": 77.388,
+    "geologic_unit": "Nrb",
+    "description": "Deep pre-Noachian Martian basement crust uplifted by Isidis basin impact.",
+    "priority": "HIGH",
+    "grid_position": {
+      "row": 6559,
+      "col": 2949
+    },
+    "original_grid_position": {
+      "row": 56679,
+      "col": 302785
+    },
+    "snap_offset_cells": -1,
+    "elevation_m": -2500.0,
+    "cell_traversal_cost": 999.0,
+    "is_safe_departure_point": false
+  }
+]

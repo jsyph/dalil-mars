@@ -1,0 +1,9 @@
+{
+  "stage": 4,
+  "description": "Consolidated Structural Barriers & Cliff Drop-Offs (Final Preprocessed Master Grid)",
+  "grid_shape": [
+    6560,
+    2950
+  ],
+  "impassable_value": "inf"
+}
