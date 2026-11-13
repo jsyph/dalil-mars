@@ -86,6 +86,11 @@ export default function App() {
   const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false);
   const [showRouteOptions, setShowRouteOptions] = useState(false);
 
+  // Animated Camera Fly-To Zoom & Locating Wave state
+  const [locatePulse, setLocatePulse] = useState(null);
+  const [showLocationPinTag, setShowLocationPinTag] = useState(false);
+  const [compassRotation, setCompassRotation] = useState(0);
+
   // Layer visibility toggles
   const [layers, setLayers] = useState({
     slope: true,
@@ -110,6 +115,7 @@ export default function App() {
 
   // Incoming Dust Storm Radar State
   const [incomingDustAlert, setIncomingDustAlert] = useState(false);
+  const [showDustRadarCard, setShowDustRadarCard] = useState(true);
 
   // Selected Sol for Astronaut POV image
   const [selectedSol, setSelectedSol] = useState(680);
@@ -350,6 +356,11 @@ export default function App() {
     loadout.speedKmh,
   ]);
 
+  // Keep compass rotation aligned with heading unless manually reoriented
+  useEffect(() => {
+    setCompassRotation(liveNavState?.heading || 0);
+  }, [liveNavState?.heading]);
+
   // Martian Time-of-Day Engine
   const martianEnv = useMemo(() => {
     const elapsedMin = Math.round(((liveNavState?.progressPct || 0) / 100) * (routeResult?.durationMin || 0));
@@ -504,6 +515,7 @@ export default function App() {
     setNavMode('navigating');
     setNavPlaying(true);
     setFollowAstronaut(true);
+    triggerLocateAstronaut(14.5);
     showToast({
       id: 'nav-started',
       type: 'info',
@@ -550,11 +562,46 @@ export default function App() {
     setSelectedSol(solPreview);
     setStartLstMinutes(lstMin);
     setIncomingDustAlert(wKey === 'dust_storm');
+    setShowDustRadarCard(true);
     showToast({
       id: 'preset-applied',
       type: 'info',
       title: `Scenario Applied`,
       message: `${wKey === 'dust_storm' ? '🌪 Regional Dust Storm' : wKey === 'solar_storm' ? '⚡ Solar Flare' : '☀️ Nominal Sol'} • ${batPct}% Battery.`,
+    });
+  };
+
+  // High-Impact Animated Locate & Fly-To Zoom Action!
+  const triggerLocateAstronaut = (zoomLevel = 15) => {
+    setFollowAstronaut(true);
+    setLocatePulse({
+      timestamp: Date.now(),
+      zoom: zoomLevel,
+      showWave: true,
+    });
+    setShowLocationPinTag(true);
+    setTimeout(() => setShowLocationPinTag(false), 4200);
+
+    const lat = liveNavState?.currentLatLon ? liveNavState.currentLatLon[0] : startPOI.lat;
+    const lon = liveNavState?.currentLatLon ? liveNavState.currentLatLon[1] : startPOI.lon;
+
+    showToast({
+      id: 'gps-lock',
+      type: 'info',
+      title: '🎯 GPS Location Locked & Zoomed In',
+      message: `Astronaut position: ${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E (Elev ${endPOI.elev}m).`,
+    });
+  };
+
+  // Interactive Compass Button Click (Re-aligns North + Centers Camera + Locates)
+  const handleCompassClick = () => {
+    setCompassRotation((r) => r + 360);
+    triggerLocateAstronaut(14.5);
+    showToast({
+      id: 'compass-realign',
+      type: 'info',
+      title: '🧭 Compass Re-aligned to North',
+      message: `Camera locked to true Martian North (0° azimuth).`,
     });
   };
 
@@ -578,6 +625,7 @@ export default function App() {
           weatherCondition={weatherKey}
           liveNavState={liveNavState}
           followAstronaut={followAstronaut}
+          locatePulse={locatePulse}
           dustFrontState={dustFrontState}
           solarPhase={martianEnv.solarPhase}
           onSelectPOI={(poi) => {
@@ -627,7 +675,71 @@ export default function App() {
         </div>
       )}
 
-      {/* 3. TOP NAVIGATION HEADER (Google Maps Android Turn Card or Search Header) */}
+      {/* 3. FLOATING ANIMATED "YOU ARE HERE" LOCATION TAG POPUP (Triggered on Pin/Compass Click) */}
+      {showLocationPinTag && (
+        <div className="location-tag-popup absolute bottom-32 left-1/2 -translate-x-1/2 z-40 flex items-center gap-2.5 rounded-2xl bg-cyan-950/95 border-2 border-cyan-400 px-4 py-2.5 text-xs font-mono font-bold text-cyan-200 shadow-2xl backdrop-blur-xl">
+          <div className="h-3 w-3 rounded-full bg-cyan-400 animate-ping" />
+          <MapPin className="h-4 w-4 text-cyan-300" />
+          <span>
+            📍 ASTRONAUT GPS LOCKED: {liveNavState?.currentLatLon ? `${liveNavState.currentLatLon[0].toFixed(4)}°N, ${liveNavState.currentLatLon[1].toFixed(4)}°E` : '18.4446°N, 77.4509°E'}
+          </span>
+          <span className="text-slate-400">•</span>
+          <span className="text-emerald-300 font-extrabold">ZOOM 15X</span>
+        </div>
+      )}
+
+      {/* 4. PREDICTIVE DUST STORM RADAR & CLOSING METRIC CARD */}
+      {dustFrontState.active && showDustRadarCard && (
+        <div className="android-toast-slide absolute top-36 left-3.5 z-30 w-80 sm:w-88 rounded-2xl bg-slate-900/95 border-2 border-orange-500/80 p-3.5 shadow-2xl backdrop-blur-xl space-y-2.5">
+          <div className="flex items-center justify-between border-b border-orange-500/40 pb-2">
+            <span className="text-xs font-black uppercase text-orange-400 flex items-center gap-1.5 font-mono">
+              <Wind className="h-4 w-4 animate-spin text-orange-400" /> PREDICTIVE SQUALL RADAR
+            </span>
+            <button
+              onClick={() => setShowDustRadarCard(false)}
+              className="p-1 rounded-md text-orange-400 hover:text-white cursor-pointer"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="flex items-baseline justify-between bg-gradient-to-r from-orange-950/80 to-amber-950/80 p-3 rounded-xl border border-orange-500/40">
+            <div>
+              <div className="text-[10px] text-orange-300 uppercase font-mono font-bold">Squall Front Impact In</div>
+              <div className="text-3xl font-black text-amber-300 font-mono flex items-baseline gap-1 mt-0.5">
+                <span>~{dustFrontState.etaMin}</span>
+                <span className="text-xs font-sans font-bold text-orange-200">min</span>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-[10px] text-orange-300 uppercase font-mono">Closing Distance</div>
+              <div className="text-xl font-black text-white font-mono mt-0.5">{dustFrontState.distanceAheadKm} km</div>
+              <div className="text-[9px] text-orange-300 font-mono">ahead on route</div>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+            <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800">
+              <span className="text-slate-400 block">BAROMETER RATE</span>
+              <span className="text-red-400 font-bold">▼ -2.8 Pa/min (Falling)</span>
+            </div>
+            <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800">
+              <span className="text-slate-400 block">SAFE EVAC WINDOW</span>
+              <span className="text-emerald-400 font-bold">{Math.max(2, dustFrontState.etaMin - 5)} min remaining</span>
+            </div>
+          </div>
+
+          <button
+            onClick={triggerShelterDivert}
+            className="glove-btn w-full min-h-[46px] rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black text-xs uppercase flex items-center justify-center gap-1.5 shadow-lg cursor-pointer"
+          >
+            <Zap className="h-4 w-4" />
+            <span>DIVERT TO {nearestShelter.station.name.split(' ')[0]} ({nearestShelter.distKm} km)</span>
+          </button>
+        </div>
+      )}
+
+      {/* 5. TOP NAVIGATION HEADER (Google Maps Android Turn Card or Search Header) */}
       <div className="absolute top-3 left-3 right-3 z-30 flex flex-col items-center pointer-events-none">
         {navMode === 'navigating' ? (
           /* GOOGLE MAPS ACTIVE NAVIGATION MANEUVER BANNER */
@@ -727,7 +839,10 @@ export default function App() {
             {/* Simulation Environment Mode Selector (☀️ Nominal | 🌪 Dust Storm | ⚡ Solar Flare) */}
             <div className="flex items-center gap-1 bg-slate-950/85 p-1 rounded-2xl border border-slate-800 backdrop-blur-md">
               <button
-                onClick={() => setWeatherKey('nominal')}
+                onClick={() => {
+                  setWeatherKey('nominal');
+                  setIncomingDustAlert(false);
+                }}
                 className={`glove-btn flex-1 min-h-[34px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
                   weatherKey === 'nominal'
                     ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
@@ -742,6 +857,7 @@ export default function App() {
                 onClick={() => {
                   setWeatherKey('dust_storm');
                   setIncomingDustAlert(true);
+                  setShowDustRadarCard(true);
                 }}
                 className={`glove-btn flex-1 min-h-[34px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
                   weatherKey === 'dust_storm'
@@ -754,7 +870,10 @@ export default function App() {
               </button>
 
               <button
-                onClick={() => setWeatherKey('solar_storm')}
+                onClick={() => {
+                  setWeatherKey('solar_storm');
+                  setIncomingDustAlert(false);
+                }}
                 className={`glove-btn flex-1 min-h-[34px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
                   weatherKey === 'solar_storm'
                     ? 'bg-red-500/25 text-red-300 border border-red-500/50'
@@ -804,7 +923,7 @@ export default function App() {
         )}
       </div>
 
-      {/* 4. EXPANDABLE ROUTE OPTIONS MODAL (When Tapped) */}
+      {/* 6. EXPANDABLE ROUTE OPTIONS MODAL */}
       {showRouteOptions && (
         <div className="absolute top-20 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-lg rounded-2xl bg-slate-900/95 border-2 border-slate-700 p-4 shadow-2xl backdrop-blur-xl space-y-3.5">
           <div className="flex items-center justify-between pb-2 border-b border-slate-800">
@@ -938,24 +1057,28 @@ export default function App() {
         </div>
       )}
 
-      {/* 5. FLOATING ACTION BUTTONS (ANDROID GOOGLE MAPS FABs ON RIGHT) */}
+      {/* 7. FLOATING ACTION BUTTONS (ANDROID GOOGLE MAPS FABs ON RIGHT) */}
       <div className="absolute right-3.5 top-36 z-20 flex flex-col items-center gap-2.5">
-        {/* Compass / Heading Indicator */}
-        <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900/90 border border-slate-700 shadow-xl backdrop-blur-md text-cyan-400 font-mono text-[11px] font-bold">
-          <Compass
-            className="h-6 w-6 transition-transform duration-300"
-            style={{ transform: `rotate(${liveNavState?.heading || 0}deg)` }}
-          />
-        </div>
-
-        {/* Recenter / Follow GPS FAB */}
+        {/* Interactive Functional Compass Button (Re-aligns North + Centers + Zooms!) */}
         <button
-          onClick={() => setFollowAstronaut((v) => !v)}
-          title="Recenter on Astronaut Location"
-          className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border shadow-xl backdrop-blur-md cursor-pointer transition-all ${
+          onClick={handleCompassClick}
+          title="Compass: Tap to Re-align North & Zoom in to Location"
+          className="glove-btn flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900/95 hover:bg-slate-800 border-2 border-cyan-500/60 hover:border-cyan-400 shadow-xl backdrop-blur-md text-cyan-400 font-mono text-[11px] font-bold cursor-pointer transition-all active:scale-90"
+        >
+          <Compass
+            className="h-6 w-6 transition-transform duration-500"
+            style={{ transform: `rotate(${compassRotation}deg)` }}
+          />
+        </button>
+
+        {/* Recenter & Animated GPS Zoom-In FAB */}
+        <button
+          onClick={() => triggerLocateAstronaut(15)}
+          title="Find My Location: Smooth Zoom-In with Radar Wave"
+          className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border-2 shadow-xl backdrop-blur-md cursor-pointer transition-all active:scale-90 ${
             followAstronaut
-              ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-cyan-500/40'
-              : 'bg-slate-900/90 text-slate-300 border-slate-700 hover:bg-slate-800'
+              ? 'bg-cyan-500 text-slate-950 border-cyan-300 shadow-cyan-500/50'
+              : 'bg-slate-900/95 text-slate-300 border-slate-700 hover:bg-slate-800'
           }`}
         >
           <Crosshair className="h-6 w-6" />
@@ -975,10 +1098,13 @@ export default function App() {
           <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-emerald-400 border-2 border-slate-950 animate-pulse" />
         </button>
 
-        {/* Storm Radar Alert FAB */}
+        {/* Storm Radar Alert FAB (Toggles Predictive Metric Card) */}
         <button
-          onClick={() => setIncomingDustAlert((v) => !v)}
-          title="Toggle Predictive Storm Radar"
+          onClick={() => {
+            setIncomingDustAlert((v) => !v);
+            setShowDustRadarCard(true);
+          }}
+          title="Toggle Predictive Storm Radar Card"
           className={`glove-btn flex h-12 w-12 items-center justify-center rounded-2xl border shadow-xl backdrop-blur-md cursor-pointer transition-all ${
             incomingDustAlert || weatherKey === 'dust_storm'
               ? 'bg-orange-500 text-slate-950 border-orange-300 animate-pulse shadow-orange-500/40'
@@ -998,7 +1124,7 @@ export default function App() {
         </button>
       </div>
 
-      {/* 6. FLOATING MARTIAN "STREET VIEW" PICTURE-IN-PICTURE (PIP) CARD */}
+      {/* 8. FLOATING MARTIAN "STREET VIEW" PICTURE-IN-PICTURE (PIP) CARD */}
       {showStreetViewPIP && activePOV && (
         <div className="absolute top-28 left-4 z-40 w-72 sm:w-80 overflow-hidden rounded-2xl bg-slate-950/95 border-2 border-slate-700 shadow-2xl backdrop-blur-xl transition-all">
           <div className="flex items-center justify-between p-2.5 bg-slate-900/90 border-b border-slate-800">
@@ -1026,7 +1152,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 7. FLOATING LAYERS SHEET (When FAB is Tapped) */}
+      {/* 9. FLOATING LAYERS SHEET (When FAB is Tapped) */}
       {showLayersSheet && (
         <div className="absolute right-16 top-52 z-40 w-64 rounded-2xl bg-slate-900/95 border-2 border-slate-700 p-3 shadow-2xl backdrop-blur-xl space-y-2">
           <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 text-xs font-bold uppercase text-orange-400">
@@ -1064,7 +1190,7 @@ export default function App() {
         </div>
       )}
 
-      {/* 8. BOTTOM GOOGLE MAPS NAVIGATION & TRIP BAR */}
+      {/* 10. BOTTOM GOOGLE MAPS NAVIGATION & TRIP BAR */}
       <div className="absolute bottom-3 left-3 right-3 z-30 flex flex-col items-center">
         <div className="w-full max-w-xl rounded-2xl bg-slate-900/95 border border-slate-700/80 shadow-2xl backdrop-blur-xl overflow-hidden transition-all">
           {navMode === 'navigating' ? (

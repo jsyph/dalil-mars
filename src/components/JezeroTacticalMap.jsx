@@ -13,6 +13,7 @@ export default function JezeroTacticalMap({
   weatherCondition,
   liveNavState,
   followAstronaut = false,
+  locatePulse = null,
   dustFrontState = null,
   solarPhase = 'day',
   onSelectPOI,
@@ -69,6 +70,18 @@ export default function JezeroTacticalMap({
       mapInstanceRef.current = null;
     };
   }, []);
+
+  // Smooth Animated Fly-To Zoom when Locate / Compass Pin is Pressed!
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map || !locatePulse?.timestamp || !liveNavState?.currentLatLon) return;
+
+    map.flyTo(liveNavState.currentLatLon, locatePulse.zoom || 14.5, {
+      animate: true,
+      duration: 1.25,
+      easeLinearity: 0.25,
+    });
+  }, [locatePulse, liveNavState?.currentLatLon]);
 
   // Render Layer 1 & 4: Perseverance Traverse & Slope Heatmap
   useEffect(() => {
@@ -321,7 +334,7 @@ export default function JezeroTacticalMap({
     }
   }, [routeResult, showDirectComparison, weatherCondition]);
 
-  // Render Predictive Incoming Dust Storm Front Radar
+  // Render Predictive Incoming Dust Storm Front Radar & Impact Vector
   useEffect(() => {
     const { dustFront } = layerGroupsRef.current;
     if (!dustFront) return;
@@ -329,16 +342,37 @@ export default function JezeroTacticalMap({
 
     if (!dustFrontState?.active) return;
 
-    const { lat, lon, radiusMeters = 1100, distanceAheadKm, etaMin } = dustFrontState;
+    const { lat, lon, radiusMeters = 1150, distanceAheadKm, etaMin } = dustFrontState;
 
+    // Outer expanding radar wave ring
     L.circle([lat, lon], {
-      radius: radiusMeters,
+      radius: radiusMeters * 1.5,
       color: '#f97316',
       fillColor: '#ea580c',
-      fillOpacity: 0.28,
+      fillOpacity: 0.08,
+      weight: 1.5,
+      dashArray: '4, 8',
+    }).addTo(dustFront);
+
+    // Primary dense storm core
+    L.circle([lat, lon], {
+      radius: radiusMeters,
+      color: '#ea580c',
+      fillColor: '#c2410c',
+      fillOpacity: 0.32,
       weight: 2.5,
       dashArray: '8, 6',
     }).addTo(dustFront);
+
+    // Trajectory dashed line pointing from storm center toward astronaut's location
+    if (liveNavState?.currentLatLon) {
+      L.polyline([[lat, lon], liveNavState.currentLatLon], {
+        color: '#f97316',
+        weight: 2,
+        dashArray: '5, 8',
+        opacity: 0.7,
+      }).addTo(dustFront);
+    }
 
     const stormBadge = L.divIcon({
       className: 'dust-storm-radar-badge',
@@ -353,14 +387,14 @@ export default function JezeroTacticalMap({
         font-size: 11px;
         font-weight: 800;
         font-family: monospace;
-        box-shadow: 0 0 18px rgba(249, 115, 22, 0.65);
-      ">🌪 DUST FRONT: ${distanceAheadKm} KM AHEAD (ETA ${etaMin}M)</div>`,
+        box-shadow: 0 0 20px rgba(249, 115, 22, 0.75);
+      ">🌪 DUST SQUALL: ${distanceAheadKm} KM AHEAD • IMPACT IN ${etaMin}M</div>`,
       iconSize: [0, 0],
       iconAnchor: [0, 0],
     });
 
     L.marker([lat, lon], { icon: stormBadge, interactive: false }).addTo(dustFront);
-  }, [dustFrontState]);
+  }, [dustFrontState, liveNavState?.currentLatLon]);
 
   // Google Maps Android-Style Live Astronaut Navigation Arrow & Directional Beam Cone
   useEffect(() => {
@@ -388,8 +422,14 @@ export default function JezeroTacticalMap({
       ? 'background: #b91c1c; color: #fef2f2;'
       : 'background: rgba(15, 23, 42, 0.92); color: #38bdf8;';
 
+    // Show high-impact radar wave animation when locatePulse is active!
+    const showLocatingRadar = Boolean(locatePulse?.showWave);
+
     const puckHtml = `
       <div class="google-maps-astronaut-puck">
+        <!-- High-Impact Locating Radar Ring when Pin is Clicked -->
+        ${showLocatingRadar ? '<div class="locating-radar-wave"></div>' : ''}
+
         <!-- Floating Status Pill above Navigation Arrow -->
         <div style="
           position: absolute; top: -30px; left: 50%; transform: translateX(-50%);
@@ -434,7 +474,7 @@ export default function JezeroTacticalMap({
     if (followAstronaut && active) {
       map.panTo(currentLatLon, { animate: true, duration: 0.35 });
     }
-  }, [liveNavState, followAstronaut]);
+  }, [liveNavState, followAstronaut, locatePulse]);
 
   return (
     <div className="relative w-full h-full">
