@@ -141,8 +141,8 @@ export default function App() {
     setActivePanorama(match);
     showToast({
       id: `pano-${Date.now()}`,
-      title: `🌐 360° POV: ${match.title.split(' ')[0]}`,
-      message: `${match.locationName} • Sol ${match.sol} (${match.is360 ? 'Interactive 360° Photosphere' : 'Ultra-HD Vista'})`,
+      title: match.is360 ? `🌐 360° Photosphere: ${match.title.split(' ')[0]}` : `📷 Surface Photo: ${match.title.split(' ')[0]}`,
+      message: `${match.locationName} • Sol ${match.sol} (${match.is360 ? 'Interactive 360° Sphere' : 'High-Res Surface Photo'})`,
       type: 'info',
       icon: 'camera',
     });

@@ -129,6 +129,7 @@ export default function JezeroTacticalMap({
           weight: 1,
         });
 
+        const is360Waypoint = w.sol === 3 || w.sol === 68;
         circle.bindPopup(`
           <div style="font-size:12px; min-width:180px;">
             <div style="font-weight:700; color:#fb923c; margin-bottom:4px;">Sol ${w.sol} Telemetry</div>
@@ -136,10 +137,10 @@ export default function JezeroTacticalMap({
             <div><b>Measured Tilt:</b> ${tilt}°</div>
             <div><b>Drive Dist:</b> ${(w.dist_total_m / 1000).toFixed(2)} km</div>
             <button onclick="window.dispatchMarsPano(${w.sol})" style="
-              margin-top:8px; width:100%; padding:6px 10px; background:#06b6d4; color:#020617;
+              margin-top:8px; width:100%; padding:6px 10px; background:${is360Waypoint ? '#06b6d4' : '#10b981'}; color:#020617;
               font-weight:800; font-size:11px; border-radius:8px; border:none; cursor:pointer;
               display:flex; align-items:center; justify-content:center; gap:4px;
-            ">🌐 OPEN 360° MARS VIEW</button>
+            ">${is360Waypoint ? '🌐 OPEN 360° PHOTOSPHERE' : '📷 VIEW SURFACE PHOTO'}</button>
           </div>
         `);
 
@@ -277,7 +278,7 @@ export default function JezeroTacticalMap({
             margin-top:8px; width:100%; padding:6px 10px; background:${bgColor}; color:#020617;
             font-weight:800; font-size:11px; border-radius:8px; border:none; cursor:pointer;
             display:flex; align-items:center; justify-content:center; gap:4px;
-          ">🌐 VIEW 360° MARS VISTA</button>
+          ">${(poi.sol === 3 || poi.sol === 68) ? '🌐 OPEN 360° PHOTOSPHERE' : '📷 VIEW SURFACE PHOTO'}</button>
         </div>
       `);
 
