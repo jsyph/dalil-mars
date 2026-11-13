@@ -690,7 +690,7 @@ export default function App() {
 
       {/* 4. PREDICTIVE DUST STORM RADAR & CLOSING METRIC CARD */}
       {dustFrontState.active && showDustRadarCard && (
-        <div className="android-toast-slide absolute top-36 left-3.5 z-30 w-80 sm:w-88 rounded-2xl bg-slate-900/95 border-2 border-orange-500/80 p-3.5 shadow-2xl backdrop-blur-xl space-y-2.5">
+        <div className="squall-card-slide absolute top-36 left-3.5 z-30 w-84 sm:w-92 rounded-2xl bg-slate-900/95 border-2 border-orange-500/80 p-3.5 shadow-2xl backdrop-blur-xl space-y-2.5">
           <div className="flex items-center justify-between border-b border-orange-500/40 pb-2">
             <span className="text-xs font-black uppercase text-orange-400 flex items-center gap-1.5 font-mono">
               <Wind className="h-4 w-4 animate-spin text-orange-400" /> PREDICTIVE SQUALL RADAR
@@ -720,12 +720,12 @@ export default function App() {
 
           <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
             <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800">
-              <span className="text-slate-400 block">BAROMETER RATE</span>
-              <span className="text-red-400 font-bold">▼ -2.8 Pa/min (Falling)</span>
+              <span className="text-slate-400 block font-bold">BAROMETER RATE</span>
+              <span className="text-red-400 font-bold text-[11px]">▼ -2.8 Pa/min (Falling)</span>
             </div>
             <div className="p-2 rounded-xl bg-slate-950/80 border border-slate-800">
-              <span className="text-slate-400 block">SAFE EVAC WINDOW</span>
-              <span className="text-emerald-400 font-bold">{Math.max(2, dustFrontState.etaMin - 5)} min remaining</span>
+              <span className="text-slate-400 block font-bold">SAFE EVAC WINDOW</span>
+              <span className="text-emerald-400 font-bold text-[11px]">{Math.max(2, dustFrontState.etaMin - 5)} min remaining</span>
             </div>
           </div>
 
@@ -734,7 +734,7 @@ export default function App() {
             className="glove-btn w-full min-h-[46px] rounded-xl bg-gradient-to-r from-amber-400 to-orange-500 hover:from-amber-300 hover:to-orange-400 text-slate-950 font-black text-xs uppercase flex items-center justify-center gap-1.5 shadow-lg cursor-pointer"
           >
             <Zap className="h-4 w-4" />
-            <span>DIVERT TO {nearestShelter.station.name.split(' ')[0]} ({nearestShelter.distKm} km)</span>
+            <span>DIVERT TO SHELTER ({nearestShelter.station.name.split(' ')[0]} • {nearestShelter.distKm} km)</span>
           </button>
         </div>
       )}
