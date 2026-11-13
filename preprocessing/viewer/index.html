@@ -1,0 +1,1214 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dalil-Mars | 3D Stage & Terrain Hazard Visualizer</title>
+  <style>
+    :root {
+      --bg-dark: #0a0c10;
+      --panel-bg: rgba(14, 18, 27, 0.88);
+      --panel-border: rgba(255, 90, 30, 0.25);
+      --accent-mars: #ff5722;
+      --accent-safe: #2ecc71;
+      --accent-danger: #ffd600;
+      --accent-blocked: #ff2a2a;
+      --text-main: #f0f3f6;
+      --text-dim: #8b949e;
+      --font-mono: 'JetBrains Mono', 'Fira Code', 'Consolas', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      user-select: none;
+    }
+
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      overflow: hidden;
+      width: 100vw;
+      height: 100vh;
+    }
+
+    #canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+    }
+
+    /* Top Control Bar */
+    .top-bar {
+      position: absolute;
+      top: 16px;
+      left: 16px;
+      right: 16px;
+      height: 54px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(12px);
+      border-radius: 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 20px;
+      z-index: 10;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      font-weight: 700;
+      font-size: 15px;
+      letter-spacing: 0.5px;
+      color: #fff;
+    }
+
+    .brand .logo-orb {
+      width: 18px;
+      height: 18px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 30% 30%, #ff8a65, #d84315);
+      box-shadow: 0 0 10px rgba(255, 87, 34, 0.8);
+    }
+
+    .controls-group {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+
+    .control-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-dim);
+    }
+
+    select, input[type="range"], button {
+      appearance: none;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: #fff;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 13px;
+      outline: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    select:hover, button:hover {
+      background: rgba(255, 255, 255, 0.14);
+      border-color: var(--accent-mars);
+    }
+
+    select option {
+      background: #161b22;
+      color: #fff;
+    }
+
+    button.btn-primary {
+      background: linear-gradient(135deg, #e64a19, #bf360c);
+      border: none;
+      font-weight: 600;
+      box-shadow: 0 2px 8px rgba(230, 74, 25, 0.4);
+    }
+
+    button.btn-primary:hover {
+      box-shadow: 0 4px 14px rgba(230, 74, 25, 0.7);
+      transform: translateY(-1px);
+    }
+
+    /* Left Floating Panel */
+    .left-panel {
+      position: absolute;
+      top: 86px;
+      left: 16px;
+      width: 320px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(12px);
+      border-radius: 10px;
+      padding: 16px;
+      z-index: 10;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+      max-height: calc(100vh - 110px);
+      overflow-y: auto;
+    }
+
+    .panel-section {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+      padding-bottom: 12px;
+    }
+
+    .panel-section:last-child {
+      border-bottom: none;
+      padding-bottom: 0;
+    }
+
+    .section-title {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: var(--text-dim);
+      font-weight: 700;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 13px;
+    }
+
+    .stat-label {
+      color: var(--text-dim);
+    }
+
+    .stat-value {
+      font-family: var(--font-mono);
+      font-weight: 600;
+    }
+
+    /* Legend Pills */
+    .legend-pills {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .legend-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 6px 10px;
+      border-radius: 6px;
+      font-size: 12px;
+    }
+
+    .pill-tag {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .color-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 3px;
+    }
+
+    .color-dot.blocked {
+      background: var(--accent-blocked);
+      box-shadow: 0 0 8px rgba(255, 42, 42, 0.8);
+    }
+
+    .color-dot.dangerous {
+      background: var(--accent-danger);
+      box-shadow: 0 0 8px rgba(255, 214, 0, 0.8);
+    }
+
+    .color-dot.safe {
+      background: var(--accent-safe);
+    }
+
+    /* Sliders */
+    .slider-container {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      color: var(--text-dim);
+    }
+
+    input[type="range"] {
+      width: 100%;
+      height: 6px;
+      border-radius: 3px;
+      background: rgba(255, 255, 255, 0.15);
+      border: none;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    input[type="range"]::-webkit-slider-thumb {
+      appearance: none;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      background: var(--accent-mars);
+      border: 2px solid #fff;
+      cursor: pointer;
+    }
+
+    /* Quick View Buttons */
+    .btn-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px;
+    }
+
+    .btn-secondary {
+      font-size: 12px;
+      padding: 6px 8px;
+      text-align: center;
+    }
+
+    /* Tooltip / Hover Badge */
+    #hover-tooltip {
+      position: absolute;
+      pointer-events: none;
+      background: rgba(13, 17, 23, 0.94);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      border-radius: 8px;
+      padding: 10px 14px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: #fff;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.8);
+      z-index: 100;
+      display: none;
+      transform: translate(15px, 15px);
+      line-height: 1.5;
+    }
+
+    .badge-status {
+      display: inline-block;
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      margin-top: 4px;
+    }
+
+    .badge-status.blocked {
+      background: rgba(255, 42, 42, 0.25);
+      border: 1px solid var(--accent-blocked);
+      color: var(--accent-blocked);
+    }
+
+    .badge-status.dangerous {
+      background: rgba(255, 214, 0, 0.25);
+      border: 1px solid var(--accent-danger);
+      color: var(--accent-danger);
+    }
+
+    .badge-status.safe {
+      background: rgba(46, 204, 113, 0.25);
+      border: 1px solid var(--accent-safe);
+      color: var(--accent-safe);
+    }
+
+    /* Loading Overlay */
+    #loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      background: rgba(10, 12, 16, 0.85);
+      backdrop-filter: blur(8px);
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      z-index: 200;
+      transition: opacity 0.3s ease;
+    }
+
+    .spinner {
+      width: 44px;
+      height: 44px;
+      border: 4px solid rgba(255, 87, 34, 0.2);
+      border-top-color: var(--accent-mars);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin-bottom: 16px;
+    }
+
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+
+    #loading-text {
+      font-size: 14px;
+      color: #fff;
+      font-weight: 500;
+      letter-spacing: 0.5px;
+    }
+
+    /* Bottom HUD status */
+    .bottom-hud {
+      position: absolute;
+      bottom: 16px;
+      right: 16px;
+      background: var(--panel-bg);
+      border: 1px solid var(--panel-border);
+      backdrop-filter: blur(12px);
+      border-radius: 8px;
+      padding: 6px 14px;
+      font-size: 12px;
+      font-family: var(--font-mono);
+      color: var(--text-dim);
+      z-index: 10;
+      display: flex;
+      gap: 16px;
+    }
+
+    .hud-val {
+      color: #fff;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- 3D Canvas -->
+  <div id="canvas-container"></div>
+
+  <!-- Loading Screen -->
+  <div id="loading-overlay">
+    <div class="spinner"></div>
+    <div id="loading-text">Loading Stage Data...</div>
+  </div>
+
+  <!-- Hover Inspection Tooltip -->
+  <div id="hover-tooltip">
+    <div id="tip-coords">Grid: (X: --, Y: --)</div>
+    <div id="tip-elevation">Elevation: -- m</div>
+    <div id="tip-slope">Slope: --°</div>
+    <div id="tip-cost">Cost: --</div>
+    <div id="tip-status" class="badge-status safe">SAFE</div>
+  </div>
+
+  <!-- Top Control Bar -->
+  <div class="top-bar">
+    <div class="brand">
+      <div class="logo-orb"></div>
+      <span>DALIL-MARS 3D VIEWER</span>
+    </div>
+
+    <div class="controls-group">
+      <!-- Stage Selector -->
+      <div class="control-item">
+        <label for="stage-select">Stage:</label>
+        <select id="stage-select">
+          <option value="">Scanning output/ ...</option>
+        </select>
+      </div>
+
+      <!-- Density / Resolution Preset -->
+      <div class="control-item">
+        <label for="density-select">Density:</label>
+        <select id="density-select">
+          <option value="8">Fast Overview (Step 8 ~75k)</option>
+          <option value="4" selected>Balanced (Step 4 ~300k)</option>
+          <option value="2">High Density (Step 2 ~1.2M)</option>
+          <option value="1">Ultra (Step 1 Full Res)</option>
+        </select>
+      </div>
+
+      <!-- Filter Selection -->
+      <div class="control-item">
+        <label for="filter-select">Display:</label>
+        <select id="filter-select">
+          <option value="all" selected>All Nodes</option>
+          <option value="hazards">Hazards & Barriers Only</option>
+          <option value="blocked">Barriers Only (Red)</option>
+          <option value="dangerous">Dangerous Only (Yellow)</option>
+          <option value="safe">Safe Terrain Only</option>
+        </select>
+      </div>
+
+      <!-- Reload button -->
+      <button id="btn-reload" class="btn-primary">↻ Reload Stage</button>
+    </div>
+  </div>
+
+  <!-- Left Stats & Configuration Panel -->
+  <div class="left-panel">
+    <!-- Active Stage Info -->
+    <div class="panel-section">
+      <div class="section-title">Active Stage Overview</div>
+      <div class="stat-row">
+        <span class="stat-label">Stage ID:</span>
+        <span id="stat-stage-id" class="stat-value">--</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Grid Dimensions:</span>
+        <span id="stat-grid-dim" class="stat-value">-- x --</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Elevation Range:</span>
+        <span id="stat-elev-range" class="stat-value">-- m to -- m</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Vertical Relief:</span>
+        <span id="stat-elev-relief" class="stat-value">-- m</span>
+      </div>
+    </div>
+
+    <!-- Hazard Classification Breakdown -->
+    <div class="panel-section">
+      <div class="section-title">
+        <span>Hazard Breakdown</span>
+        <span id="stat-node-count" style="color: #fff; font-family: var(--font-mono);">0 nodes</span>
+      </div>
+      <div class="legend-pills">
+        <div class="legend-pill">
+          <div class="pill-tag">
+            <div class="color-dot blocked"></div>
+            <span>Blocked / Barrier</span>
+          </div>
+          <span id="stat-blocked-count" class="stat-value" style="color: var(--accent-blocked);">0 (0%)</span>
+        </div>
+        <div class="legend-pill">
+          <div class="pill-tag">
+            <div class="color-dot dangerous"></div>
+            <span>Dangerous / Caution</span>
+          </div>
+          <span id="stat-danger-count" class="stat-value" style="color: var(--accent-danger);">0 (0%)</span>
+        </div>
+        <div class="legend-pill">
+          <div class="pill-tag">
+            <div class="color-dot safe"></div>
+            <span>Safe Terrain</span>
+          </div>
+          <span id="stat-safe-count" class="stat-value" style="color: var(--accent-safe);">0 (0%)</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3D Environment Display Settings -->
+    <div class="panel-section">
+      <div class="section-title">3D Elevation & Block Settings</div>
+      
+      <!-- Vertical Height Scale -->
+      <div class="slider-container">
+        <div class="slider-header">
+          <span>Height Exaggeration (Vertical Axis):</span>
+          <span id="val-height-scale" class="stat-value">2.5x</span>
+        </div>
+        <input id="slider-height-scale" type="range" min="0.5" max="8.0" step="0.25" value="2.5">
+      </div>
+
+      <!-- Block Size -->
+      <div class="slider-container">
+        <div class="slider-header">
+          <span>Block Width / Gap:</span>
+          <span id="val-block-size" class="stat-value">0.95x</span>
+        </div>
+        <input id="slider-block-size" type="range" min="0.5" max="1.3" step="0.05" value="0.95">
+      </div>
+
+      <!-- Vertical Datum Mode (+ve / -ve Vertical Axis) -->
+      <div class="slider-container">
+        <div class="slider-header">
+          <span>Vertical Axis Datum Mode:</span>
+        </div>
+        <select id="datum-mode-select">
+          <option value="mean" selected>Mean Datum (±ve Vertical Axis: +High / -Low)</option>
+          <option value="floor">Crater Floor Datum (+ve Vertical Axis)</option>
+        </select>
+      </div>
+
+      <!-- Geometry Style -->
+      <div class="slider-container">
+        <div class="slider-header">
+          <span>Block Geometry Style:</span>
+        </div>
+        <select id="block-style-select">
+          <option value="cubes" selected>Floating 3D Blocks (Cubes)</option>
+          <option value="columns">Extruded Terrain Columns</option>
+        </select>
+      </div>
+
+      <!-- Color Palette -->
+      <div class="slider-container">
+        <div class="slider-header">
+          <span>Terrain Palette:</span>
+        </div>
+        <select id="palette-select">
+          <option value="mars" selected>Mars Rust Topography</option>
+          <option value="emerald">Emerald Contrast Palette</option>
+          <option value="dark">Stealth Carbon Matrix</option>
+        </select>
+      </div>
+    </div>
+
+    <!-- Quick Camera Presets -->
+    <div class="panel-section">
+      <div class="section-title">Camera Perspectives</div>
+      <div class="btn-grid">
+        <button id="cam-iso" class="btn-secondary">3D Isometric</button>
+        <button id="cam-top" class="btn-secondary">Top-Down 2D</button>
+        <button id="cam-rim" class="btn-secondary">Crater Rim Profile</button>
+        <button id="cam-delta" class="btn-secondary">Jezero Delta</button>
+      </div>
+    </div>
+
+    <!-- Region of Interest Quick Zoom -->
+    <div class="panel-section">
+      <div class="section-title">Region of Interest (ROI)</div>
+      <select id="roi-select">
+        <option value="full" selected>Full Grid (100% Extent)</option>
+        <option value="delta">Jezero River Delta Sector</option>
+        <option value="crater_rim">Western Crater Rim Wall</option>
+        <option value="crater_floor">Deep Lakebed Basin</option>
+      </select>
+    </div>
+  </div>
+
+  <!-- Bottom Diagnostics HUD -->
+  <div class="bottom-hud">
+    <div>FPS: <span id="hud-fps" class="hud-val">60</span></div>
+    <div>Draw Calls: <span id="hud-draws" class="hud-val">1</span></div>
+    <div>Nodes Rendered: <span id="hud-nodes" class="hud-val">0</span></div>
+    <div>Data Transfer: <span id="hud-transfer" class="hud-val">0.0 MB</span></div>
+  </div>
+
+  <!-- Three.js + OrbitControls (Local with CDN fallback) -->
+  <script src="./static/three.min.js"></script>
+  <script>
+    if (typeof THREE === 'undefined') {
+      document.write('<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"><\/script>');
+    }
+  </script>
+  <script src="./static/OrbitControls.js"></script>
+  <script>
+    if (typeof THREE.OrbitControls === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"><\/script>');
+    }
+  </script>
+
+  <!-- Application Logic -->
+  <script>
+    // Global State
+    let scene, camera, renderer, controls;
+    let instancedMesh = null;
+    let blockGeometry = null;
+    let blockMaterial = null;
+    let wireframeMesh = null;
+    let raycaster, mouse;
+
+    let currentStage = 'stage_2';
+    let currentStep = 4;
+    let currentFilter = 'all';
+    let currentRoi = 'full';
+    let heightMultiplier = 2.5;
+    let blockSizeMultiplier = 0.95;
+    let currentBlockStyle = 'cubes';
+    let currentPalette = 'mars';
+    let currentDatumMode = 'mean';
+
+    // Data Cache for Hover Raycasting
+    let nodeDataArray = null; // Float32Array
+    let nodeCount = 0;
+    let gridBounds = { minZ: -3200, maxZ: -1400, rows: 3385, cols: 1877 };
+    let normScale = { scaleX: 1, scaleY: 1, scaleZ: 1, offsetX: 0, offsetY: 0, offsetZ: 0 };
+
+    // Performance timing
+    let lastTime = performance.now();
+    let frameCount = 0;
+    let fps = 60;
+
+    const dummy = new THREE.Object3D();
+    const tempColor = new THREE.Color();
+
+    // DOM Elements
+    const stageSelect = document.getElementById('stage-select');
+    const densitySelect = document.getElementById('density-select');
+    const filterSelect = document.getElementById('filter-select');
+    const roiSelect = document.getElementById('roi-select');
+    const btnReload = document.getElementById('btn-reload');
+    const sliderHeight = document.getElementById('slider-height-scale');
+    const valHeight = document.getElementById('val-height-scale');
+    const sliderBlockSize = document.getElementById('slider-block-size');
+    const valBlockSize = document.getElementById('val-block-size');
+    const blockStyleSelect = document.getElementById('block-style-select');
+    const datumModeSelect = document.getElementById('datum-mode-select');
+    const paletteSelect = document.getElementById('palette-select');
+
+    const loadingOverlay = document.getElementById('loading-overlay');
+    const loadingText = document.getElementById('loading-text');
+    const tooltip = document.getElementById('hover-tooltip');
+
+    // Stats Elements
+    const statStageId = document.getElementById('stat-stage-id');
+    const statGridDim = document.getElementById('stat-grid-dim');
+    const statElevRange = document.getElementById('stat-elev-range');
+    const statElevRelief = document.getElementById('stat-elev-relief');
+    const statNodeCount = document.getElementById('stat-node-count');
+    const statBlockedCount = document.getElementById('stat-blocked-count');
+    const statDangerCount = document.getElementById('stat-danger-count');
+    const statSafeCount = document.getElementById('stat-safe-count');
+    const hudFps = document.getElementById('hud-fps');
+    const hudNodes = document.getElementById('hud-nodes');
+    const hudTransfer = document.getElementById('hud-transfer');
+
+    // Preset Regions of Interest (ROI)
+    const ROI_PRESETS = {
+      full: null,
+      delta: { r_min: 1400, r_max: 2200, c_min: 700, c_max: 1300 },
+      crater_rim: { r_min: 1000, r_max: 2600, c_min: 100, c_max: 600 },
+      crater_floor: { r_min: 1800, r_max: 2800, c_min: 900, c_max: 1600 }
+    };
+
+    // Color definitions
+    const COLOR_BLOCKED = new THREE.Color('#ff2222');
+    const COLOR_DANGEROUS = new THREE.Color('#ffd600');
+    const COLOR_SAFE_MARS_MIN = new THREE.Color('#662d18');
+    const COLOR_SAFE_MARS_MAX = new THREE.Color('#f39c12');
+    const COLOR_SAFE_EMERALD_MIN = new THREE.Color('#145a32');
+    const COLOR_SAFE_EMERALD_MAX = new THREE.Color('#2ecc71');
+    const COLOR_SAFE_DARK_MIN = new THREE.Color('#212f3d');
+    const COLOR_SAFE_DARK_MAX = new THREE.Color('#5d6d7e');
+
+    // Initialize 3D Scene
+    function initScene() {
+      const container = document.getElementById('canvas-container');
+
+      scene = new THREE.Scene();
+      scene.background = new THREE.Color(0x0a0c10);
+      scene.fog = new THREE.FogExp2(0x0a0c10, 0.0015);
+
+      camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 5000);
+      camera.position.set(220, 260, 320);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+      renderer.setSize(window.innerWidth, window.innerHeight);
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.shadowMap.enabled = false; // Disabled for ultra high-fps block rendering
+      container.appendChild(renderer.domElement);
+
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.dampingFactor = 0.05;
+      controls.maxDistance = 3500;
+      controls.minDistance = 5;
+      controls.target.set(0, 0, 0);
+
+      // Lighting
+      const ambientLight = new THREE.AmbientLight(0xffffff, 0.65);
+      scene.add(ambientLight);
+
+      const dirLight = new THREE.DirectionalLight(0xffeedd, 0.85);
+      dirLight.position.set(300, 500, 200);
+      scene.add(dirLight);
+
+      const fillLight = new THREE.DirectionalLight(0x88bbff, 0.35);
+      fillLight.position.set(-300, 200, -200);
+      scene.add(fillLight);
+
+      // Grid Base Plane
+      const gridHelper = new THREE.GridHelper(500, 50, 0x334455, 0x1b2430);
+      gridHelper.position.y = -1;
+      scene.add(gridHelper);
+
+      // Raycaster for hover inspection
+      raycaster = new THREE.Raycaster();
+      mouse = new THREE.Vector2(-999, -999);
+
+      window.addEventListener('resize', onWindowResize);
+      window.addEventListener('mousemove', onMouseMove);
+
+      setupEventListeners();
+      loadStagesList();
+      animate();
+    }
+
+    function onWindowResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    function onMouseMove(event) {
+      // Raycasting only when hovering over canvas
+      if (event.clientY < 70 || event.clientX < 340) {
+        tooltip.style.display = 'none';
+        return;
+      }
+      mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+      mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+
+      tooltip.style.left = event.clientX + 'px';
+      tooltip.style.top = event.clientY + 'px';
+    }
+
+    // Fetch Stages List from Python API
+    async function loadStagesList() {
+      try {
+        const res = await fetch('/api/stages');
+        const stages = await res.json();
+        stageSelect.innerHTML = '';
+
+        if (!stages || stages.length === 0) {
+          stageSelect.innerHTML = '<option value="">No stages found</option>';
+          return;
+        }
+
+        stages.forEach(st => {
+          const opt = document.createElement('option');
+          opt.value = st.id;
+          opt.textContent = `${st.id.toUpperCase()}: ${st.name}`;
+          stageSelect.appendChild(opt);
+        });
+
+        // Default to stage_2 if exists, otherwise first stage
+        const hasStage2 = stages.some(s => s.id === 'stage_2');
+        currentStage = hasStage2 ? 'stage_2' : stages[0].id;
+        stageSelect.value = currentStage;
+
+        fetchAndRenderStage();
+      } catch (err) {
+        console.error('Failed to load stages:', err);
+        loadingText.textContent = 'Error connecting to visualizer server';
+      }
+    }
+
+    // Fetch Binary Block Stream from Python API & Render InstancedMesh
+    async function fetchAndRenderStage() {
+      showLoading(true, `Loading ${currentStage.toUpperCase()} data...`);
+
+      const roiParam = ROI_PRESETS[currentRoi];
+      let url = `/api/data?stage=${encodeURIComponent(currentStage)}&step=${currentStep}&filter=${currentFilter}`;
+      if (roiParam) {
+        url += `&r_min=${roiParam.r_min}&r_max=${roiParam.r_max}&c_min=${roiParam.c_min}&c_max=${roiParam.c_max}`;
+      }
+
+      const t0 = performance.now();
+      try {
+        const response = await fetch(url);
+        if (!response.ok) throw new Error(`HTTP Error: ${response.status}`);
+
+        const arrayBuffer = await response.arrayBuffer();
+        const transferMB = (arrayBuffer.byteLength / (1024 * 1024)).toFixed(2);
+        hudTransfer.textContent = `${transferMB} MB`;
+
+        parseAndBuildScene(arrayBuffer);
+        updateMetadataUI();
+      } catch (err) {
+        console.error('Error fetching stage data:', err);
+        alert('Failed to load stage data: ' + err.message);
+      } finally {
+        showLoading(false);
+      }
+    }
+
+    // Parse Binary Header & Node Records
+    function parseAndBuildScene(buffer) {
+      if (buffer.byteLength < 64) {
+        console.warn('Received empty buffer');
+        return;
+      }
+
+      const view = new DataView(buffer);
+      // Verify magic 'MARS'
+      const magic0 = view.getUint8(0);
+      const magic1 = view.getUint8(1);
+      const magic2 = view.getUint8(2);
+      const magic3 = view.getUint8(3);
+      const magicStr = String.fromCharCode(magic0, magic1, magic2, magic3);
+
+      if (magicStr !== 'MARS') {
+        console.error('Invalid binary magic header:', magicStr);
+        return;
+      }
+
+      const totalNodes = view.getUint32(8, true);
+      const gridRows = view.getUint32(12, true);
+      const gridCols = view.getUint32(16, true);
+      const step = view.getUint32(20, true);
+      const minZ = view.getFloat32(24, true);
+      const maxZ = view.getFloat32(28, true);
+      const safeCount = view.getUint32(32, true);
+      const dangerousCount = view.getUint32(36, true);
+      const blockedCount = view.getUint32(40, true);
+
+      nodeCount = totalNodes;
+      gridBounds = { minZ, maxZ, rows: gridRows, cols: gridCols };
+
+      // Update Sidebar Statistics
+      statStageId.textContent = currentStage.toUpperCase();
+      statGridDim.textContent = `${gridRows} x ${gridCols} nodes`;
+      statElevRange.textContent = `${minZ.toFixed(1)} m to ${maxZ.toFixed(1)} m`;
+      statElevRelief.textContent = `${(maxZ - minZ).toFixed(1)} m`;
+
+      statNodeCount.textContent = `${totalNodes.toLocaleString()} blocks`;
+      hudNodes.textContent = totalNodes.toLocaleString();
+
+      const totalActive = safeCount + dangerousCount + blockedCount || 1;
+      statBlockedCount.textContent = `${blockedCount.toLocaleString()} (${((blockedCount/totalActive)*100).toFixed(1)}%)`;
+      statDangerCount.textContent = `${dangerousCount.toLocaleString()} (${((dangerousCount/totalActive)*100).toFixed(1)}%)`;
+      statSafeCount.textContent = `${safeCount.toLocaleString()} (${((safeCount/totalActive)*100).toFixed(1)}%)`;
+
+      // Clear existing mesh
+      if (instancedMesh) {
+        scene.remove(instancedMesh);
+        instancedMesh.geometry.dispose();
+        instancedMesh.material.dispose();
+        instancedMesh = null;
+      }
+
+      if (totalNodes === 0) return;
+
+      // Extract node data records (20 bytes each)
+      // Stored in typed arrays for ultra-fast access
+      const headerOffset = 64;
+      const recordSize = 20;
+
+      // Create storage for CPU raycasting inspector
+      nodeDataArray = new Array(totalNodes);
+
+      // Coordinate normalization to fit comfortably in a 250 x 250 unit 3D workspace
+      const aspect = gridCols / gridRows;
+      const extentY = 240;
+      const extentX = extentY * aspect;
+
+      const deltaZ = (maxZ - minZ) || 1.0;
+      const verticalHeightSpan = 35.0; // Base vertical height unit
+
+      normScale = {
+        scaleX: extentX / gridCols,
+        scaleY: extentY / gridRows,
+        scaleZ: verticalHeightSpan / deltaZ,
+        offsetX: -extentX / 2,
+        offsetY: -extentY / 2,
+        minZ: minZ
+      };
+
+      // Base Block Size in 3D Units
+      const blockWidth = (extentX / (gridCols / step)) * blockSizeMultiplier;
+      const blockDepth = (extentY / (gridRows / step)) * blockSizeMultiplier;
+      const defaultBlockHeight = Math.max(0.5, blockWidth * 0.7);
+
+      // Create InstancedMesh
+      blockGeometry = new THREE.BoxGeometry(blockWidth, defaultBlockHeight, blockDepth);
+      blockMaterial = new THREE.MeshStandardMaterial({
+        roughness: 0.65,
+        metalness: 0.15,
+        flatShading: true
+      });
+
+      instancedMesh = new THREE.InstancedMesh(blockGeometry, blockMaterial, totalNodes);
+      instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+      // Populate instance transforms and colors
+      const zRange = maxZ - minZ || 1.0;
+
+      for (let i = 0; i < totalNodes; i++) {
+        const offset = headerOffset + i * recordSize;
+        const col = view.getFloat32(offset, true);
+        const row = view.getFloat32(offset + 4, true);
+        const z = view.getFloat32(offset + 8, true);
+        const status = view.getUint8(offset + 12);
+        const slope = view.getUint8(offset + 13);
+        const cost = view.getFloat32(offset + 16, true);
+
+        // Save into cache for hover inspector
+        nodeDataArray[i] = { col, row, z, status, slope, cost };
+
+        // 3D coordinates: X = col, Z = row (horizontal), Y = vertical height
+        const posX = normScale.offsetX + col * normScale.scaleX;
+        const posZ = normScale.offsetY + row * normScale.scaleY;
+        const datumBaseline = (currentDatumMode === 'mean') ? ((minZ + maxZ) / 2.0) : minZ;
+        const elevRelative = (z - datumBaseline);
+        const posY = elevRelative * normScale.scaleZ * heightMultiplier;
+
+        if (currentBlockStyle === 'columns') {
+          // Extruded column rising/descending along vertical axis
+          const colHeight = Math.max(0.6, Math.abs(posY));
+          const colCenterY = (currentDatumMode === 'mean') ? (posY / 2) : (colHeight / 2);
+          dummy.position.set(posX, colCenterY, posZ);
+          dummy.scale.set(1, colHeight / defaultBlockHeight, 1);
+        } else {
+          // Floating 3D Block positioned directly at vertical elevation (+ve or -ve vertical axis)
+          dummy.position.set(posX, posY, posZ);
+          dummy.scale.set(1, 1, 1);
+        }
+
+        dummy.updateMatrix();
+        instancedMesh.setMatrixAt(i, dummy.matrix);
+
+        // Color coding
+        if (status === 2) {
+          // Blocked / Barrier -> RED
+          tempColor.copy(COLOR_BLOCKED);
+        } else if (status === 1) {
+          // Dangerous / Caution -> YELLOW
+          tempColor.copy(COLOR_DANGEROUS);
+        } else {
+          // Safe Terrain -> Mars Topo Gradient or Selected Palette
+          const t = Math.max(0, Math.min(1, (z - minZ) / zRange));
+          if (currentPalette === 'mars') {
+            tempColor.copy(COLOR_SAFE_MARS_MIN).lerp(COLOR_SAFE_MARS_MAX, t);
+          } else if (currentPalette === 'emerald') {
+            tempColor.copy(COLOR_SAFE_EMERALD_MIN).lerp(COLOR_SAFE_EMERALD_MAX, t);
+          } else {
+            tempColor.copy(COLOR_SAFE_DARK_MIN).lerp(COLOR_SAFE_DARK_MAX, t);
+          }
+        }
+
+        instancedMesh.setColorAt(i, tempColor);
+      }
+
+      instancedMesh.instanceMatrix.needsUpdate = true;
+      if (instancedMesh.instanceColor) instancedMesh.instanceColor.needsUpdate = true;
+
+      scene.add(instancedMesh);
+    }
+
+    // Dynamic Height Scale Update (Instantly re-scales vertical axis without re-fetching!)
+    function updateHeightScale() {
+      if (!instancedMesh || !nodeDataArray) return;
+
+      const totalNodes = nodeDataArray.length;
+      const minZ = gridBounds.minZ;
+      const defaultBlockHeight = blockGeometry.parameters.height;
+
+      const datumBaseline = (currentDatumMode === 'mean') ? ((gridBounds.minZ + gridBounds.maxZ) / 2.0) : gridBounds.minZ;
+
+      for (let i = 0; i < totalNodes; i++) {
+        const node = nodeDataArray[i];
+        const posX = normScale.offsetX + node.col * normScale.scaleX;
+        const posZ = normScale.offsetY + node.row * normScale.scaleY;
+        const elevRelative = (node.z - datumBaseline);
+        const posY = elevRelative * normScale.scaleZ * heightMultiplier;
+
+        if (currentBlockStyle === 'columns') {
+          const colHeight = Math.max(0.6, Math.abs(posY));
+          const colCenterY = (currentDatumMode === 'mean') ? (posY / 2) : (colHeight / 2);
+          dummy.position.set(posX, colCenterY, posZ);
+          dummy.scale.set(1, colHeight / defaultBlockHeight, 1);
+        } else {
+          dummy.position.set(posX, posY, posZ);
+          dummy.scale.set(1, 1, 1);
+        }
+
+        dummy.updateMatrix();
+        instancedMesh.setMatrixAt(i, dummy.matrix);
+      }
+
+      instancedMesh.instanceMatrix.needsUpdate = true;
+    }
+
+    // Dynamic Color Palette Update
+    function updatePaletteColors() {
+      if (!instancedMesh || !nodeDataArray) return;
+      const totalNodes = nodeDataArray.length;
+      const minZ = gridBounds.minZ;
+      const maxZ = gridBounds.maxZ;
+      const zRange = maxZ - minZ || 1.0;
+
+      for (let i = 0; i < totalNodes; i++) {
+        const node = nodeDataArray[i];
+        if (node.status === 2) {
+          tempColor.copy(COLOR_BLOCKED);
+        } else if (node.status === 1) {
+          tempColor.copy(COLOR_DANGEROUS);
+        } else {
+          const t = Math.max(0, Math.min(1, (node.z - minZ) / zRange));
+          if (currentPalette === 'mars') {
+            tempColor.copy(COLOR_SAFE_MARS_MIN).lerp(COLOR_SAFE_MARS_MAX, t);
+          } else if (currentPalette === 'emerald') {
+            tempColor.copy(COLOR_SAFE_EMERALD_MIN).lerp(COLOR_SAFE_EMERALD_MAX, t);
+          } else {
+            tempColor.copy(COLOR_SAFE_DARK_MIN).lerp(COLOR_SAFE_DARK_MAX, t);
+          }
+        }
+        instancedMesh.setColorAt(i, tempColor);
+      }
+
+      if (instancedMesh.instanceColor) instancedMesh.instanceColor.needsUpdate = true;
+    }
+
+    // Raycast Inspection for Mouse Hover
+    function inspectHover() {
+      if (!instancedMesh || !nodeDataArray) return;
+
+      raycaster.setFromCamera(mouse, camera);
+      const intersects = raycaster.intersectObject(instancedMesh);
+
+      if (intersects.length > 0) {
+        const instanceId = intersects[0].instanceId;
+        if (instanceId !== undefined && nodeDataArray[instanceId]) {
+          const data = nodeDataArray[instanceId];
+
+          document.getElementById('tip-coords').textContent = `Grid: (Col ${Math.round(data.col)}, Row ${Math.round(data.row)})`;
+          document.getElementById('tip-elevation').textContent = `Elevation: ${data.z.toFixed(2)} m`;
+          document.getElementById('tip-slope').textContent = `Slope: ${data.slope}°`;
+          document.getElementById('tip-cost').textContent = `Cost Weight: ${data.cost < 0 ? 'INF (Blocked)' : data.cost.toFixed(1)}`;
+
+          const statusElem = document.getElementById('tip-status');
+          if (data.status === 2) {
+            statusElem.className = 'badge-status blocked';
+            statusElem.textContent = 'BLOCKED / BARRIER';
+          } else if (data.status === 1) {
+            statusElem.className = 'badge-status dangerous';
+            statusElem.textContent = 'DANGEROUS / CAUTION';
+          } else {
+            statusElem.className = 'badge-status safe';
+            statusElem.textContent = 'SAFE TERRAIN';
+          }
+
+          tooltip.style.display = 'block';
+          return;
+        }
+      }
+      tooltip.style.display = 'none';
+    }
+
+    // UI Event Listeners
+    function setupEventListeners() {
+      // Stage selection
+      stageSelect.addEventListener('change', (e) => {
+        currentStage = e.target.value;
+        fetchAndRenderStage();
+      });
+
+      // Density selection
+      densitySelect.addEventListener('change', (e) => {
+        currentStep = parseInt(e.target.value, 10);
+        fetchAndRenderStage();
+      });
+
+      // Filter selection
+      filterSelect.addEventListener('change', (e) => {
+        currentFilter = e.target.value;
+        fetchAndRenderStage();
+      });
+
+      // ROI selection
+      roiSelect.addEventListener('change', (e) => {
+        currentRoi = e.target.value;
+        fetchAndRenderStage();
+      });
+
+      // Reload
+      btnReload.addEventListener('click', () => {
+        fetchAndRenderStage();
+      });
+
+      // Height exaggeration slider
+      sliderHeight.addEventListener('input', (e) => {
+        heightMultiplier = parseFloat(e.target.value);
+        valHeight.textContent = heightMultiplier.toFixed(1) + 'x';
+        updateHeightScale();
+      });
+
+      // Block size slider
+      sliderBlockSize.addEventListener('change', (e) => {
+        blockSizeMultiplier = parseFloat(e.target.value);
+        valBlockSize.textContent = blockSizeMultiplier.toFixed(2) + 'x';
+        fetchAndRenderStage();
+      });
+
+      // Block style
+      blockStyleSelect.addEventListener('change', (e) => {
+        currentBlockStyle = e.target.value;
+        updateHeightScale();
+      });
+
+      // Datum mode (+ve / -ve vertical axis)
+      datumModeSelect.addEventListener('change', (e) => {
+        currentDatumMode = e.target.value;
+        updateHeightScale();
+      });
+
+      // Palette
+      paletteSelect.addEventListener('change', (e) => {
+        currentPalette = e.target.value;
+        updatePaletteColors();
+      });
+
+      // Camera Presets
+      document.getElementById('cam-iso').addEventListener('click', () => {
+        tweenCamera(220, 260, 320, 0, 0, 0);
+      });
+
+      document.getElementById('cam-top').addEventListener('click', () => {
+        tweenCamera(0, 480, 0.01, 0, 0, 0);
+      });
+
+      document.getElementById('cam-rim').addEventListener('click', () => {
+        tweenCamera(-280, 80, 0, 0, 20, 0);
+      });
+
+      document.getElementById('cam-delta').addEventListener('click', () => {
+        tweenCamera(30, 90, 80, 10, 15, 20);
+      });
+    }
+
+    function tweenCamera(x, y, z, tx, ty, tz) {
+      camera.position.set(x, y, z);
+      controls.target.set(tx, ty, tz);
+      controls.update();
+    }
+
+    function showLoading(show, message = 'Loading Stage Data...') {
+      loadingText.textContent = message;
+      loadingOverlay.style.display = show ? 'flex' : 'none';
+      loadingOverlay.style.opacity = show ? '1' : '0';
+    }
+
+    async function updateMetadataUI() {
+      try {
+        const res = await fetch(`/api/stage_info?stage=${encodeURIComponent(currentStage)}`);
+        const info = await res.json();
+        if (info && info.description) {
+          statStageId.title = info.description;
+        }
+      } catch (e) {}
+    }
+
+    // Animation Loop
+    function animate() {
+      requestAnimationFrame(animate);
+
+      // Measure FPS
+      frameCount++;
+      const now = performance.now();
+      if (now - lastTime >= 1000) {
+        fps = Math.round((frameCount * 1000) / (now - lastTime));
+        hudFps.textContent = fps;
+        frameCount = 0;
+        lastTime = now;
+      }
+
+      controls.update();
+      inspectHover();
+      renderer.render(scene, camera);
+    }
+
+    // Start
+    window.addEventListener('DOMContentLoaded', initScene);
+  </script>
+</body>
+</html>
