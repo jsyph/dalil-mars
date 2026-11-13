@@ -3344,73 +3344,63 @@ export default function App() {
                         ))}
                       </div>
 
-                      {/* Prominent Battery & PLSS O2 Tank Simulation Cards */}
-                      <div className="grid grid-cols-2 gap-2 bg-[#191d24] p-2.5 rounded-[4px] border border-[#242933]">
+                      {/* Prominent Battery & PLSS O2 Tank Simulation Sliders */}
+                      <div className="grid grid-cols-2 gap-2.5 bg-[#191d24] p-2.5 rounded-[4px] border border-[#242933]">
                         <div>
-                          <div className="flex items-center justify-between text-[11px] font-mono text-[#9da5b4] mb-1">
+                          <div className="flex items-center justify-between text-[11px] font-mono text-[#9da5b4] mb-1.5">
                             <span className="flex items-center gap-1 font-bold text-[#edf0f5]">
-                              <BatteryCharging className="h-3.5 w-3.5 text-[#22c55e]" /> Battery
+                              <BatteryCharging className={`h-3.5 w-3.5 ${startBatteryPct < 25 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`} /> Battery
                             </span>
                             <span className="font-bold text-[#edf0f5]">
-                              {startBatteryPct}% <span className="text-[10px] text-[#656d7d]">-&gt; {routeResult.finalArrivalBattery}%</span>
+                              {startBatteryPct}%{' '}
+                              <span className={`text-[10px] ${routeResult.finalArrivalBattery < 20 ? 'text-[#ef4444]' : 'text-[#656d7d]'}`}>
+                                &rarr; {routeResult.finalArrivalBattery}%
+                              </span>
                             </span>
                           </div>
-                          <div className="w-full h-2 bg-[#0b0d11] rounded-[2px] overflow-hidden">
-                            <div
-                              className={`h-full ${startBatteryPct < 30 ? 'bg-[#ef4444]' : 'bg-[#22c55e]'}`}
-                              style={{ width: `${startBatteryPct}%` }}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between mt-1.5 text-[10px] font-mono">
-                            <button
-                              type="button"
-                              onClick={() => setStartBatteryPct((b) => Math.max(15, b - 15))}
-                              className="glove-btn min-h-[30px] px-2 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
-                            >
-                              <Minus className="h-3 w-3" /> 15%
-                            </button>
-                            <span className="text-[#656d7d]">SIM</span>
-                            <button
-                              type="button"
-                              onClick={() => setStartBatteryPct((b) => Math.min(100, b + 15))}
-                              className="glove-btn min-h-[30px] px-2 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
-                            >
-                              <Plus className="h-3 w-3" /> 15%
-                            </button>
+                          <input
+                            type="range"
+                            min="15"
+                            max="100"
+                            step="1"
+                            value={startBatteryPct}
+                            onChange={(e) => setStartBatteryPct(Number(e.target.value))}
+                            className="glove-slider w-full"
+                            aria-label="Starting Battery Percentage"
+                          />
+                          <div className="flex justify-between items-center text-[9px] font-mono text-[#656d7d] mt-1">
+                            <span>15%</span>
+                            <span className="text-[#9da5b4]">SIMULATOR</span>
+                            <span>100%</span>
                           </div>
                         </div>
 
                         <div>
-                          <div className="flex items-center justify-between text-[11px] font-mono text-[#9da5b4] mb-1">
+                          <div className="flex items-center justify-between text-[11px] font-mono text-[#9da5b4] mb-1.5">
                             <span className="flex items-center gap-1 font-bold text-[#edf0f5]">
-                              <Droplets className="h-3.5 w-3.5 text-[#22c55e]" /> PLSS O2
+                              <Droplets className={`h-3.5 w-3.5 ${startO2Pct < 25 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`} /> PLSS O2
                             </span>
                             <span className="font-bold text-[#edf0f5]">
-                              {startO2Pct}% <span className="text-[10px] text-[#656d7d]">-&gt; {routeResult.finalArrivalO2}%</span>
+                              {startO2Pct}%{' '}
+                              <span className={`text-[10px] ${routeResult.finalArrivalO2 < 20 ? 'text-[#ef4444]' : 'text-[#656d7d]'}`}>
+                                &rarr; {routeResult.finalArrivalO2}%
+                              </span>
                             </span>
                           </div>
-                          <div className="w-full h-2 bg-[#0b0d11] rounded-[2px] overflow-hidden">
-                            <div
-                              className={`h-full ${startO2Pct < 30 ? 'bg-[#ef4444]' : 'bg-[#22c55e]'}`}
-                              style={{ width: `${startO2Pct}%` }}
-                            />
-                          </div>
-                          <div className="flex items-center justify-between mt-1.5 text-[10px] font-mono">
-                            <button
-                              type="button"
-                              onClick={() => setStartO2Pct((o) => Math.max(15, o - 15))}
-                              className="glove-btn min-h-[30px] px-2 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
-                            >
-                              <Minus className="h-3 w-3" /> 15%
-                            </button>
-                            <span className="text-[#656d7d]">SIM</span>
-                            <button
-                              type="button"
-                              onClick={() => setStartO2Pct((o) => Math.min(100, o + 15))}
-                              className="glove-btn min-h-[30px] px-2 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
-                            >
-                              <Plus className="h-3 w-3" /> 15%
-                            </button>
+                          <input
+                            type="range"
+                            min="15"
+                            max="100"
+                            step="1"
+                            value={startO2Pct}
+                            onChange={(e) => setStartO2Pct(Number(e.target.value))}
+                            className="glove-slider w-full"
+                            aria-label="Starting PLSS Oxygen Percentage"
+                          />
+                          <div className="flex justify-between items-center text-[9px] font-mono text-[#656d7d] mt-1">
+                            <span>15%</span>
+                            <span className="text-[#9da5b4]">SIMULATOR</span>
+                            <span>100%</span>
                           </div>
                         </div>
                       </div>
