@@ -5,6 +5,7 @@ import {
   Battery,
   BatteryCharging,
   Camera,
+  Check,
   CheckCircle2,
   ChevronDown,
   ChevronLeft,
@@ -17,21 +18,30 @@ import {
   Eye,
   EyeOff,
   Flame,
+  Gauge,
   Layers,
+  LogOut,
+  Map as MapIcon,
   MapPin,
+  Microscope,
+  Minus,
   Navigation,
   Navigation2,
+  PackageCheck,
   Pause,
   Play,
+  Plus,
   Radio,
   RotateCcw,
   Shield,
   ShieldAlert,
   Sliders,
   Sun,
+  Target,
   Thermometer,
-  Volume2,
-  VolumeX,
+  TrendingUp,
+  Truck,
+  User,
   Wind,
   X,
   Zap,
@@ -68,7 +78,7 @@ export default function App() {
     season: 'late autumn',
   };
 
-  // Google Maps App Modes: 'browse' (exploring/planning) vs 'navigating' (active turn-by-turn driving/walking)
+  // App Navigation Modes: 'browse' (exploring/planning) vs 'navigating' (active turn-by-turn walking)
   const [navMode, setNavMode] = useState('browse');
   const [followAstronaut, setFollowAstronaut] = useState(true);
   const [showLayersSheet, setShowLayersSheet] = useState(false);
@@ -98,7 +108,7 @@ export default function App() {
   const [selectedMissionSol] = useState(Number(latestMeda.sol) || 1133);
   const [startLstMinutes, setStartLstMinutes] = useState(705); // 11:45 LST
 
-  // Incoming Dust Storm State
+  // Incoming Dust Storm Radar State
   const [incomingDustAlert, setIncomingDustAlert] = useState(false);
 
   // Selected Sol for Astronaut POV image
@@ -186,7 +196,7 @@ export default function App() {
             setHasCompletedPitStop(true);
             showToast({
               id: 'recharge-done',
-              type: 'success',
+              type: 'charge',
               title: '⚡ Fast-Charge Complete',
               message: 'Suit/Rover Battery & Oxygen restored to 100% capacity.',
             });
@@ -528,6 +538,26 @@ export default function App() {
     });
   };
 
+  // Quick Preset Simulator Mode Applier
+  const applyPreset = (sId, eId, lKey, wKey, batPct, o2Pct, solPreview, lstMin = 705) => {
+    setStartId(sId);
+    setEndId(eId);
+    setLoadoutKey(lKey);
+    setWeatherKey(wKey);
+    setStartBatteryPct(batPct);
+    setStartO2Pct(o2Pct);
+    setAutoChargingStop(true);
+    setSelectedSol(solPreview);
+    setStartLstMinutes(lstMin);
+    setIncomingDustAlert(wKey === 'dust_storm');
+    showToast({
+      id: 'preset-applied',
+      type: 'info',
+      title: `Scenario Applied`,
+      message: `${wKey === 'dust_storm' ? '🌪 Regional Dust Storm' : wKey === 'solar_storm' ? '⚡ Solar Flare' : '☀️ Nominal Sol'} • ${batPct}% Battery.`,
+    });
+  };
+
   const toggleLayer = (key) => {
     setLayers((prev) => ({ ...prev, [key]: !prev[key] }));
   };
@@ -638,15 +668,18 @@ export default function App() {
               </div>
             </div>
 
-            {/* Next maneuver preview subtitle */}
-            {currentManeuver?.subtitle && (
-              <div className="mt-2 pt-2 border-t border-emerald-800/80 text-[11px] text-emerald-200/90 flex items-center justify-between">
-                <span className="truncate">{currentManeuver.subtitle}</span>
-                <span className="text-[10px] font-mono text-emerald-300 font-bold ml-2 shrink-0">
-                  PLSS {liveNavState?.currentO2}% • BAT {liveNavState?.currentBattery}%
+            {/* Next maneuver preview subtitle & Live Battery/O2 status */}
+            <div className="mt-2 pt-2 border-t border-emerald-800/80 text-[11px] text-emerald-200/90 flex items-center justify-between">
+              <span className="truncate">{currentManeuver?.subtitle}</span>
+              <div className="flex items-center gap-3 ml-2 shrink-0 font-mono text-[11px] font-bold">
+                <span className="flex items-center gap-1 text-cyan-300">
+                  <Battery className="h-3.5 w-3.5" /> {liveNavState?.currentBattery}%
+                </span>
+                <span className="flex items-center gap-1 text-emerald-300">
+                  <Droplets className="h-3.5 w-3.5" /> {liveNavState?.currentO2}%
                 </span>
               </div>
-            )}
+            </div>
           </div>
         ) : (
           /* GOOGLE MAPS EXPLORE & SEARCH BAR */
@@ -686,35 +719,86 @@ export default function App() {
                   }`}
                 >
                   <Sliders className="h-3.5 w-3.5" />
-                  <span className="hidden sm:inline">Route Setup</span>
+                  <span>Route Setup</span>
                 </button>
               </div>
             </div>
 
-            {/* Quick Filter POI Chips */}
+            {/* Simulation Environment Mode Selector (☀️ Nominal | 🌪 Dust Storm | ⚡ Solar Flare) */}
+            <div className="flex items-center gap-1 bg-slate-950/85 p-1 rounded-2xl border border-slate-800 backdrop-blur-md">
+              <button
+                onClick={() => setWeatherKey('nominal')}
+                className={`glove-btn flex-1 min-h-[34px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                  weatherKey === 'nominal'
+                    ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/50'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Sun className="h-3.5 w-3.5 text-amber-400" />
+                <span>Nominal Sol</span>
+              </button>
+
+              <button
+                onClick={() => {
+                  setWeatherKey('dust_storm');
+                  setIncomingDustAlert(true);
+                }}
+                className={`glove-btn flex-1 min-h-[34px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                  weatherKey === 'dust_storm'
+                    ? 'bg-orange-500/25 text-orange-300 border border-orange-500/50'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Wind className="h-3.5 w-3.5 text-orange-400" />
+                <span>Dust Storm</span>
+              </button>
+
+              <button
+                onClick={() => setWeatherKey('solar_storm')}
+                className={`glove-btn flex-1 min-h-[34px] px-2.5 py-1 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                  weatherKey === 'solar_storm'
+                    ? 'bg-red-500/25 text-red-300 border border-red-500/50'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+              >
+                <Zap className="h-3.5 w-3.5 text-red-400" />
+                <span>Solar Flare</span>
+              </button>
+            </div>
+
+            {/* Quick Demo Scenario Presets (All with Icons) */}
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-              {[
-                { id: 'three-forks', label: '🔬 Three Forks Depot', sol: 680 },
-                { id: 'station-delta-solar', label: '⚡ Delta Solar Base', sol: 400 },
-                { id: 'hawksbill-gap', label: '💧 Water Clays', sol: 450 },
-                { id: 'belva-crater', label: '🌋 Belva Crater', sol: 780 },
-                { id: 'western-rim', label: '🛡 Western Rim Shelter', sol: 2022 },
-              ].map((chip) => (
-                <button
-                  key={chip.id}
-                  onClick={() => {
-                    setEndId(chip.id);
-                    setSelectedSol(chip.sol);
-                  }}
-                  className={`glove-btn whitespace-nowrap min-h-[34px] px-3 py-1 rounded-full text-xs font-medium border shadow-md cursor-pointer transition-all ${
-                    endId === chip.id
-                      ? 'bg-cyan-500 text-slate-950 border-cyan-300 font-bold shadow-cyan-500/25'
-                      : 'bg-slate-900/90 text-slate-300 border-slate-700/80 hover:bg-slate-800'
-                  }`}
-                >
-                  {chip.label}
-                </button>
-              ))}
+              <button
+                onClick={() => applyPreset('hab-alpha', 'three-forks', 'light', 'nominal', 85, 90, 680, 705)}
+                className="glove-btn whitespace-nowrap min-h-[34px] px-3 py-1 rounded-full text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-cyan-300 border border-cyan-500/40 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Target className="h-3.5 w-3.5" />
+                <span>1. Direct Sample</span>
+              </button>
+
+              <button
+                onClick={() => applyPreset('hab-alpha', 'belva-crater', 'light', 'nominal', 45, 75, 900, 720)}
+                className="glove-btn whitespace-nowrap min-h-[34px] px-3 py-1 rounded-full text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-emerald-300 border border-emerald-500/40 flex items-center gap-1.5 cursor-pointer"
+              >
+                <BatteryCharging className="h-3.5 w-3.5" />
+                <span>2. Recharge Pit-Stop</span>
+              </button>
+
+              <button
+                onClick={() => applyPreset('belva-crater', 'western-rim', 'light', 'dust_storm', 85, 90, 2000, 940)}
+                className="glove-btn whitespace-nowrap min-h-[34px] px-3 py-1 rounded-full text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-orange-300 border border-orange-500/40 flex items-center gap-1.5 cursor-pointer"
+              >
+                <Wind className="h-3.5 w-3.5" />
+                <span>3. Dusk & Dust Front</span>
+              </button>
+
+              <button
+                onClick={() => applyPreset('belva-crater', 'hab-alpha', 'light', 'solar_storm', 85, 90, 2022, 705)}
+                className="glove-btn whitespace-nowrap min-h-[34px] px-3 py-1 rounded-full text-xs font-semibold bg-slate-900/90 hover:bg-slate-800 text-red-300 border border-red-500/40 flex items-center gap-1.5 cursor-pointer"
+              >
+                <ShieldAlert className="h-3.5 w-3.5" />
+                <span>4. Solar Flare Abort</span>
+              </button>
             </div>
           </div>
         )}
@@ -777,13 +861,20 @@ export default function App() {
                 <button
                   key={prof.id}
                   onClick={() => setLoadoutKey(prof.id)}
-                  className={`glove-btn min-h-[44px] px-2 py-1.5 rounded-xl border text-xs font-semibold cursor-pointer ${
+                  className={`glove-btn min-h-[44px] px-2 py-1.5 rounded-xl border text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer ${
                     loadoutKey === prof.id
                       ? 'bg-cyan-500 text-slate-950 border-cyan-300 font-bold'
                       : 'bg-slate-950 border-slate-800 text-slate-300'
                   }`}
                 >
-                  {prof.id === 'light' ? 'Solo Suit' : prof.id === 'heavy' ? 'Heavy Kit' : 'Rover Mule'}
+                  {prof.id === 'light' ? (
+                    <User className="h-4 w-4" />
+                  ) : prof.id === 'heavy' ? (
+                    <PackageCheck className="h-4 w-4" />
+                  ) : (
+                    <Truck className="h-4 w-4" />
+                  )}
+                  <span>{prof.id === 'light' ? 'Solo Suit' : prof.id === 'heavy' ? 'Heavy Kit' : 'Rover Mule'}</span>
                 </button>
               ))}
             </div>
@@ -791,7 +882,9 @@ export default function App() {
 
           <div className="rounded-xl bg-slate-950/80 border border-slate-800 p-3 space-y-2.5">
             <div className="flex justify-between text-xs text-slate-300">
-              <span>Starting Battery</span>
+              <span className="flex items-center gap-1.5">
+                <BatteryCharging className="h-4 w-4 text-cyan-400" /> Starting Battery
+              </span>
               <span className="font-mono font-bold text-cyan-300">{startBatteryPct}%</span>
             </div>
             <input
@@ -804,7 +897,24 @@ export default function App() {
             />
 
             <div className="flex justify-between text-xs text-slate-300 pt-1">
-              <span>Martian Departure Time</span>
+              <span className="flex items-center gap-1.5">
+                <Droplets className="h-4 w-4 text-emerald-400" /> Starting PLSS Tank
+              </span>
+              <span className="font-mono font-bold text-emerald-300">{startO2Pct}%</span>
+            </div>
+            <input
+              type="range"
+              min={15}
+              max={100}
+              value={startO2Pct}
+              onChange={(e) => setStartO2Pct(Number(e.target.value))}
+              className="glove-slider w-full"
+            />
+
+            <div className="flex justify-between text-xs text-slate-300 pt-1">
+              <span className="flex items-center gap-1.5">
+                <Clock className="h-4 w-4 text-amber-400" /> Martian Departure Time
+              </span>
               <span className="font-mono font-bold text-amber-300">{formatLst(startLstMinutes)}</span>
             </div>
             <input
@@ -820,15 +930,16 @@ export default function App() {
 
           <button
             onClick={() => setShowRouteOptions(false)}
-            className="glove-btn w-full min-h-[46px] rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs uppercase tracking-wider cursor-pointer"
+            className="glove-btn w-full min-h-[46px] rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 cursor-pointer"
           >
-            Apply Route Settings
+            <Check className="h-4 w-4" />
+            <span>Apply Route Settings</span>
           </button>
         </div>
       )}
 
       {/* 5. FLOATING ACTION BUTTONS (ANDROID GOOGLE MAPS FABs ON RIGHT) */}
-      <div className="absolute right-3.5 top-28 z-20 flex flex-col items-center gap-2.5">
+      <div className="absolute right-3.5 top-36 z-20 flex flex-col items-center gap-2.5">
         {/* Compass / Heading Indicator */}
         <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-900/90 border border-slate-700 shadow-xl backdrop-blur-md text-cyan-400 font-mono text-[11px] font-bold">
           <Compass
@@ -889,7 +1000,7 @@ export default function App() {
 
       {/* 6. FLOATING MARTIAN "STREET VIEW" PICTURE-IN-PICTURE (PIP) CARD */}
       {showStreetViewPIP && activePOV && (
-        <div className="absolute top-20 left-4 z-40 w-72 sm:w-80 overflow-hidden rounded-2xl bg-slate-950/95 border-2 border-slate-700 shadow-2xl backdrop-blur-xl transition-all">
+        <div className="absolute top-28 left-4 z-40 w-72 sm:w-80 overflow-hidden rounded-2xl bg-slate-950/95 border-2 border-slate-700 shadow-2xl backdrop-blur-xl transition-all">
           <div className="flex items-center justify-between p-2.5 bg-slate-900/90 border-b border-slate-800">
             <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 uppercase font-mono">
               <Camera className="h-4 w-4" /> Sol {activePOV.sol} POV
@@ -919,23 +1030,28 @@ export default function App() {
       {showLayersSheet && (
         <div className="absolute right-16 top-52 z-40 w-64 rounded-2xl bg-slate-900/95 border-2 border-slate-700 p-3 shadow-2xl backdrop-blur-xl space-y-2">
           <div className="flex items-center justify-between pb-1.5 border-b border-slate-800 text-xs font-bold uppercase text-orange-400">
-            <span>Map Layers</span>
+            <span className="flex items-center gap-1.5">
+              <Layers className="h-4 w-4" /> Map Layers
+            </span>
             <button onClick={() => setShowLayersSheet(false)} className="text-slate-400 hover:text-white">
               <X className="h-4 w-4" />
             </button>
           </div>
           <div className="space-y-1 text-xs">
             {[
-              { key: 'slope', label: 'Slope Safety Heatmap' },
-              { key: 'hazards', label: 'Terrain Hazards (Sand/Cliffs)' },
-              { key: 'science', label: 'Bases & Science POIs' },
-              { key: 'traverse', label: 'Perseverance Rover Track' },
+              { key: 'slope', label: 'Slope Safety Heatmap', icon: <TrendingUp className="h-3.5 w-3.5 text-emerald-400" /> },
+              { key: 'hazards', label: 'Terrain Hazards (Sand/Cliffs)', icon: <AlertTriangle className="h-3.5 w-3.5 text-red-400" /> },
+              { key: 'science', label: 'Bases & Science POIs', icon: <Zap className="h-3.5 w-3.5 text-amber-400" /> },
+              { key: 'traverse', label: 'Perseverance Rover Track', icon: <Navigation className="h-3.5 w-3.5 text-orange-400" /> },
             ].map((item) => (
               <label
                 key={item.key}
                 className="flex items-center justify-between min-h-[38px] px-2 rounded-lg hover:bg-slate-800 cursor-pointer"
               >
-                <span>{item.label}</span>
+                <span className="flex items-center gap-2">
+                  {item.icon}
+                  <span>{item.label}</span>
+                </span>
                 <input
                   type="checkbox"
                   checked={layers[item.key]}
@@ -967,22 +1083,43 @@ export default function App() {
                   </div>
                 </div>
 
-                {/* Big Live Suit/Rover Battery & O2 Status Pills */}
-                <div className="flex items-center gap-2">
-                  <div className="flex items-center gap-1.5 rounded-xl bg-slate-950 px-3 py-1.5 border border-slate-800 text-xs font-mono font-bold">
-                    <Battery className={`h-4 w-4 ${liveNavState?.currentBattery < 25 ? 'text-red-400' : 'text-cyan-400'}`} />
-                    <span className={liveNavState?.currentBattery < 25 ? 'text-red-400' : 'text-cyan-300'}>
+                {/* Big Live Suit/Rover Battery & O2 Status Gauges */}
+                <div className="flex items-center gap-3">
+                  <div className="rounded-xl bg-slate-950 p-2 border border-slate-800 text-right min-w-[90px]">
+                    <div className="flex items-center justify-end gap-1 text-[10px] text-slate-400 font-mono">
+                      <Battery className={`h-3.5 w-3.5 ${liveNavState?.currentBattery < 25 ? 'text-red-400' : 'text-cyan-400'}`} />
+                      <span>BATTERY</span>
+                    </div>
+                    <div className={`text-sm font-black font-mono ${liveNavState?.currentBattery < 25 ? 'text-red-400' : 'text-cyan-300'}`}>
                       {liveNavState?.currentBattery}%
-                    </span>
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                      <div
+                        className={`h-full ${liveNavState?.currentBattery < 25 ? 'bg-red-500' : 'bg-cyan-400'}`}
+                        style={{ width: `${liveNavState?.currentBattery}%` }}
+                      />
+                    </div>
                   </div>
-                  <div className="flex items-center gap-1.5 rounded-xl bg-slate-950 px-3 py-1.5 border border-slate-800 text-xs font-mono font-bold">
-                    <Droplets className="h-4 w-4 text-emerald-400" />
-                    <span className="text-emerald-300">{liveNavState?.currentO2}%</span>
+
+                  <div className="rounded-xl bg-slate-950 p-2 border border-slate-800 text-right min-w-[90px]">
+                    <div className="flex items-center justify-end gap-1 text-[10px] text-slate-400 font-mono">
+                      <Droplets className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>PLSS TANK</span>
+                    </div>
+                    <div className="text-sm font-black font-mono text-emerald-300">
+                      {liveNavState?.currentO2}%
+                    </div>
+                    <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden mt-0.5">
+                      <div
+                        className="h-full bg-emerald-400"
+                        style={{ width: `${liveNavState?.currentO2}%` }}
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Big Glove-Friendly Android Action Buttons */}
+              {/* Big Glove-Friendly Android Action Buttons (All with Icons) */}
               <div className="grid grid-cols-4 gap-2 pt-1">
                 <button
                   onClick={() => setNavPlaying((p) => !p)}
@@ -998,16 +1135,16 @@ export default function App() {
                   onClick={() => setNavSpeed((s) => (s === 1 ? 3 : 1))}
                   className="glove-btn min-h-[52px] rounded-xl bg-slate-800 hover:bg-slate-700 text-cyan-300 font-mono font-bold text-xs border border-slate-700 flex flex-col items-center justify-center cursor-pointer"
                 >
-                  <span className="text-sm">{navSpeed}x</span>
-                  <span className="text-[9px] text-slate-400">Speed</span>
+                  <Gauge className="h-4 w-4 mb-0.5 text-cyan-400" />
+                  <span>{navSpeed}x Speed</span>
                 </button>
 
                 <button
                   onClick={stopNavigation}
                   className="glove-btn min-h-[52px] rounded-xl bg-rose-950/80 hover:bg-rose-900 border border-rose-500/50 text-rose-200 font-bold text-xs flex flex-col items-center justify-center cursor-pointer"
                 >
-                  <X className="h-5 w-5 text-rose-400" />
-                  <span className="text-[10px]">Exit</span>
+                  <LogOut className="h-4 w-4 mb-0.5 text-rose-400" />
+                  <span>Exit</span>
                 </button>
               </div>
 
@@ -1015,7 +1152,7 @@ export default function App() {
               {(incomingDustAlert || weatherKey === 'dust_storm' || liveNavState?.currentBattery < 25) && (
                 <button
                   onClick={triggerShelterDivert}
-                  className="glove-btn w-full min-h-[44px] rounded-xl bg-gradient-to-r from-red-600 to-amber-600 text-white font-extrabold text-xs uppercase flex items-center justify-center gap-2 shadow-lg cursor-pointer animate-pulse"
+                  className="glove-btn w-full min-h-[46px] rounded-xl bg-gradient-to-r from-red-600 to-amber-600 text-white font-extrabold text-xs uppercase flex items-center justify-center gap-2 shadow-lg cursor-pointer animate-pulse"
                 >
                   <ShieldAlert className="h-4 w-4" />
                   <span>Divert to {nearestShelter.station.name} ({nearestShelter.distKm} km)</span>
@@ -1030,8 +1167,8 @@ export default function App() {
                   <div className="flex items-center gap-2">
                     <span className="text-base font-bold text-white line-clamp-1">{endPOI.name}</span>
                     {endPOI.isChargingStation && (
-                      <span className="rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-bold">
-                        ⚡ Virtual Base
+                      <span className="rounded-full bg-emerald-500/20 text-emerald-400 border border-emerald-500/40 px-2 py-0.5 text-[10px] font-bold flex items-center gap-1">
+                        <Zap className="h-3 w-3" /> Virtual Base
                       </span>
                     )}
                   </div>
@@ -1048,19 +1185,86 @@ export default function App() {
                 <div className="shrink-0 text-right">
                   {routeResult.rangeStatus === 'direct_clear' && (
                     <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
-                      <CheckCircle2 className="h-3.5 w-3.5" /> Can Reach
+                      <CheckCircle2 className="h-3.5 w-3.5" /> Can Reach Direct
                     </span>
                   )}
                   {routeResult.rangeStatus === 'recharged_ok' && (
                     <span className="inline-flex items-center gap-1 rounded-lg bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 text-[11px] font-bold text-amber-300">
-                      <Zap className="h-3.5 w-3.5" /> +15m Recharge
+                      <Zap className="h-3.5 w-3.5" /> +15m Recharge Pit-Stop
                     </span>
                   )}
                   {routeResult.rangeStatus === 'out_of_range' && (
                     <span className="inline-flex items-center gap-1 rounded-lg bg-red-500/15 border border-red-500/30 px-2.5 py-1 text-[11px] font-bold text-red-400">
-                      <AlertTriangle className="h-3.5 w-3.5" /> Low Reserve
+                      <AlertTriangle className="h-3.5 w-3.5" /> Low Reserve Warning
                     </span>
                   )}
+                </div>
+              </div>
+
+              {/* Prominent Starting Battery & Tank Percentage Gauge Cards */}
+              <div className="grid grid-cols-2 gap-2 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+                <div>
+                  <div className="flex items-center justify-between text-xs text-slate-300 mb-1">
+                    <span className="flex items-center gap-1.5 font-semibold">
+                      <BatteryCharging className="h-4 w-4 text-cyan-400" /> Battery
+                    </span>
+                    <span className="font-mono font-bold text-cyan-300">
+                      {startBatteryPct}% <span className="text-[10px] text-slate-500 font-normal">➔ {routeResult.finalArrivalBattery}%</span>
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full ${startBatteryPct < 30 ? 'bg-amber-400' : 'bg-cyan-400'}`}
+                      style={{ width: `${startBatteryPct}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between mt-1 text-[10px]">
+                    <button
+                      onClick={() => setStartBatteryPct((b) => Math.max(15, b - 15))}
+                      className="glove-btn px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Minus className="h-3 w-3" /> 15%
+                    </button>
+                    <span className="text-slate-500 font-mono">Simulate</span>
+                    <button
+                      onClick={() => setStartBatteryPct((b) => Math.min(100, b + 15))}
+                      className="glove-btn px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Plus className="h-3 w-3" /> 15%
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between text-xs text-slate-300 mb-1">
+                    <span className="flex items-center gap-1.5 font-semibold">
+                      <Droplets className="h-4 w-4 text-emerald-400" /> PLSS O2 Tank
+                    </span>
+                    <span className="font-mono font-bold text-emerald-300">
+                      {startO2Pct}% <span className="text-[10px] text-slate-500 font-normal">➔ {routeResult.finalArrivalO2}%</span>
+                    </span>
+                  </div>
+                  <div className="w-full h-2 bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-emerald-400"
+                      style={{ width: `${startO2Pct}%` }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between mt-1 text-[10px]">
+                    <button
+                      onClick={() => setStartO2Pct((o) => Math.max(15, o - 15))}
+                      className="glove-btn px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Minus className="h-3 w-3" /> 15%
+                    </button>
+                    <span className="text-slate-500 font-mono">Simulate</span>
+                    <button
+                      onClick={() => setStartO2Pct((o) => Math.min(100, o + 15))}
+                      className="glove-btn px-1.5 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Plus className="h-3 w-3" /> 15%
+                    </button>
+                  </div>
                 </div>
               </div>
 
