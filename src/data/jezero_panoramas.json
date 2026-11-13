@@ -1,0 +1,123 @@
+[
+  {
+    "id": "octavia_butler_360",
+    "title": "Octavia E. Butler Landing 360° Photosphere",
+    "sol": 3,
+    "lat": 18.4446,
+    "lon": 77.4509,
+    "elevation": -2570,
+    "type": "360_sphere",
+    "is360": true,
+    "locationName": "Jezero Landing Site & Bradbury Rise",
+    "associatedPOI": "Jezero Base Alpha (Hab 1)",
+    "instrument": "NASA Mastcam-Z Dual Imager (Stereo Multi-Spectral)",
+    "caption": "NASA Perseverance's historic first 360-degree cylindrical panorama, stitched from 142 individual high-resolution exposures on Sol 3. Shows the distant northern rim of Jezero Crater, rocky ripples, and the initial touchdown site on Mars.",
+    "attribution": "NASA / JPL-Caltech / ASU / MSSS",
+    "image": "/panoramas/octavia_butler_360.jpg",
+    "hotspots": [
+      { "name": "Jezero Crater North Rim", "yaw": 15, "pitch": 5, "desc": "Ancient crater wall rising 600m above the floor" },
+      { "name": "Perseverance Touchdown Mark", "yaw": 180, "pitch": -22, "desc": "Sky Crane retro-rocket scour zone" },
+      { "name": "Delta Scarp Horizon", "yaw": 275, "pitch": 2, "desc": "River delta deposit fans 2.1 km to the west" }
+    ]
+  },
+  {
+    "id": "van_zyl_overlook_360",
+    "title": "Van Zyl Overlook 360° Panoramic Vista",
+    "sol": 68,
+    "lat": 18.4435,
+    "lon": 77.4522,
+    "elevation": -2565,
+    "type": "360_sphere",
+    "is360": true,
+    "locationName": "Van Zyl Overlook / Ingenuity Airfield",
+    "associatedPOI": "South Séítah Margin",
+    "instrument": "Mastcam-Z 110mm Telephoto Stereo",
+    "caption": "Spectacular 360° panorama captured from Van Zyl Overlook where the rover was stationed during Ingenuity Mars Helicopter flight trials. Features layered sedimentary strata and basaltic sand dunes.",
+    "attribution": "NASA / JPL-Caltech / ASU / MSSS",
+    "image": "/panoramas/van_zyl_overlook_360.jpg",
+    "hotspots": [
+      { "name": "Wright Brothers Airfield", "yaw": 90, "pitch": -8, "desc": "Flat landing zone where Ingenuity made the first powered flight on another planet" },
+      { "name": "Layered Sedimentary Outcrop", "yaw": 210, "pitch": -12, "desc": "Lacustrine mudstones deposited by river discharge" }
+    ]
+  },
+  {
+    "id": "belva_crater_panorama",
+    "title": "Belva Crater Impact Basin 360° Rim Vista",
+    "sol": 772,
+    "lat": 18.4520,
+    "lon": 77.4350,
+    "elevation": -2510,
+    "type": "360_sphere",
+    "is360": true,
+    "locationName": "Belva Crater Rim / Echo Creek",
+    "associatedPOI": "Belva Ridge Power & O2 Relay",
+    "instrument": "Mastcam-Z Multi-Spectral Zoom",
+    "caption": "Panoramic mosaic looking inside the 0.9-kilometer-wide Belva impact crater. Craters act as natural geologic cuts, exposing steep dipping beds that reveal ancient Martian mega-floods and lake currents.",
+    "attribution": "NASA / JPL-Caltech / ASU / MSSS",
+    "image": "/panoramas/belva_crater_panorama.jpg",
+    "hotspots": [
+      { "name": "Belva Dipping Beds", "yaw": 120, "pitch": -10, "desc": "Steep downward-angled sedimentary layers from ancient river bars" },
+      { "name": "Echo Creek Outcrop", "yaw": 240, "pitch": -18, "desc": "Light-toned bedrock showing hydration signatures" }
+    ]
+  },
+  {
+    "id": "kodiak_butte_delta",
+    "title": "Mount Kodiak Ancient Delta Remnant",
+    "sol": 114,
+    "lat": 18.4320,
+    "lon": 77.4200,
+    "elevation": -2530,
+    "type": "panorama_wide",
+    "is360": false,
+    "locationName": "Delta Front & Kodiak Mesa",
+    "associatedPOI": "Kodiak Delta Base Alpha",
+    "instrument": "SuperCam RMI & Mastcam-Z Telephoto",
+    "caption": "High-definition view of Kodiak Butte, an isolated erosional remnant of the western delta fan. The steep inclined strata (foreset beds) sandwiched between horizontal layers are conclusive proof of an ancient river feeding a standing lake on Mars.",
+    "attribution": "NASA / JPL-Caltech / LANL / CNES / ASU",
+    "image": "/panoramas/kodiak_butte_delta.jpg",
+    "hotspots": [
+      { "name": "Delta Topset Beds", "yaw": 0, "pitch": 8, "desc": "Horizontal gravel sheets from late-stage fluvial flow" },
+      { "name": "Steep Foreset Delta Front", "yaw": 15, "pitch": -5, "desc": "Sediments dumped rapidly at river mouth into standing lake" }
+    ]
+  },
+  {
+    "id": "wildcat_ridge_delta",
+    "title": "Wildcat Ridge Astrobiology Core Site",
+    "sol": 518,
+    "lat": 18.4610,
+    "lon": 77.4120,
+    "elevation": -2490,
+    "type": "panorama_wide",
+    "is360": false,
+    "locationName": "Wildcat Ridge / Jezero Delta Front",
+    "associatedPOI": "Delta Scarp Outcrop",
+    "instrument": "Mastcam-Z Micro-Imager & SHERLOC UV Spectrometer",
+    "caption": "Ultra high-resolution panorama of the Wildcat Ridge sedimentary outcrop. Perseverance collected rock core samples here after detecting aromatics and organic carbon compounds concentrated in ancient river-delta mudstones.",
+    "attribution": "NASA / JPL-Caltech / ASU",
+    "image": "/panoramas/wildcat_ridge_delta.jpg",
+    "hotspots": [
+      { "name": "Abrasion Patch Hazen", "yaw": -10, "pitch": -15, "desc": "Circular drill abrasion revealing green and sulfate mineral grains" },
+      { "name": "Delta Scarp Ridge", "yaw": 45, "pitch": 12, "desc": "Cliffs formed by millions of years of wind erosion" }
+    ]
+  },
+  {
+    "id": "jezero_floor_tracks",
+    "title": "Jezero Crater Floor & Traverse Rover Tracks",
+    "sol": 548,
+    "lat": 18.4550,
+    "lon": 77.4420,
+    "elevation": -2545,
+    "type": "panorama_wide",
+    "is360": false,
+    "locationName": "South Séítah Dune Corridor",
+    "associatedPOI": "Jezero Base Alpha (Hab 1)",
+    "instrument": "Navcam Stereo Panoramic Imager",
+    "caption": "Wide-angle ground POV looking back over Perseverance's wheel tracks carving through basaltic ripples and fractured crater floor bedrock. Shows the challenging wheel traction dynamics navigated by the autonomous AutoNav AI.",
+    "attribution": "NASA / JPL-Caltech",
+    "image": "/panoramas/jezero_floor_tracks.jpg",
+    "hotspots": [
+      { "name": "Rover Grousers Imprint", "yaw": -30, "pitch": -25, "desc": "Tire cleats indented in Martian regolith" },
+      { "name": "Basaltic Ripple Field", "yaw": 20, "pitch": -5, "desc": "Active dark dunes driven by Martian thermal winds" }
+    ]
+  }
+]

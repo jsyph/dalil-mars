@@ -47,9 +47,11 @@ import {
   Zap,
 } from 'lucide-react';
 import JezeroTacticalMap from './components/JezeroTacticalMap';
+import MarsPanoramaViewer from './components/MarsPanoramaViewer';
 import waypointsData from './data/jezero_waypoints.json';
 import medaWeatherData from './data/meda_weather.json';
 import povImagesData from './data/pov_images.json';
+import jezeroPanoramas from './data/jezero_panoramas.json';
 import scienceHazardsData from './data/jezero_science_hazards.json';
 import {
   calculateBearingDegrees,
@@ -118,7 +120,33 @@ export default function App() {
   const [showDustRadarCard, setShowDustRadarCard] = useState(true);
 
   // Selected Sol for Astronaut POV image
-  const [selectedSol, setSelectedSol] = useState(680);
+  const [selectedSol, setSelectedSol] = useState(3);
+
+  // Active Interactive 360° Panorama Viewer State
+  const [activePanorama, setActivePanorama] = useState(null);
+
+  const handleOpenPanorama = (sol, coords, poi) => {
+    let match = null;
+    if (poi) {
+      match = jezeroPanoramas.find((p) => p.associatedPOI === poi.name || p.id.includes(poi.id));
+    }
+    if (!match && sol !== undefined && sol !== null) {
+      match = jezeroPanoramas.reduce((prev, curr) =>
+        Math.abs(curr.sol - Number(sol)) < Math.abs(prev.sol - Number(sol)) ? curr : prev
+      );
+    }
+    if (!match) {
+      match = jezeroPanoramas[0];
+    }
+    setActivePanorama(match);
+    showToast({
+      id: `pano-${Date.now()}`,
+      title: `🌐 360° POV: ${match.title.split(' ')[0]}`,
+      message: `${match.locationName} • Sol ${match.sol} (${match.is360 ? 'Interactive 360° Photosphere' : 'Ultra-HD Vista'})`,
+      type: 'info',
+      icon: 'camera',
+    });
+  };
 
   // Live Navigation Simulation State
   const [navPlaying, setNavPlaying] = useState(false);
@@ -466,8 +494,8 @@ export default function App() {
   }, [liveNavState?.idx, liveNavState?.active, liveNavState?.currentLatLon]);
 
   const activePOV = useMemo(() => {
-    if (!povImagesData.length) return null;
-    return povImagesData.reduce((prev, curr) =>
+    if (!jezeroPanoramas.length) return null;
+    return jezeroPanoramas.reduce((prev, curr) =>
       Math.abs(curr.sol - selectedSol) < Math.abs(prev.sol - selectedSol) ? curr : prev
     );
   }, [selectedSol]);
@@ -631,8 +659,13 @@ export default function App() {
           onSelectPOI={(poi) => {
             setEndId(poi.id);
             setSelectedSol(poi.sol);
+            handleOpenPanorama(poi.sol, [poi.lat, poi.lon], poi);
           }}
-          onSelectWaypointSol={(sol) => setSelectedSol(sol)}
+          onSelectWaypointSol={(sol) => {
+            setSelectedSol(sol);
+            handleOpenPanorama(sol);
+          }}
+          onOpenPanorama={handleOpenPanorama}
         />
       </div>
 
@@ -1084,18 +1117,14 @@ export default function App() {
           <Crosshair className="h-6 w-6" />
         </button>
 
-        {/* Martian "Street View" POV Picture-in-Picture Toggle */}
+        {/* Martian "Street View" 360° POV Panorama Launcher FAB */}
         <button
-          onClick={() => setShowStreetViewPIP((v) => !v)}
-          title="Martian Street View Ground Photo"
-          className={`glove-btn relative flex h-12 w-12 items-center justify-center rounded-2xl border shadow-xl backdrop-blur-md cursor-pointer transition-all ${
-            showStreetViewPIP
-              ? 'bg-amber-500 text-slate-950 border-amber-300 shadow-amber-500/40'
-              : 'bg-slate-900/90 text-slate-300 border-slate-700 hover:bg-slate-800'
-          }`}
+          onClick={() => handleOpenPanorama(selectedSol)}
+          title="Open Interactive 360° Mars Panorama"
+          className="glove-btn relative flex h-12 w-12 items-center justify-center rounded-2xl border shadow-xl backdrop-blur-md cursor-pointer transition-all bg-slate-900/90 text-cyan-400 hover:text-white border-cyan-500/60 hover:border-cyan-400 hover:bg-cyan-950 active:scale-90"
         >
           <Camera className="h-6 w-6" />
-          <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-emerald-400 border-2 border-slate-950 animate-pulse" />
+          <span className="absolute -top-1 -right-1 h-3.5 w-3.5 rounded-full bg-cyan-400 border-2 border-slate-950 animate-pulse" />
         </button>
 
         {/* Storm Radar Alert FAB (Toggles Predictive Metric Card) */}
@@ -1126,10 +1155,10 @@ export default function App() {
 
       {/* 8. FLOATING MARTIAN "STREET VIEW" PICTURE-IN-PICTURE (PIP) CARD */}
       {showStreetViewPIP && activePOV && (
-        <div className="absolute top-28 left-4 z-40 w-72 sm:w-80 overflow-hidden rounded-2xl bg-slate-950/95 border-2 border-slate-700 shadow-2xl backdrop-blur-xl transition-all">
+        <div className="absolute top-28 left-4 z-40 w-72 sm:w-84 overflow-hidden rounded-2xl bg-slate-950/95 border-2 border-cyan-500/70 shadow-2xl backdrop-blur-xl transition-all">
           <div className="flex items-center justify-between p-2.5 bg-slate-900/90 border-b border-slate-800">
-            <span className="text-xs font-bold text-emerald-400 flex items-center gap-1.5 uppercase font-mono">
-              <Camera className="h-4 w-4" /> Sol {activePOV.sol} POV
+            <span className="text-xs font-bold text-cyan-400 flex items-center gap-1.5 uppercase font-mono">
+              <Camera className="h-4 w-4" /> Sol {activePOV.sol} • {activePOV.is360 ? '360° POV' : 'Vista'}
             </span>
             <button
               onClick={() => setShowStreetViewPIP(false)}
@@ -1138,16 +1167,32 @@ export default function App() {
               <X className="h-4 w-4" />
             </button>
           </div>
-          <img
-            src={activePOV.url}
-            alt={activePOV.title}
-            className="w-full h-44 object-cover"
-            loading="lazy"
-          />
-          <div className="p-2.5 text-[11px] bg-slate-950 space-y-1">
+          <div
+            onClick={() => handleOpenPanorama(activePOV.sol)}
+            className="relative cursor-pointer group"
+          >
+            <img
+              src={activePOV.image || activePOV.url}
+              alt={activePOV.title}
+              className="w-full h-44 object-cover transition-transform group-hover:scale-105"
+              loading="lazy"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-transparent to-transparent flex items-end p-2.5">
+              <span className="text-[11px] font-mono font-bold text-white bg-cyan-600/90 px-2 py-1 rounded-lg border border-cyan-400/50 shadow flex items-center gap-1">
+                🌐 TAP TO OPEN 360° SPHERE
+              </span>
+            </div>
+          </div>
+          <div className="p-2.5 text-[11px] bg-slate-950 space-y-1.5">
             <div className="font-semibold text-slate-200 line-clamp-1">{activePOV.title}</div>
-            <div className="text-[10px] font-mono text-cyan-400 uppercase">Camera: {activePOV.camera}</div>
-            <div className="text-[10px] text-slate-400">Ground landmark matching your GPS coordinates.</div>
+            <div className="text-[10px] font-mono text-cyan-400 uppercase">{activePOV.instrument || `Camera: ${activePOV.camera}`}</div>
+            <button
+              onClick={() => handleOpenPanorama(activePOV.sol)}
+              className="glove-btn w-full py-2 rounded-xl bg-cyan-500 hover:bg-cyan-400 text-slate-950 font-black text-[11px] uppercase tracking-wider flex items-center justify-center gap-1.5 cursor-pointer shadow-md"
+            >
+              <Eye className="h-3.5 w-3.5" />
+              <span>Launch 360° Photosphere</span>
+            </button>
           </div>
         </div>
       )}
@@ -1446,6 +1491,30 @@ export default function App() {
           )}
         </div>
       </div>
+
+      {/* 11. INTERACTIVE 360° MARS PANORAMA & ULTRA-HD VISTA VIEWER MODAL */}
+      {activePanorama && (
+        <MarsPanoramaViewer
+          panorama={activePanorama}
+          allPanoramas={jezeroPanoramas}
+          onSelectPanorama={(p) => setActivePanorama(p)}
+          onClose={() => setActivePanorama(null)}
+          onNavigateToLocation={(p) => {
+            const matchingPOI = sciencePOIs.find(
+              (poi) => poi.name === p.associatedPOI || poi.sol === p.sol
+            );
+            if (matchingPOI) {
+              setEndId(matchingPOI.id);
+              showToast({
+                id: `dest-${Date.now()}`,
+                title: `🎯 Destination Set`,
+                message: `Route plotted to ${matchingPOI.name}`,
+                type: 'success',
+              });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

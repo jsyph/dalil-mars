@@ -18,11 +18,22 @@ export default function JezeroTacticalMap({
   solarPhase = 'day',
   onSelectPOI,
   onSelectWaypointSol,
+  onOpenPanorama,
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
   const layerGroupsRef = useRef({});
   const liveMarkerRef = useRef(null);
+
+  // Global dispatcher for popup button clicks
+  useEffect(() => {
+    window.dispatchMarsPano = (sol) => {
+      onOpenPanorama?.(sol);
+    };
+    return () => {
+      delete window.dispatchMarsPano;
+    };
+  }, [onOpenPanorama]);
 
   // Initialize Leaflet Map once
   useEffect(() => {
@@ -119,23 +130,28 @@ export default function JezeroTacticalMap({
         });
 
         circle.bindPopup(`
-          <div style="font-size:12px; min-width:170px;">
+          <div style="font-size:12px; min-width:180px;">
             <div style="font-weight:700; color:#fb923c; margin-bottom:4px;">Sol ${w.sol} Telemetry</div>
             <div><b>Elevation:</b> ${w.elev} m</div>
             <div><b>Measured Tilt:</b> ${tilt}°</div>
             <div><b>Drive Dist:</b> ${(w.dist_total_m / 1000).toFixed(2)} km</div>
-            <div style="margin-top:6px; font-size:11px; color:#94a3b8;">Click synced ground POV photo →</div>
+            <button onclick="window.dispatchMarsPano(${w.sol})" style="
+              margin-top:8px; width:100%; padding:6px 10px; background:#06b6d4; color:#020617;
+              font-weight:800; font-size:11px; border-radius:8px; border:none; cursor:pointer;
+              display:flex; align-items:center; justify-content:center; gap:4px;
+            ">🌐 OPEN 360° MARS VIEW</button>
           </div>
         `);
 
         circle.on('click', () => {
           onSelectWaypointSol?.(w.sol);
+          onOpenPanorama?.(w.sol, [w.lat, w.lon]);
         });
 
         circle.addTo(slope);
       }
     }
-  }, [waypoints, layers.traverse, layers.slope, onSelectWaypointSol]);
+  }, [waypoints, layers.traverse, layers.slope, onSelectWaypointSol, onOpenPanorama]);
 
   // Render Layer 2: Hazard Zones
   useEffect(() => {
@@ -257,17 +273,23 @@ export default function JezeroTacticalMap({
           <div><b>Composition:</b> ${poi.minerals}</div>
           ${isStation ? `<div style="margin-top:4px; color:#4ade80; font-weight:600;">⚡ Fast-Charge: 15 min to 100% Battery & O2</div>` : ''}
           <p style="margin:5px 0 0; color:#cbd5e1; font-size:11px;">${poi.description}</p>
+          <button onclick="window.dispatchMarsPano(${poi.sol})" style="
+            margin-top:8px; width:100%; padding:6px 10px; background:${bgColor}; color:#020617;
+            font-weight:800; font-size:11px; border-radius:8px; border:none; cursor:pointer;
+            display:flex; align-items:center; justify-content:center; gap:4px;
+          ">🌐 VIEW 360° MARS VISTA</button>
         </div>
       `);
 
       marker.on('click', () => {
         onSelectPOI?.(poi);
         onSelectWaypointSol?.(poi.sol);
+        onOpenPanorama?.(poi.sol, [poi.lat, poi.lon], poi);
       });
 
       marker.addTo(science);
     });
-  }, [sciencePOIs, layers.science, startPOI, endPOI, routeResult?.chargingStop, onSelectPOI, onSelectWaypointSol]);
+  }, [sciencePOIs, layers.science, startPOI, endPOI, routeResult?.chargingStop, onSelectPOI, onSelectWaypointSol, onOpenPanorama]);
 
   // Render A* Safe Marswalk Route (1-Leg or 2-Leg Recharged Route)
   useEffect(() => {
