@@ -1,12 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Activity,
   AlertTriangle,
   ArrowLeftRight,
   Battery,
   BatteryCharging,
   Camera,
   Check,
+  CheckCircle2,
   ChevronDown,
   ChevronLeft,
   ChevronRight,
@@ -15,28 +15,38 @@ import {
   Compass,
   Crosshair,
   Download,
-  Eye,
+  Droplets,
   FileText,
   Gauge,
   Globe,
+  Hexagon,
+  Info,
   Layers,
+  LogOut,
   Map as MapIcon,
   MapPin,
+  Minus,
   Navigation,
+  Navigation2,
+  PackageCheck,
   Pause,
   Play,
-  Radio,
+  Plus,
   RotateCcw,
   ShieldAlert,
   Sliders,
   Square,
   Sun,
+  Tablet,
   Target,
-  Thermometer,
+  Terminal,
   Trash2,
   TrendingUp,
+  Truck,
+  User,
   Wind,
   X,
+  Zap,
 } from 'lucide-react';
 import APP_THEME from './theme';
 import JezeroTacticalMap from './components/JezeroTacticalMap';
@@ -102,12 +112,18 @@ export default function App() {
     season: 'late autumn',
   };
 
-  // Terminal Layout & Overlay State
+  // Terminal Dual-Mode UX ('astronaut' = Glove-first Google Maps Tablet UI | 'developer' = Ground Control Terminal)
+  const [uiMode, setUiMode] = useState('astronaut');
   const [navMode, setNavMode] = useState('browse');
   const [followAstronaut, setFollowAstronaut] = useState(true);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showLayersSheet, setShowLayersSheet] = useState(false);
   const [showLegendSheet, setShowLegendSheet] = useState(false);
+  const [showRouteOptions, setShowRouteOptions] = useState(false);
+  const [bottomSheetExpanded, setBottomSheetExpanded] = useState(false);
+  const [showLocationPinTag, setShowLocationPinTag] = useState(false);
+  const [compassRotation, setCompassRotation] = useState(0);
+  const pinTagTimerRef = useRef(null);
 
   // Camera & Locating State
   const [locatePulse, setLocatePulse] = useState(null);
@@ -861,6 +877,11 @@ export default function App() {
     };
   }, [routeResult, liveNavState, hasCompletedPitStop, endPOI]);
 
+  // Keep compass icon synchronized with active heading
+  useEffect(() => {
+    setCompassRotation(liveNavState?.heading || 0);
+  }, [liveNavState?.heading]);
+
   // Actions
   const triggerLocateAstronaut = (zoomLevel = 14.5) => {
     setFollowAstronaut(true);
@@ -869,6 +890,12 @@ export default function App() {
       zoom: zoomLevel,
       showWave: true,
     });
+    if (pinTagTimerRef.current) clearTimeout(pinTagTimerRef.current);
+    setShowLocationPinTag(true);
+    pinTagTimerRef.current = setTimeout(() => {
+      setShowLocationPinTag(false);
+    }, 4200);
+
     const lat = liveNavState?.currentLatLon ? liveNavState.currentLatLon[0] : startPOI.lat;
     const lon = liveNavState?.currentLatLon ? liveNavState.currentLatLon[1] : startPOI.lon;
     const elev = estimateElev(lat, lon);
@@ -881,7 +908,19 @@ export default function App() {
   };
 
   const handleCompassReset = () => {
+    setCompassRotation((r) => r + 360);
     triggerLocateAstronaut(13.5);
+  };
+
+  const handleCompassClick = () => {
+    setCompassRotation((r) => r + 360);
+    triggerLocateAstronaut(14.5);
+  };
+
+  const switchUiMode = (nextMode) => {
+    setUiMode(nextMode);
+    setShowLayersSheet(false);
+    setShowRouteOptions(false);
   };
 
   const startNavigation = () => {
@@ -1263,8 +1302,9 @@ export default function App() {
 
   return (
     <div className="h-screen w-screen flex flex-col overflow-hidden bg-[#0b0d11] text-[#edf0f5] font-sans select-none">
-      {/* 1. TOP SYSTEM STATUS & COMMAND BAR */}
-      <header className="shrink-0 min-h-[46px] bg-[#13161c] border-b border-[#242933] px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 z-30">
+      {/* 1. DEVELOPER TERMINAL SYSTEM STATUS & COMMAND BAR */}
+      {uiMode === 'developer' && (
+        <header className="shrink-0 min-h-[46px] bg-[#13161c] border-b border-[#242933] px-3 py-1.5 flex flex-wrap items-center justify-between gap-2 z-30">
         {/* System Identity & Solid Status Indicators */}
         <div className="flex items-center gap-3 flex-wrap">
           <div className="flex items-center gap-2 font-mono text-xs font-bold tracking-wider text-[#edf0f5]">
@@ -1368,6 +1408,16 @@ export default function App() {
 
           <button
             type="button"
+            onClick={() => switchUiMode('astronaut')}
+            className="glove-btn min-h-[36px] px-2.5 rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] text-[#0b0d11] border border-[#22c55e] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer"
+            title="Switch to Simplified Astronaut Tablet GUI"
+          >
+            <Tablet className="h-3.5 w-3.5" />
+            <span>EVA TABLET GUI</span>
+          </button>
+
+          <button
+            type="button"
             onClick={() => setSidebarOpen((v) => !v)}
             className="glove-btn min-h-[36px] px-2.5 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] text-[#edf0f5] border border-[#4f5767] font-mono text-[10px] font-bold flex items-center gap-1 cursor-pointer"
             title="Toggle Control Side Panel"
@@ -1385,11 +1435,12 @@ export default function App() {
             )}
           </button>
         </div>
-      </header>
+        </header>
+      )}
 
       {/* 2. MAIN WORKSPACE (TACTICAL MAP + COLLAPSIBLE INSTRUMENT SIDEBAR) */}
       <div className="flex-1 flex flex-col lg:flex-row relative overflow-hidden">
-        {/* LEFT/CENTER: PRIMARY MAP VIEWPORT */}
+        {/* LEFT/CENTER: PRIMARY PERSISTENT MAP VIEWPORT */}
         <main className="relative flex-1 min-h-[340px] bg-[#0b0d11] overflow-hidden">
           <JezeroTacticalMap
             waypoints={waypointsData}
@@ -1411,9 +1462,10 @@ export default function App() {
             basemap={basemap}
             reliefBlend={reliefBlend}
             landmarks={landmarksData}
-            activeDrawMode={activeDrawMode}
-            drawVertices={drawVertices}
+            activeDrawMode={uiMode === 'developer' ? activeDrawMode : null}
+            drawVertices={uiMode === 'developer' ? drawVertices : []}
             drawnZones={drawnZones}
+            cleanTabletMode={uiMode === 'astronaut'}
             onOpenPanorama={(sol) => openPanoramaModal(sol)}
             onOpenLandmarkVista={(id) => openPanoramaModal(id)}
             onNavigateToPOI={(id) => handleNavigateToPOI(id)}
@@ -1430,6 +1482,9 @@ export default function App() {
             onDeleteZone={handleDeleteZone}
             onCursorMove={setCursorTelemetry}
           />
+
+          {uiMode === 'developer' && (
+            <>
 
           {/* HUD TOP-LEFT: QUICK 11-SITE LANDMARK SELECTOR */}
           <div className="absolute top-2.5 left-2.5 z-[450] max-w-[260px] sm:max-w-[360px] bg-[#13161c]/95 border border-[#242933] rounded-[4px] p-1.5">
@@ -1770,6 +1825,1090 @@ export default function App() {
               </button>
             </div>
           )}
+            </>
+          )}
+
+          {/* SIMPLIFIED ASTRONAUT TABLET GUI (DEFAULT GLOVE-FIRST VIEW) */}
+          {uiMode === 'astronaut' && (
+            <>
+              {/* A1. TOP-CENTER HEADS-UP NOTIFICATION POPUP */}
+              {activeToast && (
+                <div className="android-toast-slide absolute top-3.5 left-1/2 z-[1000] w-[92%] max-w-md -translate-x-1/2">
+                  <div
+                    className={`flex items-start justify-between gap-3 rounded-[6px] border p-3 bg-[#13161c]/95 ${
+                      activeToast.type === 'warning'
+                        ? 'border-[#ef4444] text-[#edf0f5]'
+                        : activeToast.type === 'charge' || activeToast.type === 'success'
+                        ? 'border-[#22c55e] text-[#edf0f5]'
+                        : 'border-[#353c4a] text-[#edf0f5]'
+                    }`}
+                  >
+                    <div className="flex items-start gap-2.5">
+                      <div className="mt-0.5 rounded-[4px] bg-[#191d24] border border-[#242933] p-2 shrink-0">
+                        {activeToast.type === 'warning' ? (
+                          <AlertTriangle className="h-4 w-4 text-[#ef4444]" />
+                        ) : activeToast.type === 'charge' ? (
+                          <Zap className="h-4 w-4 text-[#22c55e]" />
+                        ) : (
+                          <CheckCircle2 className="h-4 w-4 text-[#22c55e]" />
+                        )}
+                      </div>
+                      <div className="min-w-0">
+                        <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-[#edf0f5]">
+                          {activeToast.title}
+                        </div>
+                        <div className="text-[11px] text-[#9da5b4] leading-snug mt-0.5">
+                          {activeToast.message}
+                        </div>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setActiveToast(null)}
+                      className="p-1.5 rounded-[4px] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] cursor-pointer shrink-0"
+                      aria-label="Dismiss Notification"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* A2. FLOATING GPS LOCK TAG */}
+              {showLocationPinTag && (
+                <div className="location-tag-popup absolute bottom-[270px] sm:bottom-[230px] left-1/2 -translate-x-1/2 z-[490] flex items-center gap-2 rounded-[4px] bg-[#13161c]/95 border border-[#22c55e] px-3.5 py-2 text-[11px] font-mono font-bold text-[#edf0f5]">
+                  <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
+                  <MapPin className="h-3.5 w-3.5 text-[#22c55e]" />
+                  <span>
+                    GPS LOCKED:{' '}
+                    {liveNavState?.currentLatLon
+                      ? `${liveNavState.currentLatLon[0].toFixed(4)} N, ${liveNavState.currentLatLon[1].toFixed(4)} E`
+                      : `${startPOI.lat.toFixed(4)} N, ${startPOI.lon.toFixed(4)} E`}
+                  </span>
+                  <span className="text-[#656d7d]">|</span>
+                  <span className="text-[#22c55e]">ZOOM 15X</span>
+                </div>
+              )}
+
+              {/* A3. PREDICTIVE SQUALL RADAR CARD */}
+              {dustFrontState.active && showDustRadarCard && (
+                <div className="squall-card-slide absolute top-36 left-3 z-[460] w-[290px] sm:w-[320px] rounded-[6px] bg-[#13161c]/95 border border-[#ef4444] p-3 space-y-2.5">
+                  <div className="flex items-center justify-between border-b border-[#242933] pb-2">
+                    <span className="text-[11px] font-bold uppercase text-[#ef4444] flex items-center gap-1.5 font-mono">
+                      <Wind className="h-4 w-4 text-[#ef4444]" /> PREDICTIVE SQUALL RADAR
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowDustRadarCard(false)}
+                      className="p-1 rounded-[4px] text-[#9da5b4] hover:text-[#edf0f5] cursor-pointer"
+                      aria-label="Close Squall Card"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="flex items-baseline justify-between bg-[#191d24] p-2.5 rounded-[4px] border border-[#242933]">
+                    <div>
+                      <div className="text-[9.5px] text-[#9da5b4] uppercase font-mono font-bold">
+                        SQUALL IMPACT IN
+                      </div>
+                      <div className="text-2xl font-bold text-[#ef4444] font-mono flex items-baseline gap-1 mt-0.5">
+                        <span>~{dustFrontState.etaMin}</span>
+                        <span className="text-xs text-[#9da5b4]">min</span>
+                      </div>
+                    </div>
+                    <div className="text-right font-mono">
+                      <div className="text-[9.5px] text-[#9da5b4] uppercase">CLOSING RANGE</div>
+                      <div className="text-lg font-bold text-[#edf0f5] mt-0.5">
+                        {dustFrontState.distanceAheadKm} km
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[10px] font-mono">
+                    <div className="p-2 rounded-[4px] bg-[#191d24] border border-[#242933]">
+                      <span className="text-[#656d7d] block font-bold">BARO RATE</span>
+                      <span className="text-[#ef4444] font-bold">-2.8 Pa/min</span>
+                    </div>
+                    <div className="p-2 rounded-[4px] bg-[#191d24] border border-[#242933]">
+                      <span className="text-[#656d7d] block font-bold">EVAC WINDOW</span>
+                      <span className="text-[#22c55e] font-bold">
+                        {Math.max(2, dustFrontState.etaMin - 5)} min safe
+                      </span>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={triggerShelterDivert}
+                    className="glove-btn w-full min-h-[46px] px-3 rounded-[4px] bg-[#dc2626] hover:bg-[#ef4444] text-[#edf0f5] font-mono font-bold text-xs uppercase flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <ShieldAlert className="h-4 w-4 shrink-0" />
+                    <span className="truncate">
+                      DIVERT TO {nearestShelter.station.name.split(' ')[0].toUpperCase()} ({nearestShelter.distKm} KM)
+                    </span>
+                  </button>
+                </div>
+              )}
+
+              {/* A4. TOP FLOATING NAVIGATION / EXPLORE HEADER */}
+              <div className="absolute top-3 left-3 right-3 z-[460] flex flex-col items-center pointer-events-none">
+                {navMode === 'navigating' ? (
+                  /* ACTIVE TURN-BY-TURN MANEUVER BANNER */
+                  <div className="pointer-events-auto w-full max-w-xl rounded-[6px] bg-[#13161c]/95 border border-[#22c55e] p-3 text-[#edf0f5]">
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 min-w-0">
+                        <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-[4px] bg-[#191d24] border border-[#22c55e]">
+                          {liveNavState?.isRecharging ? (
+                            <Zap className="h-6 w-6 text-[#22c55e]" />
+                          ) : liveNavState?.arrived ? (
+                            <CheckCircle2 className="h-6 w-6 text-[#22c55e]" />
+                          ) : (
+                            <Navigation2
+                              className="h-6 w-6 text-[#edf0f5]"
+                              style={{ transform: `rotate(${liveNavState?.heading || 0}deg)` }}
+                            />
+                          )}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-lg font-bold tracking-tight text-[#edf0f5] flex items-center gap-2 font-mono">
+                            <span>{currentManeuver?.distanceText}</span>
+                            <span className="text-[10.5px] font-semibold text-[#22c55e] bg-[#191d24] px-2 py-0.5 rounded-[4px] border border-[#353c4a]">
+                              {liveNavState?.heading || 0} DEG | {martianEnv.lstText}
+                            </span>
+                          </div>
+                          <div className="text-xs font-semibold text-[#edf0f5] truncate uppercase">
+                            {currentManeuver?.instruction}
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="text-right font-mono shrink-0">
+                        <div className="text-sm font-bold text-[#edf0f5]">
+                          {liveNavState?.speedKmh} <span className="text-[10px] text-[#9da5b4]">km/h</span>
+                        </div>
+                        <div className="text-[10px] text-[#9da5b4]">{martianEnv.ambientTempC} C</div>
+                      </div>
+                    </div>
+
+                    <div className="mt-2 pt-2 border-t border-[#242933] text-[11px] font-mono text-[#9da5b4] flex items-center justify-between gap-2">
+                      <span className="truncate">{currentManeuver?.subtitle}</span>
+                      <div className="flex items-center gap-3 shrink-0 font-bold">
+                        <span className={`flex items-center gap-1 ${curBat < 25 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
+                          <Battery className="h-3.5 w-3.5" /> {curBat}%
+                        </span>
+                        <span className="flex items-center gap-1 text-[#edf0f5]">
+                          <Droplets className="h-3.5 w-3.5 text-[#22c55e]" /> {curO2}%
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  /* SIMPLE EXPLORE BAR + WEATHER MODES + SCENARIO PRESETS */
+                  <div className="pointer-events-auto w-full max-w-2xl space-y-2">
+                    <div className="flex items-center justify-between gap-2 rounded-[6px] bg-[#13161c]/95 border border-[#353c4a] px-3 py-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[4px] bg-[#191d24] border border-[#353c4a] text-[#edf0f5]">
+                          <Compass className="h-5 w-5" />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-bold tracking-wider uppercase text-[#edf0f5] truncate">
+                              Dalil Mars
+                            </span>
+                            <span className="rounded-[4px] bg-[#191d24] px-1.5 py-0.5 text-[9px] font-mono font-bold text-[#22c55e] border border-[#22c55e]/50">
+                              JEZERO
+                            </span>
+                          </div>
+                          <div className="text-[10px] font-mono text-[#9da5b4] flex items-center gap-1.5">
+                            <span>SOL {selectedMissionSol}</span>
+                            <span>|</span>
+                            <span className="text-[#edf0f5] font-semibold">{martianEnv.lstText}</span>
+                            <span>|</span>
+                            <span>{martianEnv.ambientTempC} C</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <button
+                          type="button"
+                          onClick={() => setShowRouteOptions((v) => !v)}
+                          className={`glove-btn min-h-[42px] px-3 py-1.5 rounded-[4px] border text-xs font-mono font-bold uppercase flex items-center gap-1.5 cursor-pointer ${
+                            showRouteOptions
+                              ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e]'
+                              : 'bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border-[#353c4a]'
+                          }`}
+                        >
+                          <Sliders className="h-4 w-4" />
+                          <span>Route Setup</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => switchUiMode('developer')}
+                          className="glove-btn min-h-[42px] px-2.5 py-1.5 rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] border border-[#353c4a] font-mono text-[10.5px] font-bold uppercase flex items-center gap-1.5 cursor-pointer"
+                          title="Switch to Developer Ground Control Terminal GUI"
+                        >
+                          <Terminal className="h-4 w-4" />
+                          <span className="hidden sm:inline">DEV GUI</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* 3-Button Weather Mode Selector */}
+                    <div className="flex items-center gap-1 bg-[#13161c]/95 p-1 rounded-[6px] border border-[#242933]">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWeatherKey('nominal');
+                          setIncomingDustAlert(false);
+                        }}
+                        className={`glove-btn flex-1 min-h-[38px] px-2.5 py-1 rounded-[4px] border text-xs font-mono font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                          weatherKey === 'nominal'
+                            ? 'bg-[#22c55e]/15 text-[#22c55e] border-[#22c55e]'
+                            : 'bg-transparent border-transparent text-[#9da5b4] hover:text-[#edf0f5] hover:bg-[#191d24]'
+                        }`}
+                      >
+                        <Sun className="h-4 w-4" />
+                        <span>Nominal Sol</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWeatherKey('dust_storm');
+                          setIncomingDustAlert(true);
+                          setShowDustRadarCard(true);
+                        }}
+                        className={`glove-btn flex-1 min-h-[38px] px-2.5 py-1 rounded-[4px] border text-xs font-mono font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                          weatherKey === 'dust_storm'
+                            ? 'bg-[#ef4444]/15 text-[#ef4444] border-[#ef4444]'
+                            : 'bg-transparent border-transparent text-[#9da5b4] hover:text-[#edf0f5] hover:bg-[#191d24]'
+                        }`}
+                      >
+                        <Wind className="h-4 w-4" />
+                        <span>Dust Storm</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setWeatherKey('solar_storm');
+                          setIncomingDustAlert(false);
+                        }}
+                        className={`glove-btn flex-1 min-h-[38px] px-2.5 py-1 rounded-[4px] border text-xs font-mono font-bold flex items-center justify-center gap-1.5 cursor-pointer ${
+                          weatherKey === 'solar_storm'
+                            ? 'bg-[#ef4444]/15 text-[#ef4444] border-[#ef4444]'
+                            : 'bg-transparent border-transparent text-[#9da5b4] hover:text-[#edf0f5] hover:bg-[#191d24]'
+                        }`}
+                      >
+                        <Zap className="h-4 w-4" />
+                        <span>Solar Flare</span>
+                      </button>
+                    </div>
+
+                    {/* 4-Button Quick Scenario Presets */}
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 py-0.5">
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('hab-alpha', 'three-forks', 'light', 'nominal', 85, 90, 705)}
+                        className="glove-btn whitespace-nowrap min-h-[36px] px-2 py-1 rounded-[4px] text-[11px] font-mono font-semibold bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Target className="h-3.5 w-3.5 shrink-0 text-[#22c55e]" />
+                        <span className="truncate">1. Direct Sample</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('hab-alpha', 'hawksbill-gap', 'heavy', 'nominal', 24, 34, 760)}
+                        className="glove-btn whitespace-nowrap min-h-[36px] px-2 py-1 rounded-[4px] text-[11px] font-mono font-semibold bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <BatteryCharging className="h-3.5 w-3.5 shrink-0 text-[#22c55e]" />
+                        <span className="truncate">2. Recharge Pit-Stop</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('kodiak-butte', 'belva-crater', 'light', 'dust_storm', 62, 70, 955)}
+                        className="glove-btn whitespace-nowrap min-h-[36px] px-2 py-1 rounded-[4px] text-[11px] font-mono font-semibold bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border border-[#ef4444]/60 flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <Wind className="h-3.5 w-3.5 shrink-0 text-[#ef4444]" />
+                        <span className="truncate">3. Dusk & Dust Front</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => applyPreset('seitah-ridge', 'western-rim', 'rover', 'solar_storm', 90, 95, 840)}
+                        className="glove-btn whitespace-nowrap min-h-[36px] px-2 py-1 rounded-[4px] text-[11px] font-mono font-semibold bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border border-[#ef4444]/60 flex items-center justify-center gap-1.5 cursor-pointer"
+                      >
+                        <ShieldAlert className="h-3.5 w-3.5 shrink-0 text-[#ef4444]" />
+                        <span className="truncate">4. Solar Flare Abort</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* A5. RIGHT-SIDE FLOATING ACTION BUTTONS (GLOVE-COMPATIBLE 48x48PX) */}
+              <div className="absolute right-3 top-36 z-[460] flex flex-col items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCompassClick}
+                  title="Compass: Re-align North & Zoom to EVA Position"
+                  className="glove-btn flex h-12 w-12 items-center justify-center rounded-[6px] bg-[#13161c]/95 hover:bg-[#222731] border border-[#353c4a] text-[#edf0f5] cursor-pointer"
+                  aria-label="Compass"
+                >
+                  <Compass
+                    className="h-6 w-6 transition-transform duration-500"
+                    style={{ transform: `rotate(${compassRotation}deg)` }}
+                  />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => triggerLocateAstronaut(15)}
+                  title="Locate EVA: Smooth GPS Zoom & Radar Wave"
+                  className={`glove-btn flex h-12 w-12 items-center justify-center rounded-[6px] border cursor-pointer ${
+                    followAstronaut
+                      ? 'bg-[#16a34a] text-[#0b0d11] border-[#22c55e]'
+                      : 'bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border-[#353c4a]'
+                  }`}
+                  aria-label="Locate EVA Position"
+                >
+                  <Crosshair className="h-6 w-6" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => openPanoramaModal(endId || startId)}
+                  title="Open 360 Photosphere / Surface Photo"
+                  className="glove-btn relative flex h-12 w-12 items-center justify-center rounded-[6px] bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] cursor-pointer"
+                  aria-label="Open Surface Vista or 360 View"
+                >
+                  <Camera className="h-6 w-6" />
+                  <span className="absolute -top-1 -right-1 h-2.5 w-2.5 rounded-full bg-[#22c55e] border border-[#0b0d11]" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIncomingDustAlert((v) => !v);
+                    setShowDustRadarCard(true);
+                  }}
+                  title="Toggle Predictive Squall Radar Card"
+                  className={`glove-btn flex h-12 w-12 items-center justify-center rounded-[6px] border cursor-pointer ${
+                    incomingDustAlert || weatherKey === 'dust_storm'
+                      ? 'bg-[#dc2626] text-[#edf0f5] border-[#ef4444]'
+                      : 'bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border-[#353c4a]'
+                  }`}
+                  aria-label="Toggle Storm Radar"
+                >
+                  <Wind className="h-6 w-6" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowLayersSheet((v) => !v)}
+                  title="Map Types & Layers"
+                  className={`glove-btn flex h-12 w-12 items-center justify-center rounded-[6px] border cursor-pointer ${
+                    showLayersSheet
+                      ? 'bg-[#2c323f] text-[#edf0f5] border-[#edf0f5]'
+                      : 'bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border-[#353c4a]'
+                  }`}
+                  aria-label="Map Layers"
+                >
+                  <Layers className="h-6 w-6" />
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setShowLegendSheet(true)}
+                  title="Map Symbology Legend"
+                  className="glove-btn flex h-12 w-12 items-center justify-center rounded-[6px] bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] cursor-pointer"
+                  aria-label="Map Legend"
+                >
+                  <Info className="h-6 w-6" />
+                </button>
+              </div>
+
+              {/* A6. BOTTOM-LEFT GOOGLE MAPS BASEMAP QUICK TOGGLE + LAYERS POPOVER */}
+              <div className="hidden md:flex absolute bottom-3 left-3 z-[460] items-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBasemap((b) => (b === 'satellite' ? 'terrain' : 'satellite'))}
+                  className="glove-btn min-h-[56px] min-w-[116px] bg-[#13161c]/95 hover:bg-[#191d24] border border-[#353c4a] rounded-[6px] p-2 flex items-center gap-2 cursor-pointer text-left"
+                  title="Quick Switch Satellite <-> Terrain"
+                >
+                  <div className="h-9 w-9 rounded-[4px] border border-[#4f5767] bg-[#191d24] flex items-center justify-center shrink-0">
+                    <MapIcon className="h-4 w-4 text-[#edf0f5]" />
+                  </div>
+                  <div className="font-mono leading-tight">
+                    <div className="text-[9px] text-[#656d7d] uppercase">BASEMAP</div>
+                    <div className="text-[11px] font-bold text-[#edf0f5] uppercase">
+                      {BASEMAP_OPTIONS.find((m) => m.id === basemap)?.short || 'SAT'}
+                    </div>
+                  </div>
+                </button>
+              </div>
+
+              {showLayersSheet && (
+                <div className="absolute bottom-[76px] left-3 z-[520] w-[290px] sm:w-[320px] rounded-[6px] bg-[#13161c]/95 border border-[#353c4a] p-3 space-y-3">
+                  <div className="flex items-center justify-between border-b border-[#242933] pb-2">
+                    <span className="font-mono text-xs font-bold uppercase text-[#edf0f5] flex items-center gap-1.5">
+                      <Layers className="h-4 w-4 text-[#22c55e]" /> Map Types & Layers
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setShowLayersSheet(false)}
+                      className="text-[#9da5b4] hover:text-[#edf0f5] p-1 cursor-pointer"
+                      aria-label="Close Layers"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1.5">
+                    {BASEMAP_OPTIONS.map((opt) => (
+                      <button
+                        type="button"
+                        key={`astro-bm-${opt.id}`}
+                        onClick={() => setBasemap(opt.id)}
+                        className={`glove-btn min-h-[42px] px-2 rounded-[4px] border font-mono text-[10px] font-bold cursor-pointer ${
+                          basemap === opt.id
+                            ? 'bg-[#22c55e]/15 text-[#22c55e] border-[#22c55e]'
+                            : 'bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] border-[#242933]'
+                        }`}
+                      >
+                        {opt.short}
+                      </button>
+                    ))}
+                  </div>
+
+                  <div>
+                    <div className="flex justify-between font-mono text-[10px] text-[#9da5b4] mb-1">
+                      <span>RELIEF HILLSHADE BLEND</span>
+                      <span className="text-[#edf0f5] font-bold">{Math.round(reliefBlend * 100)}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min="0"
+                      max="100"
+                      value={Math.round(reliefBlend * 100)}
+                      onChange={(e) => setReliefBlend(Number(e.target.value) / 100)}
+                      className="glove-slider"
+                    />
+                  </div>
+
+                  <div className="space-y-1 border-t border-[#242933] pt-2">
+                    {[
+                      { key: 'slope', label: 'Slope Safety Heatmap', icon: TrendingUp },
+                      { key: 'hazards', label: 'Terrain & Science Hazards', icon: AlertTriangle },
+                      { key: 'science', label: 'Charging, ISRU & Science POIs', icon: Zap },
+                      { key: 'traverse', label: 'Perseverance Traverse Track', icon: Navigation },
+                      { key: 'landmarks', label: '11 Regional Landmarks', icon: Target },
+                      { key: 'hirise', label: 'NASA HiRISE 25cm Mosaic', icon: Globe },
+                    ].map((ov) => {
+                      const Icon = ov.icon;
+                      return (
+                        <label
+                          key={`astro-ov-${ov.key}`}
+                          className="flex items-center justify-between min-h-[38px] px-2 rounded-[4px] bg-[#191d24] border border-[#242933] hover:border-[#353c4a] cursor-pointer text-xs text-[#edf0f5]"
+                        >
+                          <span className="flex items-center gap-2 font-mono text-[10.5px]">
+                            <Icon className="h-3.5 w-3.5 text-[#9da5b4]" />
+                            <span>{ov.label}</span>
+                          </span>
+                          <input
+                            type="checkbox"
+                            checked={Boolean(layers[ov.key])}
+                            onChange={(e) =>
+                              setLayers((prev) => ({ ...prev, [ov.key]: e.target.checked }))
+                            }
+                            className="accent-[#22c55e] h-4 w-4 cursor-pointer"
+                          />
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* A7. EXPANDABLE ROUTE SETUP MODAL */}
+              {showRouteOptions && (
+                <div className="absolute top-20 left-1/2 -translate-x-1/2 z-[750] w-[94%] max-w-lg rounded-[6px] bg-[#13161c] border border-[#353c4a] p-4 space-y-3.5">
+                  <div className="flex items-center justify-between pb-2 border-b border-[#242933]">
+                    <div className="text-xs font-mono font-bold uppercase text-[#edf0f5] flex items-center gap-2">
+                      <Sliders className="h-4 w-4 text-[#22c55e]" />
+                      <span>Route & EVA Suit Settings</span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setShowRouteOptions(false)}
+                      className="p-1.5 rounded-[4px] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] cursor-pointer"
+                      aria-label="Close Route Settings"
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                    <div>
+                      <label className="block text-[10px] font-mono text-[#9da5b4] uppercase mb-1">
+                        Starting Location
+                      </label>
+                      <select
+                        value={startId === 'custom-origin' ? '' : startId}
+                        onChange={(e) => e.target.value && handleSetOrigin(e.target.value)}
+                        className="w-full min-h-[44px] rounded-[4px] bg-[#0b0d11] border border-[#353c4a] px-3 py-2 font-mono text-xs text-[#edf0f5]"
+                      >
+                        {allSiteOptions.map((s) => (
+                          <option key={`modal-orig-${s.id}`} value={s.id}>
+                            {s.isChargingStation ? '[CHG] ' : ''}{s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] font-mono text-[#9da5b4] uppercase mb-1">
+                        Destination Target
+                      </label>
+                      <select
+                        value={endId === 'custom-dest' ? '' : endId}
+                        onChange={(e) => e.target.value && handleNavigateToPOI(e.target.value)}
+                        className="w-full min-h-[44px] rounded-[4px] bg-[#0b0d11] border border-[#353c4a] px-3 py-2 font-mono text-xs text-[#edf0f5]"
+                      >
+                        {allSiteOptions.map((s) => (
+                          <option key={`modal-dest-${s.id}`} value={s.id}>
+                            {s.isChargingStation ? '[CHG] ' : ''}{s.name}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-[10px] font-mono text-[#9da5b4] uppercase mb-1.5">
+                      Astronaut Mobility Mode
+                    </label>
+                    <div className="grid grid-cols-3 gap-1.5">
+                      {Object.values(LOADOUT_PROFILES).map((prof) => (
+                        <button
+                          type="button"
+                          key={`modal-prof-${prof.id}`}
+                          onClick={() => setLoadoutKey(prof.id)}
+                          className={`glove-btn min-h-[46px] px-2 py-1.5 rounded-[4px] border text-xs font-mono font-semibold flex items-center justify-center gap-1.5 cursor-pointer ${
+                            loadoutKey === prof.id
+                              ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e] font-bold'
+                              : 'bg-[#191d24] hover:bg-[#222731] border-[#353c4a] text-[#edf0f5]'
+                          }`}
+                        >
+                          {prof.id === 'light' ? (
+                            <User className="h-4 w-4" />
+                          ) : prof.id === 'heavy' ? (
+                            <PackageCheck className="h-4 w-4" />
+                          ) : (
+                            <Truck className="h-4 w-4" />
+                          )}
+                          <span>
+                            {prof.id === 'light' ? 'Solo Suit' : prof.id === 'heavy' ? 'Heavy Kit' : 'Rover Mule'}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div className="rounded-[4px] bg-[#191d24] border border-[#242933] p-3 space-y-2.5">
+                    <div className="flex justify-between text-xs font-mono text-[#9da5b4]">
+                      <span className="flex items-center gap-1.5">
+                        <BatteryCharging className="h-4 w-4 text-[#22c55e]" /> Starting Battery
+                      </span>
+                      <span className="font-bold text-[#edf0f5]">{startBatteryPct}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={15}
+                      max={100}
+                      value={startBatteryPct}
+                      onChange={(e) => setStartBatteryPct(Number(e.target.value))}
+                      className="glove-slider w-full"
+                    />
+
+                    <div className="flex justify-between text-xs font-mono text-[#9da5b4] pt-1">
+                      <span className="flex items-center gap-1.5">
+                        <Droplets className="h-4 w-4 text-[#22c55e]" /> Starting PLSS Tank
+                      </span>
+                      <span className="font-bold text-[#edf0f5]">{startO2Pct}%</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={15}
+                      max={100}
+                      value={startO2Pct}
+                      onChange={(e) => setStartO2Pct(Number(e.target.value))}
+                      className="glove-slider w-full"
+                    />
+
+                    <div className="flex justify-between text-xs font-mono text-[#9da5b4] pt-1">
+                      <span className="flex items-center gap-1.5">
+                        <Clock className="h-4 w-4 text-[#edf0f5]" /> Martian Departure Time
+                      </span>
+                      <span className="font-bold text-[#edf0f5]">{formatLst(startLstMinutes)}</span>
+                    </div>
+                    <input
+                      type="range"
+                      min={360}
+                      max={1140}
+                      step={15}
+                      value={startLstMinutes}
+                      onChange={(e) => setStartLstMinutes(Number(e.target.value))}
+                      className="glove-slider w-full"
+                    />
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setShowRouteOptions(false)}
+                    className="glove-btn w-full min-h-[48px] rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] text-[#0b0d11] font-mono font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 border border-[#22c55e] cursor-pointer"
+                  >
+                    <Check className="h-4 w-4" />
+                    <span>Apply Route Settings</span>
+                  </button>
+                </div>
+              )}
+
+              {/* A8. BOTTOM-CENTER GOOGLE MAPS NAVIGATION & TRIP SHEET */}
+              <div className="absolute bottom-3 left-3 right-3 z-[450] flex flex-col items-center pointer-events-none">
+                <div className="pointer-events-auto w-full max-w-xl rounded-[6px] bg-[#13161c]/95 border border-[#353c4a] overflow-hidden">
+                  {navMode === 'navigating' ? (
+                    /* STATE 1: ACTIVE EVA WALK CONTROLS */
+                    <div className="p-3.5 space-y-3">
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <div className="text-2xl font-bold text-[#edf0f5] font-mono flex items-baseline gap-1.5">
+                            <span>{liveNavState?.estTimeRemainingMin}</span>
+                            <span className="text-xs font-sans text-[#9da5b4]">min</span>
+                          </div>
+                          <div className="text-xs text-[#9da5b4] font-mono flex items-center gap-2">
+                            <span>{liveNavState?.distRemainingKm} km remaining</span>
+                            <span>|</span>
+                            <span className="text-[#22c55e] font-bold">Sol {selectedMissionSol}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-2.5">
+                          <div className="rounded-[4px] bg-[#191d24] p-2 border border-[#242933] text-right min-w-[92px]">
+                            <div className="flex items-center justify-end gap-1 text-[9.5px] text-[#9da5b4] font-mono">
+                              <Battery className={`h-3.5 w-3.5 ${curBat < 25 ? 'text-[#ef4444]' : 'text-[#22c55e]'}`} />
+                              <span>BATTERY</span>
+                            </div>
+                            <div className={`text-sm font-bold font-mono ${curBat < 25 ? 'text-[#ef4444]' : 'text-[#edf0f5]'}`}>
+                              {liveNavState?.currentBattery}%
+                            </div>
+                            <div className="w-full h-1.5 bg-[#0b0d11] rounded-[2px] overflow-hidden mt-1">
+                              <div
+                                className={`h-full ${curBat < 25 ? 'bg-[#ef4444]' : 'bg-[#22c55e]'}`}
+                                style={{ width: `${liveNavState?.currentBattery || 0}%` }}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="rounded-[4px] bg-[#191d24] p-2 border border-[#242933] text-right min-w-[92px]">
+                            <div className="flex items-center justify-end gap-1 text-[9.5px] text-[#9da5b4] font-mono">
+                              <Droplets className="h-3.5 w-3.5 text-[#22c55e]" />
+                              <span>PLSS TANK</span>
+                            </div>
+                            <div className="text-sm font-bold font-mono text-[#edf0f5]">
+                              {liveNavState?.currentO2}%
+                            </div>
+                            <div className="w-full h-1.5 bg-[#0b0d11] rounded-[2px] overflow-hidden mt-1">
+                              <div
+                                className="h-full bg-[#22c55e]"
+                                style={{ width: `${liveNavState?.currentO2 || 0}%` }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-4 gap-2 pt-1">
+                        <button
+                          type="button"
+                          onClick={() => setNavPlaying((p) => !p)}
+                          className={`glove-btn col-span-2 min-h-[52px] rounded-[4px] font-mono font-bold text-xs uppercase flex items-center justify-center gap-2 border cursor-pointer ${
+                            navPlaying
+                              ? 'bg-[#2c323f] hover:bg-[#353c4a] text-[#edf0f5] border-[#4f5767]'
+                              : 'bg-[#16a34a] hover:bg-[#22c55e] text-[#0b0d11] border-[#22c55e]'
+                          }`}
+                        >
+                          {navPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
+                          <span>{navPlaying ? 'Pause Walk' : 'Resume Walk'}</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setNavSpeed((s) => (s === 1 ? 3 : 1))}
+                          className="glove-btn min-h-[52px] rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] font-mono font-bold text-xs border border-[#353c4a] flex flex-col items-center justify-center cursor-pointer"
+                        >
+                          <Gauge className="h-4 w-4 mb-0.5 text-[#22c55e]" />
+                          <span>{navSpeed}x Speed</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={stopNavigation}
+                          className="glove-btn min-h-[52px] rounded-[4px] bg-[#191d24] hover:bg-[#dc2626]/20 border border-[#ef4444]/60 text-[#ef4444] font-mono font-bold text-xs flex flex-col items-center justify-center cursor-pointer"
+                        >
+                          <LogOut className="h-4 w-4 mb-0.5" />
+                          <span>Exit</span>
+                        </button>
+                      </div>
+
+                      {(incomingDustAlert || weatherKey === 'dust_storm' || curBat < 25) && (
+                        <button
+                          type="button"
+                          onClick={triggerShelterDivert}
+                          className="glove-btn w-full min-h-[46px] rounded-[4px] bg-[#dc2626] hover:bg-[#ef4444] text-[#edf0f5] font-mono font-bold text-xs uppercase flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          <ShieldAlert className="h-4 w-4" />
+                          <span>
+                            Divert to {nearestShelter.station.name} ({nearestShelter.distKm} km)
+                          </span>
+                        </button>
+                      )}
+                    </div>
+                  ) : navMode === 'arrived' || (startId === endId && startId !== 'custom-origin') ? (
+                    /* STATE 2: ARRIVED AT WAYPOINT — 1-TAP NEXT LEG SELECTOR */
+                    <div className="p-3.5 space-y-3">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[4px] bg-[#191d24] text-[#22c55e] border border-[#22c55e]/60">
+                            <CheckCircle2 className="h-5 w-5" />
+                          </span>
+                          <div className="min-w-0">
+                            <div className="text-[10px] font-mono uppercase text-[#22c55e] font-bold tracking-wider">
+                              Traverse Leg Complete
+                            </div>
+                            <div className="text-sm font-bold text-[#edf0f5] flex items-center gap-1.5 flex-wrap">
+                              <span className="truncate">{startPOI.name}</span>
+                              {startPOI.isChargingStation && (
+                                <span className="rounded-[4px] bg-[#191d24] text-[#22c55e] border border-[#22c55e]/50 px-1.5 py-0.5 text-[9.5px] font-mono font-bold inline-flex items-center gap-1">
+                                  <Zap className="h-3 w-3" /> 100%
+                                </span>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => openPanoramaModal(startPOI.id)}
+                                className="glove-btn px-2 py-0.5 rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#edf0f5] font-mono text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                              >
+                                <Camera className="h-3 w-3 text-[#22c55e]" />
+                                <span>
+                                  {startPOI.id === 'hab-alpha' || startPOI.id === 'seitah-ridge'
+                                    ? '360'
+                                    : 'Photo'}
+                                </span>
+                              </button>
+                            </div>
+                          </div>
+                        </div>
+                        <div className="text-right font-mono shrink-0">
+                          <div className="text-[9.5px] text-[#656d7d]">ELEV</div>
+                          <div className="text-xs font-bold text-[#edf0f5]">{startPOI.elev} m</div>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-2 gap-2 bg-[#191d24] p-2.5 rounded-[4px] border border-[#242933] font-mono text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-[#9da5b4]">
+                            <Battery className="h-3.5 w-3.5 text-[#22c55e]" /> Battery
+                          </span>
+                          <span className="font-bold text-[#edf0f5]">{startBatteryPct}%</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="flex items-center gap-1.5 text-[#9da5b4]">
+                            <Droplets className="h-3.5 w-3.5 text-[#22c55e]" /> PLSS O2
+                          </span>
+                          <span className="font-bold text-[#edf0f5]">{startO2Pct}%</span>
+                        </div>
+                      </div>
+
+                      <div className="space-y-1.5">
+                        <div className="text-[10px] font-mono text-[#9da5b4] uppercase flex items-center justify-between">
+                          <span>Select Next Waypoint:</span>
+                          <span className="text-[#22c55e]">From {startPOI.name.split(' ')[0]}</span>
+                        </div>
+                        <div className="grid grid-cols-2 gap-2 max-h-40 overflow-y-auto aerospace-scroll pr-0.5">
+                          {allSiteOptions
+                            .filter(
+                              (p) =>
+                                normalizeKey(p.id) !== normalizeKey(astronautLocId) &&
+                                !(astronautLocId === 'hab-alpha' && p.id === 'landing_site')
+                            )
+                            .map((dest) => {
+                              const dist = Number(
+                                (
+                                  marsDistanceMeters(startPOI.lat, startPOI.lon, dest.lat, dest.lon) /
+                                  1000
+                                ).toFixed(1)
+                              );
+                              return (
+                                <button
+                                  type="button"
+                                  key={`next-${dest.id}`}
+                                  onClick={() => handleNavigateToPOI(dest.id)}
+                                  className="glove-btn min-h-[50px] p-2 rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] hover:border-[#22c55e] text-left cursor-pointer flex flex-col justify-between"
+                                >
+                                  <div className="flex items-center justify-between gap-1.5 w-full">
+                                    <span className="flex items-center gap-1.5 text-xs font-bold text-[#edf0f5] truncate">
+                                      {dest.isChargingStation ? (
+                                        <Zap className="h-3.5 w-3.5 text-[#22c55e] shrink-0" />
+                                      ) : (
+                                        <MapPin className="h-3.5 w-3.5 text-[#9da5b4] shrink-0" />
+                                      )}
+                                      <span className="truncate">{dest.name.replace(' [Landmark]', '')}</span>
+                                    </span>
+                                    <span className="text-[10px] font-mono text-[#22c55e] font-bold shrink-0">
+                                      {dist} km
+                                    </span>
+                                  </div>
+                                </button>
+                              );
+                            })}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    /* STATE 3: EXPLORE & ROUTE PLANNING TRIP SHEET */
+                    <div className="p-3.5 space-y-3">
+                      <div className="flex items-center justify-between gap-2 bg-[#191d24] p-2.5 rounded-[4px] border border-[#242933]">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-1.5 text-[9.5px] font-mono text-[#9da5b4] uppercase">
+                            <span className="h-2 w-2 rounded-full bg-[#edf0f5]" />
+                            <span>Origin {startId === astronautLocId ? '(Field)' : ''}</span>
+                          </div>
+                          <div className="text-xs font-bold text-[#edf0f5] truncate">{startPOI.name}</div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={handleSwapEndpoints}
+                          title="Swap Origin and Destination"
+                          className="glove-btn h-10 w-10 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] flex items-center justify-center shrink-0 cursor-pointer"
+                          aria-label="Swap Origin and Destination"
+                        >
+                          <ArrowLeftRight className="h-4 w-4" />
+                        </button>
+
+                        <div className="flex-1 min-w-0 text-right">
+                          <div className="flex items-center justify-end gap-1.5 text-[9.5px] font-mono text-[#9da5b4] uppercase">
+                            <span>Destination</span>
+                            <span className="h-2 w-2 rounded-full bg-[#22c55e]" />
+                          </div>
+                          <div className="text-xs font-bold text-[#edf0f5] truncate">{endPOI.name}</div>
+                        </div>
+                      </div>
+
+                      <div className="flex items-start justify-between gap-2 flex-wrap">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-bold text-[#edf0f5] truncate">
+                              {endPOI.name}
+                            </span>
+                            {endPOI.isChargingStation && (
+                              <span className="rounded-[4px] bg-[#191d24] text-[#22c55e] border border-[#22c55e]/50 px-1.5 py-0.5 text-[10px] font-mono font-bold inline-flex items-center gap-1">
+                                <Zap className="h-3 w-3" /> Base
+                              </span>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => openPanoramaModal(endPOI.id)}
+                              className="glove-btn px-2.5 py-1 rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#edf0f5] font-mono text-[10px] font-bold inline-flex items-center gap-1 cursor-pointer"
+                            >
+                              <Camera className="h-3.5 w-3.5 text-[#22c55e]" />
+                              <span>
+                                {endPOI.id === 'hab-alpha' || endPOI.id === 'seitah-ridge'
+                                  ? '360 Sphere'
+                                  : 'Photo'}
+                              </span>
+                            </button>
+                          </div>
+                          <div className="text-xs font-mono text-[#9da5b4] mt-0.5 flex items-center gap-2">
+                            <span className="text-[#edf0f5] font-bold">{routeResult.distKm} km</span>
+                            <span>|</span>
+                            <span>{routeResult.durationMin} min walk</span>
+                            <span>|</span>
+                            <span>Elev {endPOI.elev} m</span>
+                          </div>
+                        </div>
+
+                        <div className="shrink-0 text-right font-mono">
+                          {routeResult.rangeStatus === 'direct_clear' && (
+                            <span className="inline-flex items-center gap-1 rounded-[4px] bg-[#22c55e]/15 border border-[#22c55e]/50 px-2.5 py-1 text-[10.5px] font-bold text-[#22c55e]">
+                              <CheckCircle2 className="h-3.5 w-3.5" /> Can Reach Direct
+                            </span>
+                          )}
+                          {routeResult.rangeStatus === 'recharged_ok' && (
+                            <span className="inline-flex items-center gap-1 rounded-[4px] bg-[#22c55e]/15 border border-[#22c55e]/50 px-2.5 py-1 text-[10.5px] font-bold text-[#22c55e]">
+                              <Zap className="h-3.5 w-3.5" /> +15m Pit-Stop
+                            </span>
+                          )}
+                          {routeResult.rangeStatus === 'out_of_range' && (
+                            <span className="inline-flex items-center gap-1 rounded-[4px] bg-[#ef4444]/15 border border-[#ef4444]/60 px-2.5 py-1 text-[10.5px] font-bold text-[#ef4444]">
+                              <AlertTriangle className="h-3.5 w-3.5" /> Low Reserve
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Prominent Battery & PLSS O2 Tank Simulation Cards */}
+                      <div className="grid grid-cols-2 gap-2 bg-[#191d24] p-2.5 rounded-[4px] border border-[#242933]">
+                        <div>
+                          <div className="flex items-center justify-between text-[11px] font-mono text-[#9da5b4] mb-1">
+                            <span className="flex items-center gap-1 font-bold text-[#edf0f5]">
+                              <BatteryCharging className="h-3.5 w-3.5 text-[#22c55e]" /> Battery
+                            </span>
+                            <span className="font-bold text-[#edf0f5]">
+                              {startBatteryPct}% <span className="text-[10px] text-[#656d7d]">-&gt; {routeResult.finalArrivalBattery}%</span>
+                            </span>
+                          </div>
+                          <div className="w-full h-2 bg-[#0b0d11] rounded-[2px] overflow-hidden">
+                            <div
+                              className={`h-full ${startBatteryPct < 30 ? 'bg-[#ef4444]' : 'bg-[#22c55e]'}`}
+                              style={{ width: `${startBatteryPct}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between mt-1.5 text-[10px] font-mono">
+                            <button
+                              type="button"
+                              onClick={() => setStartBatteryPct((b) => Math.max(15, b - 15))}
+                              className="glove-btn min-h-[30px] px-2 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <Minus className="h-3 w-3" /> 15%
+                            </button>
+                            <span className="text-[#656d7d]">SIM</span>
+                            <button
+                              type="button"
+                              onClick={() => setStartBatteryPct((b) => Math.min(100, b + 15))}
+                              className="glove-btn min-h-[30px] px-2 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <Plus className="h-3 w-3" /> 15%
+                            </button>
+                          </div>
+                        </div>
+
+                        <div>
+                          <div className="flex items-center justify-between text-[11px] font-mono text-[#9da5b4] mb-1">
+                            <span className="flex items-center gap-1 font-bold text-[#edf0f5]">
+                              <Droplets className="h-3.5 w-3.5 text-[#22c55e]" /> PLSS O2
+                            </span>
+                            <span className="font-bold text-[#edf0f5]">
+                              {startO2Pct}% <span className="text-[10px] text-[#656d7d]">-&gt; {routeResult.finalArrivalO2}%</span>
+                            </span>
+                          </div>
+                          <div className="w-full h-2 bg-[#0b0d11] rounded-[2px] overflow-hidden">
+                            <div
+                              className={`h-full ${startO2Pct < 30 ? 'bg-[#ef4444]' : 'bg-[#22c55e]'}`}
+                              style={{ width: `${startO2Pct}%` }}
+                            />
+                          </div>
+                          <div className="flex items-center justify-between mt-1.5 text-[10px] font-mono">
+                            <button
+                              type="button"
+                              onClick={() => setStartO2Pct((o) => Math.max(15, o - 15))}
+                              className="glove-btn min-h-[30px] px-2 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <Minus className="h-3 w-3" /> 15%
+                            </button>
+                            <span className="text-[#656d7d]">SIM</span>
+                            <button
+                              type="button"
+                              onClick={() => setStartO2Pct((o) => Math.min(100, o + 15))}
+                              className="glove-btn min-h-[30px] px-2 rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#353c4a] text-[#edf0f5] flex items-center gap-0.5 cursor-pointer"
+                            >
+                              <Plus className="h-3 w-3" /> 15%
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Primary 56px Glove START NAVIGATION Button */}
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={startNavigation}
+                          className="glove-btn flex-1 min-h-[56px] rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] text-[#0b0d11] font-mono font-bold text-sm uppercase tracking-wider flex items-center justify-center gap-2.5 border border-[#22c55e] cursor-pointer"
+                        >
+                          <Navigation className="h-5 w-5" />
+                          <span>Start Navigation</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => setBottomSheetExpanded((v) => !v)}
+                          title="Expand Route Details"
+                          className="glove-btn flex h-[56px] w-[56px] items-center justify-center rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] cursor-pointer shrink-0"
+                          aria-label="Toggle Route Details"
+                        >
+                          {bottomSheetExpanded ? (
+                            <ChevronDown className="h-5 w-5" />
+                          ) : (
+                            <ChevronUp className="h-5 w-5" />
+                          )}
+                        </button>
+                      </div>
+
+                      {bottomSheetExpanded && (
+                        <div className="pt-2 border-t border-[#242933] space-y-2 text-xs max-h-44 overflow-y-auto aerospace-scroll">
+                          <div className="grid grid-cols-3 gap-2 text-center font-mono text-[10.5px]">
+                            <div className="p-2 rounded-[4px] bg-[#191d24] border border-[#242933]">
+                              <div className="text-[9px] text-[#656d7d]">ARRIVAL BAT</div>
+                              <div className="font-bold text-[#22c55e]">
+                                {routeResult.finalArrivalBattery}%
+                              </div>
+                            </div>
+                            <div className="p-2 rounded-[4px] bg-[#191d24] border border-[#242933]">
+                              <div className="text-[9px] text-[#656d7d]">PEAK GRADE</div>
+                              <div className="font-bold text-[#edf0f5]">
+                                {routeResult.maxSlopeAlongPath} deg
+                              </div>
+                            </div>
+                            <div className="p-2 rounded-[4px] bg-[#191d24] border border-[#242933]">
+                              <div className="text-[9px] text-[#656d7d]">HAZARDS BYPASSED</div>
+                              <div className="font-bold text-[#22c55e]">
+                                {routeResult.hazardsAvoided} zones
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="space-y-1">
+                            <div className="text-[10px] font-mono uppercase text-[#656d7d]">
+                              Turn-by-Turn Preview
+                            </div>
+                            {routeResult.navigationSteps?.slice(0, 4).map((step, idx) => (
+                              <div
+                                key={step.id || idx}
+                                className="p-2 rounded-[4px] bg-[#191d24] border border-[#242933] text-[11px] font-mono text-[#edf0f5]"
+                              >
+                                <span className="font-bold">
+                                  {idx + 1}. {step.instruction}
+                                </span>
+                                {step.detail && (
+                                  <div className="text-[10px] text-[#9da5b4] font-sans mt-0.5">
+                                    {step.detail}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
 
           {/* SLIDE-IN SCIENTIFIC LANDMARK DOSSIER DRAWER */}
           {activeLandmark && (
@@ -1788,8 +2927,8 @@ export default function App() {
           )}
         </main>
 
-        {/* RIGHT: COLLAPSIBLE AEROSPACE INSTRUMENT CONSOLE */}
-        {sidebarOpen && (
+        {/* RIGHT: COLLAPSIBLE DEVELOPER INSTRUMENT CONSOLE */}
+        {uiMode === 'developer' && sidebarOpen && (
           <aside className="w-full lg:w-[390px] xl:w-[410px] shrink-0 bg-[#13161c] border-t lg:border-t-0 lg:border-l border-[#242933] flex flex-col max-h-[48vh] lg:max-h-full overflow-y-auto aerospace-scroll z-20">
             {/* PANEL 1: NAVIGATION VECTORS & SIMULATION */}
             <section className="p-3 border-b border-[#242933] space-y-2.5">
@@ -2305,112 +3444,129 @@ export default function App() {
         )}
       </div>
 
-      {/* 3. BOTTOM LIVE TELEMETRY & SENSOR BAR (8 CELLS) */}
-      <footer className="shrink-0 bg-[#13161c] border-t border-[#242933] grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 divide-x divide-y lg:divide-y-0 divide-[#242933] font-mono text-[10px] z-30">
-        <div className="px-2.5 py-1.5">
-          <div className="text-[9px] text-[#656d7d]">CURSOR COORD</div>
-          <div className="text-[#edf0f5] font-semibold truncate">
-            {cursorTelemetry.lat.toFixed(4)} N, {cursorTelemetry.lon.toFixed(4)} E
+      {/* 3. DEVELOPER BOTTOM LIVE TELEMETRY & SENSOR BAR (8 CELLS) */}
+      {uiMode === 'developer' && (
+        <footer className="shrink-0 bg-[#13161c] border-t border-[#242933] grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-8 divide-x divide-y lg:divide-y-0 divide-[#242933] font-mono text-[10px] z-30">
+          <div className="px-2.5 py-1.5">
+            <div className="text-[9px] text-[#656d7d]">CURSOR COORD</div>
+            <div className="text-[#edf0f5] font-semibold truncate">
+              {cursorTelemetry.lat.toFixed(4)} N, {cursorTelemetry.lon.toFixed(4)} E
+            </div>
           </div>
-        </div>
-        <div className="px-2.5 py-1.5">
-          <div className="text-[9px] text-[#656d7d]">ELEV (HRSC DTM)</div>
-          <div className="text-[#edf0f5] font-semibold">{cursorTelemetry.elevM} m</div>
-        </div>
-        <div className="px-2.5 py-1.5">
-          <div className="text-[9px] text-[#656d7d]">MAX ROUTE GRADE</div>
-          <div className="text-[#edf0f5] font-semibold">{curSlope} deg</div>
-        </div>
-        <div className="px-2.5 py-1.5">
-          <div className="text-[9px] text-[#656d7d]">SURF TEMP (MEDA)</div>
-          <div className="text-[#edf0f5] font-semibold">{martianEnv.ambientTempC} C</div>
-        </div>
-        <div className="px-2.5 py-1.5">
-          <div className="text-[9px] text-[#656d7d]">GCR RAD FLUX</div>
-          <div className={weatherKey === 'solar_storm' ? 'text-[#ef4444] font-bold' : 'text-[#edf0f5] font-semibold'}>
-            {gcrFlux}
+          <div className="px-2.5 py-1.5">
+            <div className="text-[9px] text-[#656d7d]">ELEV (HRSC DTM)</div>
+            <div className="text-[#edf0f5] font-semibold">{cursorTelemetry.elevM} m</div>
           </div>
-        </div>
-        <div className="px-2.5 py-1.5">
-          <div className="text-[9px] text-[#656d7d]">CLO4 SOIL CONC</div>
-          <div className="text-[#edf0f5] font-semibold">{clo4Pct}</div>
-        </div>
-        <div className="px-2.5 py-1.5">
-          <div className="text-[9px] text-[#656d7d]">SECTOR STATUS</div>
-          <div className={`font-bold truncate ${cursorTelemetry.isFault ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
-            {cursorTelemetry.hazardLabel}
+          <div className="px-2.5 py-1.5">
+            <div className="text-[9px] text-[#656d7d]">MAX ROUTE GRADE</div>
+            <div className="text-[#edf0f5] font-semibold">{curSlope} deg</div>
           </div>
-        </div>
-        <div className="px-2.5 py-1.5">
-          <div className="text-[9px] text-[#656d7d]">DATA FEED</div>
-          <div className="text-[#9da5b4] font-semibold">NASA M20 // USGS</div>
-        </div>
-      </footer>
+          <div className="px-2.5 py-1.5">
+            <div className="text-[9px] text-[#656d7d]">SURF TEMP (MEDA)</div>
+            <div className="text-[#edf0f5] font-semibold">{martianEnv.ambientTempC} C</div>
+          </div>
+          <div className="px-2.5 py-1.5">
+            <div className="text-[9px] text-[#656d7d]">GCR RAD FLUX</div>
+            <div className={weatherKey === 'solar_storm' ? 'text-[#ef4444] font-bold' : 'text-[#edf0f5] font-semibold'}>
+              {gcrFlux}
+            </div>
+          </div>
+          <div className="px-2.5 py-1.5">
+            <div className="text-[9px] text-[#656d7d]">CLO4 SOIL CONC</div>
+            <div className="text-[#edf0f5] font-semibold">{clo4Pct}</div>
+          </div>
+          <div className="px-2.5 py-1.5">
+            <div className="text-[9px] text-[#656d7d]">SECTOR STATUS</div>
+            <div className={`font-bold truncate ${cursorTelemetry.isFault ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
+              {cursorTelemetry.hazardLabel}
+            </div>
+          </div>
+          <div className="px-2.5 py-1.5">
+            <div className="text-[9px] text-[#656d7d]">DATA FEED</div>
+            <div className="text-[#9da5b4] font-semibold">NASA M20 // USGS</div>
+          </div>
+        </footer>
+      )}
 
-      {/* TECHNICAL MAP SYMBOLOGY LEGEND MODAL (MONOCHROME + GREEN/CRIMSON ONLY) */}
+      {/* VISUAL MAP SYMBOLOGY LEGEND MODAL (MONOCHROME + GREEN/CRIMSON ONLY) */}
       {showLegendSheet && (
         <div className="fixed inset-0 z-[1400] flex items-center justify-center bg-[#0b0d11]/85 p-4">
-          <div className="w-full max-w-lg bg-[#13161c] border border-[#353c4a] rounded-[4px] overflow-hidden">
+          <div className="w-full max-w-xl bg-[#13161c] border border-[#353c4a] rounded-[6px] overflow-hidden">
             <div className="flex items-center justify-between px-4 py-3 bg-[#191d24] border-b border-[#242933]">
-              <div className="font-mono text-xs font-bold text-[#edf0f5] uppercase">
-                TACTICAL MAP SYMBOLOGY & LEGEND
+              <div className="font-mono text-xs font-bold text-[#edf0f5] uppercase flex items-center gap-2">
+                <Info className="h-4 w-4 text-[#22c55e]" />
+                <span>Tactical Map Symbology & Legend</span>
               </div>
               <button
                 type="button"
                 onClick={() => setShowLegendSheet(false)}
-                className="text-[#9da5b4] hover:text-[#edf0f5] p-1 cursor-pointer"
+                className="text-[#9da5b4] hover:text-[#edf0f5] p-1.5 rounded-[4px] hover:bg-[#222731] cursor-pointer"
                 aria-label="Close Legend"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
 
-            <div className="p-4 space-y-3 text-xs font-mono text-[#9da5b4]">
+            <div className="p-4 space-y-3 text-xs font-mono text-[#9da5b4] max-h-[80vh] overflow-y-auto aerospace-scroll">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                <div className="p-2.5 bg-[#191d24] border border-[#242933] rounded-[4px] space-y-1.5">
+                <div className="p-3 bg-[#191d24] border border-[#242933] rounded-[4px] space-y-2">
                   <div className="text-[10px] font-bold text-[#edf0f5] uppercase border-b border-[#242933] pb-1">
-                    STATION & LANDMARK NODES
+                    STATION & LANDMARK PINS
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-1.5 py-0.5 rounded-[4px] border border-[#22c55e] text-[9px] text-[#edf0f5] bg-[#13161c]">
-                      PWR / HAB
+                  <div className="flex items-center gap-2.5">
+                    <span className="h-7 w-7 rounded-[4px] border border-[#22c55e] bg-[#13161c] flex items-center justify-center shrink-0">
+                      <Zap className="h-4 w-4 text-[#22c55e]" />
                     </span>
-                    <span>Charging & Shelter Base</span>
+                    <span>Charging & Shelter Habitat</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="px-1.5 py-0.5 rounded-[4px] border border-[#4f5767] text-[9px] text-[#edf0f5] bg-[#13161c]">
-                      H2O / SCI
+                  <div className="flex items-center gap-2.5">
+                    <span className="h-7 w-7 rounded-[4px] border border-[#22c55e] bg-[#13161c] flex items-center justify-center shrink-0">
+                      <Droplets className="h-4 w-4 text-[#22c55e]" />
                     </span>
-                    <span>ISRU / Sample Waypoint</span>
+                    <span>ISRU Water Extraction Site</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-3.5 h-3.5 rounded-[4px] border border-[#edf0f5] inline-block" />
-                    <span>Regional Landmark Reticle</span>
+                  <div className="flex items-center gap-2.5">
+                    <span className="h-7 w-7 rounded-[4px] border border-[#4f5767] bg-[#13161c] flex items-center justify-center shrink-0">
+                      <Hexagon className="h-4 w-4 text-[#edf0f5]" />
+                    </span>
+                    <span>Sample Depot / Mineral Cache</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="h-7 w-7 rounded-[4px] border border-[#edf0f5] bg-[#13161c] flex items-center justify-center shrink-0">
+                      <Crosshair className="h-4 w-4 text-[#edf0f5]" />
+                    </span>
+                    <span>Regional Science Landmark</span>
                   </div>
                 </div>
 
-                <div className="p-2.5 bg-[#191d24] border border-[#242933] rounded-[4px] space-y-1.5">
+                <div className="p-3 bg-[#191d24] border border-[#242933] rounded-[4px] space-y-2">
                   <div className="text-[10px] font-bold text-[#edf0f5] uppercase border-b border-[#242933] pb-1">
-                    TRAVERSE & SLOPE TELEMETRY
+                    NAVIGATION PUCK & VECTORS
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-0.5 bg-[#edf0f5] inline-block" />
+                  <div className="flex items-center gap-2.5">
+                    <span className="h-7 w-7 rounded-[4px] border border-[#353c4a] bg-[#13161c] flex items-center justify-center shrink-0">
+                      <Navigation2 className="h-4 w-4 text-[#edf0f5]" />
+                    </span>
+                    <span>EVA Astronaut Heading & Beam</span>
+                  </div>
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-7 h-1 bg-[#edf0f5] rounded-full inline-block shrink-0" />
                     <span>A* Primary Safe Path (Leg 1)</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-0.5 bg-[#22c55e] inline-block" />
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-7 h-1 bg-[#22c55e] rounded-full inline-block shrink-0" />
                     <span>Post-Recharge Leg 2 Vector</span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="w-6 h-0.5 bg-[#ef4444] inline-block" />
+                  <div className="flex items-center gap-2.5">
+                    <span className="w-7 h-1 bg-[#ef4444] rounded-full inline-block shrink-0" />
                     <span>Out-of-Range / Hazard Fault</span>
                   </div>
                 </div>
               </div>
 
-              <div className="p-2.5 bg-[#191d24] border border-[#242933] rounded-[4px] space-y-1.5">
+              <div className="p-3 bg-[#191d24] border border-[#242933] rounded-[4px] space-y-2">
                 <div className="text-[10px] font-bold text-[#edf0f5] uppercase border-b border-[#242933] pb-1">
-                  SLOPE GRADE & EXCLUSION POLYGONS
+                  SLOPE GRADE DOTS & HAZARD ZONES
                 </div>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-[10.5px]">
                   <div className="flex items-center gap-2">
@@ -2431,7 +3587,7 @@ export default function App() {
               <button
                 type="button"
                 onClick={() => setShowLegendSheet(false)}
-                className="glove-btn w-full min-h-[42px] rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#4f5767] text-[#edf0f5] font-bold uppercase cursor-pointer"
+                className="glove-btn w-full min-h-[46px] rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#4f5767] text-[#edf0f5] font-bold uppercase cursor-pointer"
               >
                 CLOSE LEGEND
               </button>

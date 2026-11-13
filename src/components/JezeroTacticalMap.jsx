@@ -81,6 +81,7 @@ export default function JezeroTacticalMap({
   activeDrawMode = null,
   drawVertices = [],
   drawnZones = [],
+  cleanTabletMode = false,
   onSelectPOI,
   onSelectWaypointSol,
   onOpenPanorama,
@@ -392,9 +393,20 @@ export default function JezeroTacticalMap({
     };
     map.on('mousemove', handleMouseMove);
 
+    const resizeObserver =
+      typeof ResizeObserver !== 'undefined'
+        ? new ResizeObserver(() => {
+            map.invalidateSize({ animate: false });
+          })
+        : null;
+    if (resizeObserver && mapContainerRef.current) {
+      resizeObserver.observe(mapContainerRef.current);
+    }
+
     mapInstanceRef.current = map;
 
     return () => {
+      if (resizeObserver) resizeObserver.disconnect();
       map.off('click', handleMapClick);
       map.off('mousemove', handleMouseMove);
       if (liveMarkerRef.current) {
@@ -449,7 +461,7 @@ export default function JezeroTacticalMap({
     syncLayer('ellipse', Boolean(layers.ellipse));
     syncLayer('linear', Boolean(layers.linear));
     syncLayer('surface', Boolean(layers.surface));
-    syncLayer('nomenclature', Boolean(layers.nomenclature));
+    syncLayer('nomenclature', Boolean(layers.nomenclature) && !cleanTabletMode);
     syncLayer('m20TraverseRemote', Boolean(layers.traverse));
   }, [
     layers.hirise,
@@ -458,6 +470,7 @@ export default function JezeroTacticalMap({
     layers.surface,
     layers.nomenclature,
     layers.traverse,
+    cleanTabletMode,
   ]);
 
   // Update Basemap & Relief Hillshade Blend dynamically
@@ -756,14 +769,16 @@ export default function JezeroTacticalMap({
         ? '#2c323f'
         : '#13161c';
 
-      const glyphCode =
+      // Visual vector SVG glyphs per station type (zero emojis)
+      const strokeHex = isEnd ? '#0b0d11' : borderColor === APP_THEME.colors.ok ? '#22c55e' : '#edf0f5';
+      const svgIcon =
         poi.type === 'charging' || poi.type === 'habitat'
-          ? 'PWR'
+          ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${strokeHex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`
           : poi.type === 'isru'
-          ? 'H2O'
+          ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${strokeHex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`
           : poi.type === 'resource'
-          ? 'ORE'
-          : 'SCI';
+          ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${strokeHex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>`
+          : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${strokeHex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>`;
 
       const topBadgeHtml = isActivePitStop
         ? `<div style="
@@ -773,7 +788,7 @@ export default function JezeroTacticalMap({
           ">PIT STOP 100%</div>`
         : isCurrentLoc
         ? `<div style="
-            position:absolute; top:-22px; left:50%; transform:translateX(-50%);
+            position:absolute; bottom:-20px; left:50%; transform:translateX(-50%);
             white-space:nowrap; background:#13161c; color:#edf0f5; border:1px solid #edf0f5;
             font-size:9px; font-weight:700; font-family:'JetBrains Mono',monospace; padding:1px 6px; border-radius:4px;
           ">UNIT BASE</div>`
@@ -784,15 +799,14 @@ export default function JezeroTacticalMap({
         html: `<div style="position:relative;">
           ${topBadgeHtml}
           <div style="
-            min-width: 28px; height: 22px; padding: 0 5px; border-radius: 4px;
-            background: ${markerBg}; color: ${isEnd ? '#0b0d11' : '#edf0f5'};
+            width: 32px; height: 32px; border-radius: 4px;
+            background: ${markerBg}; color: ${strokeHex};
             display: flex; align-items: center; justify-content: center;
-            font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 9px;
-            border: 1.5px solid ${borderColor}; letter-spacing: 0.04em;
-          ">${glyphCode}</div>
+            border: 1.5px solid ${borderColor};
+          ">${svgIcon}</div>
         </div>`,
-        iconSize: [32, 24],
-        iconAnchor: [16, 12],
+        iconSize: [32, 32],
+        iconAnchor: [16, 16],
       });
 
       const marker = L.marker([poi.lat, poi.lon], { icon: customIcon });
@@ -867,6 +881,15 @@ export default function JezeroTacticalMap({
         (astronautLocId === 'hab-alpha' && lm.id === 'landing_site');
       const pinColor = isCurrentLoc ? '#22c55e' : '#edf0f5';
 
+      const labelTagHtml = cleanTabletMode
+        ? ''
+        : `<span style="
+            background:#13161c;border:1px solid #353c4a;
+            color:${pinColor};font-family:'JetBrains Mono',monospace;
+            font-size:9px;font-weight:700;letter-spacing:0.04em;
+            padding:2px 6px;border-radius:4px;white-space:nowrap;
+          ">${lm.name.toUpperCase()}</span>`;
+
       const icon = L.divIcon({
         className: 'aerospace-landmark-marker',
         html: `
@@ -881,12 +904,7 @@ export default function JezeroTacticalMap({
                 <circle cx="12" cy="12" r="2" fill="${pinColor}" />
               </svg>
             </div>
-            <span style="
-              background:#13161c;border:1px solid #353c4a;
-              color:${pinColor};font-family:'JetBrains Mono',monospace;
-              font-size:9px;font-weight:700;letter-spacing:0.04em;
-              padding:2px 6px;border-radius:4px;white-space:nowrap;
-            ">${lm.name.toUpperCase()}</span>
+            ${labelTagHtml}
           </div>
         `,
         iconSize: [24, 24],
@@ -894,6 +912,12 @@ export default function JezeroTacticalMap({
       });
 
       const marker = L.marker(lm.coords, { icon, zIndexOffset: 650 });
+      if (cleanTabletMode) {
+        marker.bindTooltip(lm.name.toUpperCase(), {
+          direction: 'right',
+          offset: [10, 0],
+        });
+      }
       const regolith = lm.regolith || 'Basaltic-Olivine Floor';
 
       marker.bindPopup(`
@@ -943,7 +967,7 @@ export default function JezeroTacticalMap({
 
       marker.addTo(lmGroup);
     });
-  }, [landmarks, layers.landmarks, astronautLocId, onSelectLandmark]);
+  }, [landmarks, layers.landmarks, astronautLocId, onSelectLandmark, cleanTabletMode]);
 
   // Render Dual-Layer Aerospace A* Safe Route
   useEffect(() => {
