@@ -84,34 +84,35 @@ Switch seamlessly between authentic planetary remote sensing layers:
 
 ## 4. Quick Start
 
+### Repository Architecture
+- **`GUI/`**: Interactive React + Leaflet Martian EVA Surface Terminal & Navigator (Vite, Tailwind, 5 Basemaps, 55 authentic NASA landmark photos, Glove-compatible tablet UX).
+- **`backend/`**: Python FastAPI GIS & A* routing backend with elevation transects and hazard buffer services.
+- **`preprocessing/`**: Python scientific data pipeline, DTM downsampling, heuristic generation, and rover telemetry processing.
+- **`scripts/`**: Automation scripts to fetch and verify live NASA M20 Jezero Crater waypoints and weather data.
+
 ### Prerequisites
 - Node.js 18+ & npm
 
 ### Installation & Run
 
+#### Option A: From Repository Root
 ```bash
-# 1. Clone the repository and checkout the unified v2 branch
-git clone https://github.com/jsyph/dalil-mars.git
-cd dalil-mars
-git checkout feat/unified-jezero-nav-v2
-
-# 2. Install dependencies
+# 1. Install dependencies (npm workspaces automatically configures GUI)
 npm install
 
-# 3. Start the Vite development server
-npm run dev -- --port 5173
+# 2. Start the development server (delegates to GUI)
+npm run dev
 
-# 4. Open http://localhost:5173/ in your browser or tablet
+# 3. Production build check
+npm run build
 ```
 
-### Production Build & Linting
-
+#### Option B: Directly inside `GUI/`
 ```bash
-# Production bundle build
+cd GUI
+npm install
+npm run dev
 npm run build
-
-# Static analysis and linting
-npm run lint
 ```
 
 ---
