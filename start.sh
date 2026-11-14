@@ -6,6 +6,8 @@ BACKEND_DIR="$ROOT_DIR/backend"
 GUI_DIR="$ROOT_DIR/GUI"
 VENV_DIR="$BACKEND_DIR/.venv"
 
+BACKEND_HOST="${BACKEND_HOST:-0.0.0.0}"
+GUI_HOST="${GUI_HOST:-0.0.0.0}"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 GUI_PORT="${GUI_PORT:-5173}"
 
@@ -36,17 +38,17 @@ if [[ ! -d "$GUI_DIR/node_modules" ]]; then
 fi
 
 # 3. Start FastAPI backend
-echo "[dalil-mars] Starting Dalil-Mars Engine API on http://127.0.0.1:$BACKEND_PORT ..."
+echo "[dalil-mars] Starting Dalil-Mars Engine API on http://$BACKEND_HOST:$BACKEND_PORT ..."
 (
   cd "$BACKEND_DIR"
-  exec "$VENV_DIR/bin/uvicorn" main:app --host 127.0.0.1 --port "$BACKEND_PORT"
+  exec "$VENV_DIR/bin/uvicorn" main:app --host "$BACKEND_HOST" --port "$BACKEND_PORT"
 ) &
 BACKEND_PID=$!
 
 # Wait for backend health check
 echo "[dalil-mars] Waiting for engine initialization..."
 for _ in $(seq 1 30); do
-  if curl -fsS "http://127.0.0.1:$BACKEND_PORT/api/engine/status" >/dev/null 2>&1; then
+  if curl -fsS "http://127.0.0.1:$BACKEND_PORT/api/engine/status" >/dev/null 2>&1 || curl -fsS "http://localhost:$BACKEND_PORT/api/engine/status" >/dev/null 2>&1; then
     echo "[dalil-mars] Engine API online!"
     break
   fi
@@ -54,10 +56,10 @@ for _ in $(seq 1 30); do
 done
 
 # 4. Start Vite GUI dev server
-echo "[dalil-mars] Starting GUI dev server on http://127.0.0.1:$GUI_PORT ..."
+echo "[dalil-mars] Starting GUI dev server on http://$GUI_HOST:$GUI_PORT ..."
 (
   cd "$GUI_DIR"
-  exec npm run dev -- --host 127.0.0.1 --port "$GUI_PORT"
+  exec npm run dev -- --host "$GUI_HOST" --port "$GUI_PORT"
 ) &
 GUI_PID=$!
 

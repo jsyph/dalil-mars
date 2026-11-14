@@ -1,6 +1,6 @@
 """
 Jezero Crater Mission Planner — FastAPI Backend
-Entry point: uvicorn main:app --reload --port 8000
+Entry point: uvicorn main:app --reload --host 0.0.0.0 --port 8000
 """
 import os
 from contextlib import asynccontextmanager
