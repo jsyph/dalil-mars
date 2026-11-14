@@ -16,6 +16,7 @@ import {
   Crosshair,
   Download,
   Droplets,
+  Eye,
   FileText,
   Gauge,
   Globe,
@@ -66,6 +67,7 @@ import {
   marsDistanceMeters,
   WEATHER_CONDITIONS,
 } from './utils/pathfinder';
+import { publishVisorState, subscribeVisorCommands } from './utils/visorSync';
 
 function formatLst(totalMinutes) {
   const wrapped = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
@@ -109,15 +111,19 @@ const OVERLAY_ITEMS = [
 
 export default function App() {
   const { sciencePOIs, hazardZones } = scienceHazardsData;
-  const latestMeda = medaWeatherData[medaWeatherData.length - 1] || {
-    sol: '1133',
-    min_temp: -79.3,
-    max_temp: -24.7,
-    pressure: 778.9,
-    sunrise: '06:18:07',
-    sunset: '17:13:51',
-    season: 'late autumn',
-  };
+  const latestMeda = useMemo(
+    () =>
+      medaWeatherData[medaWeatherData.length - 1] || {
+        sol: '1133',
+        min_temp: -79.3,
+        max_temp: -24.7,
+        pressure: 778.9,
+        sunrise: '06:18:07',
+        sunset: '17:13:51',
+        season: 'late autumn',
+      },
+    []
+  );
 
   // Terminal Dual-Mode UX ('astronaut' = Glove-first Google Maps Tablet UI | 'developer' = Ground Control Terminal)
   const [uiMode, setUiMode] = useState('astronaut');
@@ -1037,6 +1043,48 @@ export default function App() {
     });
   };
 
+  // Sync live EVA state to standalone AR Visor HUD (?mode=visor)
+  const triggerShelterDivertRef = useRef(triggerShelterDivert);
+
+  useEffect(() => {
+    triggerShelterDivertRef.current = triggerShelterDivert;
+  });
+
+  useEffect(() => {
+    publishVisorState({
+      navMode,
+      liveNavState,
+      martianEnv,
+      currentManeuver,
+      weatherCondition: WEATHER_CONDITIONS[weatherKey] || WEATHER_CONDITIONS.nominal,
+      dustFrontState,
+      nearestShelter,
+      endPOI,
+      loadout,
+      latestMeda,
+    });
+  }, [
+    navMode,
+    liveNavState,
+    martianEnv,
+    currentManeuver,
+    weatherKey,
+    dustFrontState,
+    nearestShelter,
+    endPOI,
+    loadout,
+    latestMeda,
+  ]);
+
+  useEffect(() => {
+    return subscribeVisorCommands((command) => {
+      if (command === 'SHELTER_DIVERT') {
+        triggerShelterDivertRef.current?.();
+      }
+    });
+  }, []);
+
+  // Quick Preset Simulator Mode Applier
   const applyPreset = (sId, eId, lKey, wKey, batPct, o2Pct, lstMin = 705) => {
     setCustomOriginCoord(null);
     setCustomDestCoord(null);
@@ -1451,6 +1499,16 @@ export default function App() {
           >
             <MapIcon className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">LEGEND</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => window.open('?mode=visor', 'ares-eva-visor', 'noopener,noreferrer')}
+            className="glove-btn min-h-[36px] px-2.5 rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-cyan-400 border border-cyan-500/40 font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer"
+            title="Open Standalone AR Visor HUD (?mode=visor)"
+          >
+            <Eye className="h-3.5 w-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">AR VISOR</span>
           </button>
 
           <button
@@ -2094,6 +2152,16 @@ export default function App() {
                         >
                           <Sliders className="h-4 w-4" />
                           <span>Suit & LST</span>
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => window.open('?mode=visor', 'ares-eva-visor', 'noopener,noreferrer')}
+                          title="Open standalone AR Visor HUD (?mode=visor)"
+                          className="glove-btn min-h-[42px] px-2.5 py-1.5 rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-cyan-400 border border-cyan-500/40 font-mono text-[10.5px] font-bold uppercase flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Eye className="h-4 w-4 text-cyan-400" />
+                          <span className="hidden sm:inline">AR VISOR</span>
                         </button>
 
                         <button
