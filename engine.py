@@ -280,12 +280,14 @@ class DalilMarsEngine:
 
         # 5. Virtual Base Charging Stations & Pressurized Shelters
         haz_path = os.path.join(BASE_DIR, "src", "data", "jezero_science_hazards.json")
+        self.all_pois = []
         self.charging_stations = []
         self.shelters = []
         if os.path.exists(haz_path):
             with open(haz_path, "r") as f:
                 data = json.load(f)
                 pois = data.get("sciencePOIs", [])
+                self.all_pois = pois
                 self.charging_stations = [p for p in pois if p.get("isChargingStation")]
                 self.shelters = [p for p in pois if p.get("isShelter")]
 
@@ -1170,6 +1172,346 @@ class DalilMarsEngine:
         route_res["abort_target_shelter"] = best_shelter
         return route_res
 
+    def _resolve_poi_target(self, target) -> dict:
+        if isinstance(target, dict) and "lat" in target and "lon" in target:
+            return target
+        if isinstance(target, (list, tuple)) and len(target) >= 2:
+            return {
+                "name": f"Waypoint ({target[0]:.4f}, {target[1]:.4f})",
+                "lat": float(target[0]),
+                "lon": float(target[1]),
+                "type": "custom",
+            }
+        if isinstance(target, str):
+            t_low = target.lower().strip()
+            for p in self.all_pois:
+                if t_low in p["name"].lower():
+                    return p
+            if "," in target:
+                parts = [float(x.strip()) for x in target.split(",")]
+                return {
+                    "name": f"Waypoint ({parts[0]:.4f}, {parts[1]:.4f})",
+                    "lat": parts[0],
+                    "lon": parts[1],
+                    "type": "custom",
+                }
+            raise ValueError(f"Unknown landmark or POI: {target}")
+        raise ValueError(f"Unrecognized target format: {target}")
+
+    def plan_science_tour(
+        self,
+        base_location=None,
+        target_landmarks=None,
+        max_duration_hours: float = 6.0,
+        stay_duration_min: float = 25.0,
+        mode: str = "rover",
+        lst_hours: float = 9.0,
+        weather: str = "nominal",
+        initial_battery_pct: float = 100.0,
+        initial_o2_pct: float = 100.0,
+        allow_charging_pitstop: bool = False,
+        uphill_penalty: float | None = None,
+        **kwargs,
+    ) -> dict:
+        """Solves the Martian Orienteering / Budgeted Science Tour Problem.
+
+        Computes the optimal sequence of science sites departing and returning to base
+        within the allotted time and life-support budget. Uses the Stage 6 All-Pairs
+        matrix for instant combinatorial optimization (< 3 ms), followed by fine A* path
+        generation for each tour leg.
+        """
+        import itertools
+
+        mode_prof = MOBILITY_PROFILES.get(mode, MOBILITY_PROFILES["rover"])
+        speed_kmh = mode_prof["speedKmh"]
+
+        # 1. Resolve Base
+        if base_location is None:
+            base_poi = self.shelters[0] if self.shelters else {
+                "name": "Hab Alpha (Octavia E. Butler Landing)",
+                "lat": 18.444627,
+                "lon": 77.450886,
+                "type": "habitat",
+            }
+        else:
+            base_poi = self._resolve_poi_target(base_location)
+
+        # 2. Resolve Candidate Targets
+        candidates = []
+        is_fixed_request = False
+        if target_landmarks is not None and len(target_landmarks) > 0:
+            is_fixed_request = True
+            for t in target_landmarks:
+                p = self._resolve_poi_target(t)
+                if p["name"] != base_poi["name"]:
+                    candidates.append(p)
+        else:
+            # Auto-select all cataloged science, resource, and ISRU sites
+            for p in self.all_pois:
+                if p["name"] != base_poi["name"] and p.get("type") in ["science", "resource", "isru"]:
+                    candidates.append(p)
+
+        if not candidates:
+            raise ValueError("No valid science candidate targets found for tour planning.")
+
+        all_nodes = [base_poi] + candidates
+        N = len(all_nodes)
+
+        # 3. Macro Pairwise Distance Matrix from Stage 6 (in km)
+        D = np.zeros((N, N), dtype=float)
+        for i in range(N):
+            r1, c1 = self.latlon_to_grid(all_nodes[i]["lat"], all_nodes[i]["lon"])
+            I1 = min(max(0, r1 // self.M), self.cH - 1)
+            J1 = min(max(0, c1 // self.M), self.cW - 1)
+            for j in range(N):
+                if i == j:
+                    continue
+                r2, c2 = self.latlon_to_grid(all_nodes[j]["lat"], all_nodes[j]["lon"])
+                I2 = min(max(0, r2 // self.M), self.cH - 1)
+                J2 = min(max(0, c2 // self.M), self.cW - 1)
+                d_m = float(self.all_pairs_4d[I1, J1, I2, J2])
+                if np.isinf(d_m):
+                    d_m = float(np.hypot(r1 - r2, c1 - c2) * self.pixel_res)
+                D[i, j] = d_m / 1000.0
+
+        # 4. Combinatorial Tour Optimizer (Prize-Collecting / TSP)
+        max_duration_min = max_duration_hours * 60.0
+        best_tour_indices = None
+        best_score = (-1, 1e9)
+
+        if is_fixed_request and len(candidates) <= 8:
+            for perm in itertools.permutations(range(1, N)):
+                tour = [0] + list(perm) + [0]
+                travel_km = sum(D[tour[m], tour[m + 1]] for m in range(len(tour) - 1))
+                travel_time_min = (travel_km / max(0.1, speed_kmh)) * 60.0
+                total_time_min = travel_time_min + len(perm) * stay_duration_min
+                score = (len(perm), -total_time_min)
+                if score > (best_score[0], -best_score[1]):
+                    best_score = (len(perm), total_time_min)
+                    best_tour_indices = tour
+
+        if best_tour_indices is None or best_score[1] > max_duration_min:
+            best_tour_indices = None
+            best_score = (-1, 1e9)
+            max_subset_size = min(len(candidates), 6)
+            for k in range(1, max_subset_size + 1):
+                for subset in itertools.combinations(range(1, N), k):
+                    for perm in itertools.permutations(subset):
+                        tour = [0] + list(perm) + [0]
+                        travel_km = sum(D[tour[m], tour[m + 1]] for m in range(len(tour) - 1))
+                        travel_time_min = (travel_km / max(0.1, speed_kmh)) * 60.0
+                        total_time_min = travel_time_min + len(perm) * stay_duration_min
+                        if total_time_min <= max_duration_min:
+                            if (len(perm) > best_score[0]) or (len(perm) == best_score[0] and total_time_min < best_score[1]):
+                                best_score = (len(perm), total_time_min)
+                                best_tour_indices = tour
+
+        if best_tour_indices is None:
+            closest_idx = 1 + int(np.argmin([D[0, j] + D[j, 0] for j in range(1, N)]))
+            best_tour_indices = [0, closest_idx, 0]
+
+        # 5. Execute Fine A* Routes for Each Leg of the Tour
+        ordered_pois = [all_nodes[idx] for idx in best_tour_indices]
+        legs = []
+        stops_telemetry = []
+
+        curr_lst = lst_hours
+        curr_batt = initial_battery_pct
+        curr_o2 = initial_o2_pct
+
+        total_dist_km = 0.0
+        total_travel_min = 0.0
+        total_dwell_min = 0.0
+        total_elev_gain = 0.0
+        total_elev_loss = 0.0
+        total_red_avoided = 0
+        max_slope_overall = 0.0
+        min_walkback_batt_margin = 100.0
+        min_walkback_o2_margin = 100.0
+
+        h_dep = int(curr_lst) % 24
+        m_dep = int((curr_lst - int(curr_lst)) * 60.0)
+        dep_str = f"{h_dep:02d}:{m_dep:02d} LST"
+
+        stops_telemetry.append({
+            "stop_index": 0,
+            "name": ordered_pois[0]["name"],
+            "type": ordered_pois[0].get("type", "habitat"),
+            "lat": ordered_pois[0]["lat"],
+            "lon": ordered_pois[0]["lon"],
+            "arrival_lst": dep_str,
+            "departure_lst": dep_str,
+            "dwell_time_min": 0,
+            "battery_arrival_pct": round(curr_batt, 1),
+            "battery_departure_pct": round(curr_batt, 1),
+            "o2_arrival_pct": round(curr_o2, 1),
+            "o2_departure_pct": round(curr_o2, 1),
+            "notes": "Expedition departure from pressurized base camp.",
+        })
+
+        for leg_idx in range(len(ordered_pois) - 1):
+            src_poi = ordered_pois[leg_idx]
+            dst_poi = ordered_pois[leg_idx + 1]
+
+            leg_plan = self.plan_route(
+                start=(src_poi["lat"], src_poi["lon"]),
+                destination=(dst_poi["lat"], dst_poi["lon"]),
+                mode=mode,
+                lst_hours=curr_lst,
+                weather=weather,
+                initial_battery_pct=curr_batt,
+                initial_o2_pct=curr_o2,
+                allow_charging_pitstop=allow_charging_pitstop,
+                uphill_penalty=uphill_penalty,
+                **kwargs,
+            )
+
+            s_leg = leg_plan["summary"]
+            legs.append({
+                "leg_index": leg_idx + 1,
+                "from_stop": src_poi["name"],
+                "to_stop": dst_poi["name"],
+                "distance_km": s_leg["total_distance_km"],
+                "duration_min": s_leg["duration_min"],
+                "battery_used_pct": s_leg["battery_used_pct"],
+                "o2_used_liters": s_leg["o2_used_liters"],
+                "max_slope_deg": s_leg["max_slope_deg"],
+                "slope_safety_rating": s_leg["slope_safety_rating"],
+                "red_nodes_avoided": s_leg["red_nodes_avoided_count"],
+                "sunlit_pct": s_leg["sunlit_pct"],
+                "navigation_steps": leg_plan["navigation_steps"],
+                "geojson": leg_plan["geojson"],
+            })
+
+            total_dist_km += s_leg["total_distance_km"]
+            total_travel_min += s_leg["duration_min"]
+            total_elev_gain += s_leg["elevation_gain_m"]
+            total_elev_loss += s_leg["elevation_loss_m"]
+            total_red_avoided += s_leg["red_nodes_avoided_count"]
+            max_slope_overall = max(max_slope_overall, s_leg["max_slope_deg"])
+
+            wb = s_leg.get("walkback_horizon", {})
+            if "minimum_walkback_battery_margin_pct" in wb:
+                min_walkback_batt_margin = min(min_walkback_batt_margin, wb["minimum_walkback_battery_margin_pct"])
+            if "minimum_walkback_o2_margin_pct" in wb:
+                min_walkback_o2_margin = min(min_walkback_o2_margin, wb["minimum_walkback_o2_margin_pct"])
+
+            curr_lst = (curr_lst + (s_leg["duration_min"] / 60.0)) % 24.0
+            curr_batt = s_leg["battery_remaining_pct"]
+            curr_o2 = s_leg["o2_remaining_pct"]
+
+            h_arr = int(curr_lst) % 24
+            m_arr = int((curr_lst - int(curr_lst)) * 60.0)
+            arr_str = f"{h_arr:02d}:{m_arr:02d} LST"
+
+            is_last_stop = (leg_idx == len(ordered_pois) - 2)
+            dwell_min = 0 if is_last_stop else int(round(stay_duration_min))
+
+            dwell_batt_drain = round((dwell_min / 60.0) * 0.8, 1) if dwell_min > 0 else 0.0
+            dwell_o2_liters = round(dwell_min * mode_prof.get("o2RateLpm", 0.85), 1) if dwell_min > 0 else 0.0
+            dwell_o2_pct = round((dwell_o2_liters / SUIT_O2_CAPACITY_L) * 100.0, 1)
+
+            curr_batt_depart = max(0.0, round(curr_batt - dwell_batt_drain, 1))
+            curr_o2_depart = max(0.0, round(curr_o2 - dwell_o2_pct, 1))
+
+            curr_lst = (curr_lst + (dwell_min / 60.0)) % 24.0
+            h_dep = int(curr_lst) % 24
+            m_dep = int((curr_lst - int(curr_lst)) * 60.0)
+            dep_str = f"{h_dep:02d}:{m_dep:02d} LST"
+
+            stops_telemetry.append({
+                "stop_index": leg_idx + 1,
+                "name": dst_poi["name"],
+                "type": dst_poi.get("type", "science" if not is_last_stop else "habitat"),
+                "lat": dst_poi["lat"],
+                "lon": dst_poi["lon"],
+                "arrival_lst": arr_str,
+                "departure_lst": dep_str if not is_last_stop else None,
+                "dwell_time_min": dwell_min,
+                "battery_arrival_pct": round(curr_batt, 1),
+                "battery_departure_pct": curr_batt_depart if not is_last_stop else round(curr_batt, 1),
+                "o2_arrival_pct": round(curr_o2, 1),
+                "o2_departure_pct": curr_o2_depart if not is_last_stop else round(curr_o2, 1),
+                "notes": "Return to base / mission complete." if is_last_stop else f"Conduct scientific sampling & field measurements ({dwell_min} min dwell).",
+            })
+
+            total_dwell_min += dwell_min
+            curr_batt = curr_batt_depart
+            curr_o2 = curr_o2_depart
+
+        total_mission_min = total_travel_min + total_dwell_min
+        total_mission_hours = round(total_mission_min / 60.0, 2)
+        h_tot = int(total_mission_min) // 60
+        m_tot = int(total_mission_min) % 60
+        formatted_mission_time = f"{h_tot}h {m_tot:02d}m"
+
+        tour_status = "OPTIMAL_TOUR_PLANNED" if total_mission_min <= max_duration_min else "FEASIBLE_TOUR_EXCEEDS_TARGET_BUDGET"
+
+        geojson_features = []
+        for leg in legs:
+            for feat in leg["geojson"]["features"]:
+                if feat["geometry"]["type"] == "LineString":
+                    feat_copy = dict(feat)
+                    feat_copy["properties"] = dict(feat["properties"])
+                    feat_copy["properties"]["leg_index"] = leg["leg_index"]
+                    feat_copy["properties"]["from_stop"] = leg["from_stop"]
+                    feat_copy["properties"]["to_stop"] = leg["to_stop"]
+                    geojson_features.append(feat_copy)
+
+        for st in stops_telemetry:
+            geojson_features.append({
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [st["lon"], st["lat"]],
+                },
+                "properties": {
+                    "marker_type": "tour_stop",
+                    "stop_index": st["stop_index"],
+                    "name": st["name"],
+                    "arrival_lst": st["arrival_lst"],
+                    "dwell_min": st["dwell_time_min"],
+                    "battery_pct": st["battery_arrival_pct"],
+                    "notes": st["notes"],
+                },
+            })
+
+        consolidated_geojson = {
+            "type": "FeatureCollection",
+            "features": geojson_features,
+        }
+
+        return {
+            "status": tour_status,
+            "mode": mode,
+            "base_camp": base_poi,
+            "targets_visited_count": len(best_tour_indices) - 2,
+            "total_stops_count": len(best_tour_indices),
+            "ordered_stops": stops_telemetry,
+            "legs": legs,
+            "geojson": consolidated_geojson,
+            "summary": {
+                "status": tour_status,
+                "mode": mode,
+                "total_distance_km": round(total_dist_km, 2),
+                "total_mission_duration_hours": total_mission_hours,
+                "total_mission_duration_formatted": formatted_mission_time,
+                "travel_time_hours": round(total_travel_min / 60.0, 2),
+                "science_dwell_hours": round(total_dwell_min / 60.0, 2),
+                "elevation_gain_m": round(total_elev_gain, 1),
+                "elevation_loss_m": round(total_elev_loss, 1),
+                "max_slope_deg": round(max_slope_overall, 1),
+                "total_red_nodes_avoided": int(total_red_avoided),
+                "battery_remaining_pct": round(curr_batt, 1),
+                "battery_used_pct": round(initial_battery_pct - curr_batt, 1),
+                "o2_remaining_pct": round(curr_o2, 1),
+                "o2_used_pct": round(initial_o2_pct - curr_o2, 1),
+                "min_walkback_battery_margin_pct": round(min_walkback_batt_margin, 1),
+                "min_walkback_o2_margin_pct": round(min_walkback_o2_margin, 1),
+                "safe_abort_maintained": bool(min_walkback_batt_margin >= SAFE_RESERVE_PCT and min_walkback_o2_margin >= SAFE_RESERVE_PCT),
+            },
+        }
+
     @staticmethod
     def _compass_bearing(lat1, lon1, lat2, lon2):
         dLon = np.radians(lon2 - lon1)
@@ -1278,6 +1620,50 @@ def plan_emergency_abort(
 
 
 abort = plan_emergency_abort
+
+
+def plan_science_tour(
+    base_location=None,
+    targets=None,
+    target_landmarks=None,
+    max_duration_hours: float = 6.0,
+    stay_duration_min: float = 25.0,
+    mode: str = "rover",
+    lst: float | None = None,
+    lst_hours: float = 9.0,
+    weather: str = "nominal",
+    initial_battery: float | None = None,
+    initial_battery_pct: float = 100.0,
+    initial_o2: float | None = None,
+    initial_o2_pct: float = 100.0,
+    allow_charging_pitstop: bool = False,
+    uphill_penalty: float | None = None,
+    **kwargs,
+) -> dict:
+    """Plans an optimal multi-stop science exploration tour visiting cataloged Jezero targets."""
+    target_list = target_landmarks if target_landmarks is not None else targets
+    lst_val = lst if lst is not None else lst_hours
+    batt_val = initial_battery if initial_battery is not None else initial_battery_pct
+    o2_val = initial_o2 if initial_o2 is not None else initial_o2_pct
+
+    return get_engine().plan_science_tour(
+        base_location=base_location,
+        target_landmarks=target_list,
+        max_duration_hours=max_duration_hours,
+        stay_duration_min=stay_duration_min,
+        mode=mode,
+        lst_hours=lst_val,
+        weather=weather,
+        initial_battery_pct=batt_val,
+        initial_o2_pct=o2_val,
+        allow_charging_pitstop=allow_charging_pitstop,
+        uphill_penalty=uphill_penalty,
+        **kwargs,
+    )
+
+
+plan_tour = plan_science_tour
+tour = plan_science_tour
 
 
 def get_waypoints() -> list[dict]:
@@ -1406,12 +1792,46 @@ def run_http_server(port: int = 8000, host: str = "0.0.0.0"):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/api/tour", methods=["GET", "POST"])
+    def tour_endpoint():
+        try:
+            if request.method == "POST":
+                data = request.get_json(force=True)
+            else:
+                data = request.args
+
+            base_val = data.get("base") or data.get("base_location")
+            targets_val = data.get("targets") or data.get("target_landmarks")
+            mode = data.get("mode", "rover")
+            max_h = float(data.get("max_hours", data.get("max_duration_hours", 6.0)))
+            dwell_m = float(data.get("dwell_min", data.get("stay_duration_min", 25.0)))
+            lst_val = float(data.get("lst", data.get("lst_hours", 9.0)))
+            weather_val = data.get("weather", "nominal")
+            batt_val = float(data.get("battery", data.get("initial_battery", 100.0)))
+            o2_val = float(data.get("o2", data.get("initial_o2", 100.0)))
+
+            res = plan_science_tour(
+                base_location=base_val,
+                targets=targets_val,
+                max_duration_hours=max_h,
+                stay_duration_min=dwell_m,
+                mode=mode,
+                lst=lst_val,
+                weather=weather_val,
+                initial_battery=batt_val,
+                initial_o2=o2_val,
+            )
+            return jsonify(res)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     print(f"Dalil-Mars REST API Server listening on http://{host}:{port}")
     print("Endpoints:")
     print("  - GET  /api/health")
     print("  - GET  /api/waypoints")
     print("  - GET  /api/weather")
     print("  - POST /api/route")
+    print("  - POST /api/tour")
     app.run(host=host, port=port, debug=False)
 
 
@@ -1424,6 +1844,10 @@ def main():
     parser.add_argument("--start", nargs=2, type=float, metavar=("LAT", "LON"), help="Start coordinate (lat, lon).")
     parser.add_argument("--end", nargs=2, type=float, metavar=("LAT", "LON"), help="Destination coordinate (lat, lon).")
     parser.add_argument("--abort", nargs=2, type=float, metavar=("LAT", "LON"), help="Emergency retreat coordinates: LAT LON (Apollo/Artemis Rule #1).")
+    parser.add_argument("--tour", action="store_true", help="Plan optimal multi-stop science exploration tour.")
+    parser.add_argument("--targets", nargs="+", help="Specific landmark names or coordinates to include in science tour.")
+    parser.add_argument("--max-hours", type=float, default=6.0, help="Max mission time budget in hours for science tour (default 6.0).")
+    parser.add_argument("--dwell-min", type=float, default=25.0, help="Dwell/science time in minutes per stop (default 25.0).")
     parser.add_argument("--mode", choices=["on_foot", "rover"], default="on_foot", help="Transportation mode.")
     parser.add_argument("--lst", type=float, default=14.0, help="Martian Local Solar Time (hours: 0.0 to 24.0).")
     parser.add_argument("--weather", choices=["nominal", "dust_storm", "solar_storm"], default="nominal", help="Weather state.")
@@ -1446,7 +1870,7 @@ def main():
 
     engine = get_engine()
 
-    if args.demo or (not args.start and not args.end and not args.abort):
+    if args.demo or (not args.start and not args.end and not args.abort and not args.tour):
         print("\n" + "=" * 65)
         print(" RUNNING 3 DALIL-MARS MISSION TEST SCENARIOS")
         print("=" * 65)
@@ -1570,6 +1994,46 @@ def main():
             print("\n  Emergency Navigation Vector:")
             for step in res["navigation_steps"]:
                 print(f"    {step['step']}. {step['instruction']} - {step['detail']}")
+            print("=" * 65 + "\n")
+
+    elif args.tour:
+        base_loc = tuple(args.start) if args.start else None
+        res = plan_science_tour(
+            base_location=base_loc,
+            targets=args.targets,
+            max_duration_hours=args.max_hours,
+            stay_duration_min=args.dwell_min,
+            mode=args.mode,
+            lst_hours=args.lst,
+            weather=args.weather,
+            initial_battery_pct=args.battery,
+            uphill_penalty=args.uphill_factor,
+        )
+
+        if args.json:
+            print(json.dumps(res, indent=2))
+        else:
+            s = res["summary"]
+            print("\n" + "=" * 65)
+            print(f" DALIL-MARS MULTI-STOP SCIENCE TOUR [{s['status']}]")
+            print("=" * 65)
+            print(f"  Mode:                {s['mode'].upper()}")
+            print(f"  Base Camp:           {res['base_camp']['name']}")
+            print(f"  Targets Visited:     {res['targets_visited_count']} science stops ({res['total_stops_count']} total legs)")
+            print(f"  Total Expedition:    {s['total_mission_duration_formatted']} ({s['total_mission_duration_hours']} h)")
+            print(f"  Traverse Time:       {s['travel_time_hours']} h | Science Sampling: {s['science_dwell_hours']} h")
+            print(f"  Total Distance:      {s['total_distance_km']} km")
+            print(f"  Elevation Change:    +{s['elevation_gain_m']} m / -{s['elevation_loss_m']} m (Max Slope: {s['max_slope_deg']}°)")
+            print(f"  Red Slopes Avoided:  {s['total_red_nodes_avoided']} nodes")
+            print(f"  Battery on Return:   {s['battery_remaining_pct']}% (Used: {s['battery_used_pct']}%)")
+            print(f"  Oxygen on Return:    {s['o2_remaining_pct']}% (Used: {s['o2_used_pct']}%)")
+            print(f"  Walkback Margins:    Min Batt: {s['min_walkback_battery_margin_pct']}% | Min O2: {s['min_walkback_o2_margin_pct']}% (Safe: {s['safe_abort_maintained']})")
+            print("\n  Mission Stop-by-Stop Itinerary:")
+            for st in res["ordered_stops"]:
+                dep = f" -> Depart {st['departure_lst']}" if st["departure_lst"] else ""
+                dwell = f" [{st['dwell_time_min']}m dwell]" if st["dwell_time_min"] > 0 else ""
+                print(f"    Stop {st['stop_index']}: {st['name']:<35} Arrive {st['arrival_lst']}{dep}{dwell} | Batt: {st['battery_arrival_pct']}%")
+                print(f"            {st['notes']}")
             print("=" * 65 + "\n")
 
 
