@@ -2082,10 +2082,14 @@ export default function App() {
             </div>
           </div>
 
-          {/* HUD TOP-RIGHT: EXCLUSION POLYGON DRAWING TOOLSET */}
-          <div className="absolute top-2.5 right-2.5 z-[450] w-[195px] bg-[#13161c]/95 border border-[#242933] rounded-[4px] p-1.5 flex flex-col gap-1">
-            <div className="px-1 pb-1 border-b border-[#242933] font-mono text-[9.5px] font-bold text-[#656d7d] tracking-wider uppercase">
-              EXCLUSION DRAW TOOLS
+          {/* HUD TOP-RIGHT: NEW ZONE / TERRITORY DRAWING TOOLSET */}
+          <div className="absolute top-2.5 right-2.5 z-[450] w-[210px] bg-[#13161c]/95 border border-[#242933] rounded-[4px] p-2 flex flex-col gap-1.5 shadow-xl">
+            <div className="flex items-center justify-between pb-1 border-b border-[#242933] font-mono text-[9.5px] font-bold text-[#656d7d] tracking-wider uppercase">
+              <span>NEW ZONE / TERRITORY</span>
+              <span className="text-[#22c55e]">{drawnZones.length} ACTIVE</span>
+            </div>
+            <div className="text-[9px] font-mono text-[#9da5b4] leading-tight">
+              Select type, click map to mark 3+ boundary vertices:
             </div>
             {Object.entries(APP_THEME.hazards).map(([zoneKey, cfg]) => {
               const isDrawingThis = activeDrawMode === zoneKey;
@@ -2095,7 +2099,7 @@ export default function App() {
                   type="button"
                   key={zoneKey}
                   onClick={() => activateDrawMode(zoneKey)}
-                  className={`min-h-[32px] px-2 py-1 rounded-[4px] border font-mono text-[10px] font-bold flex items-center gap-2 cursor-pointer text-left ${
+                  className={`min-h-[32px] px-2 py-1 rounded-[4px] border font-mono text-[10px] font-bold flex items-center gap-2 cursor-pointer text-left transition-colors ${
                     isDrawingThis
                       ? 'bg-[#2c323f] text-[#edf0f5] border-[#edf0f5]'
                       : 'bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] border-[#242933]'
@@ -2112,9 +2116,12 @@ export default function App() {
             })}
 
             {activeDrawMode && (
-              <div className="mt-1 pt-1 border-t border-[#242933] space-y-1">
-                <div className="font-mono text-[9.5px] text-[#edf0f5] px-1">
-                  VERTICES PLACED: {drawVertices.length}
+              <div className="mt-1 pt-1.5 border-t border-[#242933] space-y-1.5 bg-[#191d24]/60 p-1.5 rounded-[4px]">
+                <div className="font-mono text-[9.5px] font-bold text-[#edf0f5] flex items-center justify-between">
+                  <span>VERTICES: {drawVertices.length}</span>
+                  <span className={drawVertices.length >= 3 ? 'text-[#22c55e]' : 'text-[#ef4444]'}>
+                    {drawVertices.length >= 3 ? 'READY TO COMMIT' : 'MIN 3 REQUIRED'}
+                  </span>
                 </div>
                 <div className="grid grid-cols-2 gap-1">
                   <button
@@ -2123,7 +2130,7 @@ export default function App() {
                     disabled={drawVertices.length < 3}
                     className="min-h-[32px] rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] disabled:bg-[#222731] disabled:text-[#656d7d] text-[#0b0d11] font-mono text-[10px] font-bold cursor-pointer border border-[#22c55e] disabled:border-[#353c4a]"
                   >
-                    FINISH
+                    COMMIT
                   </button>
                   <button
                     type="button"
@@ -2140,10 +2147,10 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleClearAllZones}
-                className="min-h-[30px] px-2 rounded-[4px] bg-[#191d24] hover:bg-[#dc2626]/20 text-[#ef4444] border border-[#353c4a] font-mono text-[10px] font-bold cursor-pointer flex items-center justify-center gap-1"
+                className="min-h-[30px] px-2 rounded-[4px] bg-[#191d24] hover:bg-[#dc2626]/20 text-[#ef4444] border border-[#353c4a] font-mono text-[10px] font-bold cursor-pointer flex items-center justify-center gap-1 transition-colors"
               >
                 <Trash2 className="h-3 w-3" />
-                <span>CLEAR ZONES ({drawnZones.length})</span>
+                <span>CLEAR ALL ZONES ({drawnZones.length})</span>
               </button>
             )}
           </div>
@@ -4521,20 +4528,95 @@ export default function App() {
               </div>
             </section>
 
-            {/* PANEL 6: ACTIVE EXCLUSION ZONES & MISSION EXPORT */}
+            {/* PANEL 6: TACTICAL EXCLUSION ZONES & TERRITORIES */}
             <section className="p-3 space-y-2.5">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <h3 className="font-mono text-[10px] font-bold tracking-wider uppercase text-[#656d7d]">
-                    CUSTOM EXCLUSION ZONES [{drawnZones.length}]
+                  <h3 className="font-mono text-[10px] font-bold tracking-wider uppercase text-[#656d7d] flex items-center gap-1.5">
+                    <ShieldAlert className="h-3.5 w-3.5 text-[#22c55e]" />
+                    <span>TACTICAL EXCLUSION ZONES & TERRITORIES [{drawnZones.length}]</span>
                   </h3>
+                  {drawnZones.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllZones}
+                      className="text-[9px] font-mono text-[#ef4444] hover:underline cursor-pointer"
+                    >
+                      CLEAR ALL
+                    </button>
+                  )}
                 </div>
+
+                {/* Direct "NEW ZONE / TERRITORY" Controls in Sidebar */}
+                <div className="p-2 bg-[#191d24] border border-[#242933] rounded-[4px] space-y-2 mb-2">
+                  <div className="flex items-center justify-between font-mono text-[9.5px] font-bold text-[#edf0f5]">
+                    <span className="text-[#22c55e]">+ DRAW NEW ZONE / TERRITORY</span>
+                    {activeDrawMode && (
+                      <span className="text-[#ef4444] animate-pulse">
+                        {drawVertices.length} PTS
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1 font-mono text-[9.5px]">
+                    {Object.entries(APP_THEME.hazards).map(([zoneKey, cfg]) => {
+                      const isDrawingThis = activeDrawMode === zoneKey;
+                      const isSafe = zoneKey === 'safe';
+                      return (
+                        <button
+                          type="button"
+                          key={zoneKey}
+                          onClick={() => activateDrawMode(zoneKey)}
+                          className={`min-h-[28px] px-1.5 py-1 rounded-[4px] border font-bold flex items-center gap-1.5 cursor-pointer text-left truncate transition-colors ${
+                            isDrawingThis
+                              ? 'bg-[#2c323f] text-[#edf0f5] border-[#edf0f5]'
+                              : 'bg-[#13161c] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] border-[#242933]'
+                          }`}
+                          title={`Draw ${cfg.label} on map`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                              isSafe ? 'bg-[#22c55e]' : 'bg-[#ef4444]'
+                            }`}
+                          />
+                          <span className="truncate">{cfg.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {activeDrawMode && (
+                    <div className="pt-1.5 border-t border-[#242933] space-y-1.5">
+                      <div className="text-[9px] font-mono text-[#9da5b4]">
+                        Click on map to place polygon vertices. (Minimum 3 points)
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={handleFinishPolygon}
+                          disabled={drawVertices.length < 3}
+                          className="min-h-[30px] rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] disabled:bg-[#222731] disabled:text-[#656d7d] text-[#0b0d11] font-mono text-[10px] font-bold cursor-pointer border border-[#22c55e] disabled:border-[#353c4a]"
+                        >
+                          COMMIT ZONE ({drawVertices.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancelPolygon}
+                          className="min-h-[30px] rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#ef4444] font-mono text-[10px] font-bold cursor-pointer border border-[#353c4a]"
+                        >
+                          CANCEL
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {drawnZones.length === 0 ? (
                   <div className="p-2 bg-[#191d24] border border-[#242933] rounded-[4px] font-mono text-[10px] text-[#656d7d]">
-                    NO CUSTOM POLYGONS DEFINED. USE TOP-RIGHT DRAW TOOLS.
+                    NO ACTIVE CUSTOM TERRITORIES. SELECT A TYPE ABOVE TO DRAW ON MAP.
                   </div>
                 ) : (
-                  <div className="space-y-1">
+                  <div className="space-y-1 max-h-[140px] overflow-y-auto aerospace-scroll">
                     {drawnZones.map((z) => (
                       <div
                         key={z.id}
@@ -4547,7 +4629,7 @@ export default function App() {
                             }`}
                           />
                           <span className="text-[#edf0f5] truncate">
-                            {APP_THEME.hazards[z.type]?.label || z.type}
+                            [{APP_THEME.hazards[z.type]?.label || z.type}] #{z.id}
                           </span>
                         </div>
                         <button
@@ -4555,7 +4637,7 @@ export default function App() {
                           onClick={() => handleDeleteZone(z.id)}
                           className="text-[#ef4444] hover:underline font-bold cursor-pointer shrink-0 ml-2"
                         >
-                          DEL
+                          REMOVE
                         </button>
                       </div>
                     ))}
@@ -4621,9 +4703,9 @@ export default function App() {
             <div className="text-[#edf0f5] font-semibold">{clo4Pct}</div>
           </div>
           <div className="px-2.5 py-1.5">
-            <div className="text-[9px] text-[#656d7d]">SECTOR STATUS</div>
+            <div className="text-[9px] text-[#656d7d]">TERRITORY STATUS</div>
             <div className={`font-bold truncate ${cursorTelemetry.isFault ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
-              {cursorTelemetry.hazardLabel}
+              {cursorTelemetry.hazardLabel || 'CLEAR / PASSABLE'}
             </div>
           </div>
           <div className="px-2.5 py-1.5">
