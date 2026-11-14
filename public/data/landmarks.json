@@ -32,9 +32,9 @@
         "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "/panoramas/jezero_tracks_floor.jpg",
-        "title": "Perseverance Rover Ground Traversal Context",
-        "source": "NASA / JPL-Caltech"
+        "url": "/data/landmarks/landing_site_skycrane.jpg",
+        "title": "Descent Stage Sky Crane Impact Plume & Surface Footprint",
+        "source": "NASA / JPL-Caltech / ASU"
       }
     ],
     "soil_regolith": {
@@ -86,14 +86,14 @@
         "source": "NASA / JPL-Caltech / ASU"
       },
       {
-        "url": "/panoramas/van_zyl_overlook_360.jpg",
-        "title": "Van Zyl Overlook Perspective of Kodiak Butte",
-        "source": "NASA / JPL-Caltech"
-      },
-      {
         "url": "/panoramas/jezero_landing_site_360.jpg",
         "title": "Crater Floor to Delta Scarp Landscape Transect",
         "source": "NASA / JPL-Caltech"
+      },
+      {
+        "url": "/data/landmarks/kodiak_supercam_scarp.jpg",
+        "title": "Sol 63 SuperCam Remote Micro-Imager Outcrop Profile",
+        "source": "NASA / JPL-Caltech / LANL / IRAP"
       }
     ],
     "soil_regolith": {
@@ -130,12 +130,12 @@
     "photos": [
       {
         "url": "/data/landmarks/three_forks_selfie.jpg",
-        "title": "PIA25681 Perseverance Depot Selfie with Sample Cache",
+        "title": "PIA25681 Perseverance Depot Selfie with 10 Sample Tubes",
         "source": "NASA / JPL-Caltech / MSSS"
       },
       {
         "url": "/data/landmarks/three_forks_tube_cache.jpg",
-        "title": "Sample Tube Deposition on Flat Basaltic Pavement",
+        "title": "Sample Tube Caching on Flat Basaltic Pavement",
         "source": "NASA / JPL-Caltech / WATSON"
       },
       {
@@ -144,14 +144,14 @@
         "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "/data/landmarks/landing_site_tracks.jpg",
-        "title": "Rover Mobility Corridor across Three Forks Basin",
-        "source": "NASA / JPL-Caltech"
+        "url": "/data/landmarks/three_forks_malay_tube.jpg",
+        "title": "Sample #6 'Malay' Encapsulated Tube on Depot Ground",
+        "source": "NASA / JPL-Caltech / WATSON"
       },
       {
-        "url": "/panoramas/octavia_butler_360.jpg",
-        "title": "Three Forks Depot Floor Geomorphic Context",
-        "source": "NASA / JPL-Caltech"
+        "url": "/data/landmarks/three_forks_depot_pan.jpg",
+        "title": "PIA25681-A Three Forks Depot Complete Surface Layout",
+        "source": "NASA / JPL-Caltech / ASU"
       }
     ],
     "soil_regolith": {
@@ -206,14 +206,14 @@
         "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "/data/landmarks/sedona_artuby.jpg",
-        "title": "Artuby Ridge Layered Bedrock & Regolith Pavement",
-        "source": "NASA / JPL-Caltech"
+        "url": "/data/landmarks/seitah_dourbes_watson.jpg",
+        "title": "PIA24940 Dourbes Rock Olivine Micro-Imaging (WATSON)",
+        "source": "NASA / JPL-Caltech / MSSS"
       },
       {
-        "url": "/panoramas/kodiak_butte_delta.jpg",
-        "title": "S\u00e9\u00edtah Basin Boundary with Jezero Delta Margin",
-        "source": "NASA / JPL-Caltech"
+        "url": "/data/landmarks/seitah_traverse_scarp.jpg",
+        "title": "PIA25027 Geological Traverse Route through S\u00e9\u00edtah Dunes",
+        "source": "NASA / JPL-Caltech / USGS"
       }
     ],
     "soil_regolith": {
@@ -265,14 +265,14 @@
         "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "/data/landmarks/enchanted_delta.jpg",
-        "title": "Delta Front Basal Outcrop & Sandstone Strata",
-        "source": "NASA / JPL-Caltech"
+        "url": "/data/landmarks/wildcat_skinner_ridge.jpg",
+        "title": "PIA24925 Skinner Ridge Layered Delta Escarpment",
+        "source": "NASA / JPL-Caltech / ASU"
       },
       {
-        "url": "/data/landmarks/enchanted_rocks.jpg",
-        "title": "Fine Lamination & Siltstone Grain Micro-Structure",
-        "source": "NASA / JPL-Caltech / WATSON"
+        "url": "/data/landmarks/wildcat_delta_locations.jpg",
+        "title": "PIA24924 Delta Front Core Sampling Locations Context",
+        "source": "NASA / JPL-Caltech / ASU"
       }
     ],
     "soil_regolith": {
@@ -319,19 +319,19 @@
         "source": "NASA / JPL-Caltech / SVS"
       },
       {
-        "url": "/panoramas/western_rim_view.jpg",
-        "title": "High-Elevation Belva Ejecta Ridge Overlook",
+        "url": "/data/landmarks/belva_view_pia25889.jpg",
+        "title": "PIA25889 Panoramic Vista Across Belva Crater Impact Cavity",
+        "source": "NASA / JPL-Caltech / ASU"
+      },
+      {
+        "url": "/data/landmarks/belva_navcam_sol777.jpg",
+        "title": "Sol 777 Navcam Wide-Field Survey of Crater Breccia",
         "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "/panoramas/crater_rim_drive.jpg",
-        "title": "Impact Breccia Megablocks along Belva Margin",
-        "source": "NASA / JPL-Caltech"
-      },
-      {
-        "url": "/data/landmarks/hartwell_hirise_crater.jpg",
-        "title": "Secondary Impact Crater Geometry & Shock Fractures",
-        "source": "NASA / JPL / University of Arizona HiRISE"
+        "url": "/data/landmarks/belva_sol768_ingenuity.jpg",
+        "title": "Ingenuity Helicopter Scout Flight over Belva Rim Horizon",
+        "source": "NASA / JPL-Caltech / ASU"
       }
     ],
     "soil_regolith": {
@@ -373,7 +373,7 @@
       },
       {
         "url": "/data/landmarks/neretva_atoko_point.jpg",
-        "title": "Sol 1175 \"Atoko Point\" Silica-Anorthosite Boulder in Neretva",
+        "title": "Sol 1175 Atoko Point Silica-Anorthosite Boulder in Neretva",
         "source": "NASA / JPL-Caltech / SuperCam"
       },
       {
@@ -382,14 +382,14 @@
         "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "/panoramas/western_rim_view.jpg",
-        "title": "Neretva Inflow Breach into Jezero Crater Basin",
-        "source": "NASA / JPL-Caltech"
+        "url": "/data/landmarks/neretva_bright_angel.jpg",
+        "title": "PIA26372 Perspective Look Back at Bright Angel Inflow Channel",
+        "source": "NASA / JPL-Caltech / ASU"
       },
       {
-        "url": "/data/landmarks/enchanted_delta.jpg",
-        "title": "River Inflow Delta Fan Sedimentary Deposit",
-        "source": "NASA / JPL-Caltech"
+        "url": "/data/landmarks/neretva_ingenuity_final.jpg",
+        "title": "Ingenuity Helicopter Final Landing Site in Neretva Ripples",
+        "source": "NASA / JPL-Caltech / ASU"
       }
     ],
     "soil_regolith": {
@@ -435,19 +435,19 @@
         "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "/panoramas/wildcat_ridge_delta.jpg",
-        "title": "Enchanted Lake to Wildcat Ridge Geological Contact",
-        "source": "NASA / JPL-Caltech / ASU Mastcam-Z"
+        "url": "/data/landmarks/enchanted_rockytop.jpg",
+        "title": "PIA25660 High-Resolution View of Rockytop Basal Outcrop",
+        "source": "NASA / JPL-Caltech / ASU"
       },
       {
-        "url": "/data/landmarks/wildcat_sampling.jpg",
-        "title": "Basal Lacustrine Mudstone Drilling Target",
+        "url": "/data/landmarks/enchanted_briefing.jpg",
+        "title": "Delta Front Lacustrine Bottomset Mudstone Sequences",
         "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "/data/landmarks/kodiak_outcrop.jpg",
-        "title": "Distal Sedimentation Correlation with Kodiak Butte",
-        "source": "NASA / JPL-Caltech"
+        "url": "/data/landmarks/enchanted_lake_layers.jpg",
+        "title": "USGS SIM 3464 Detailed Stratigraphic Delta Succession",
+        "source": "USGS / NASA Planetary Geology"
       }
     ],
     "soil_regolith": {
@@ -552,19 +552,19 @@
         "source": "NASA / JPL-Caltech / ASU"
       },
       {
-        "url": "/panoramas/octavia_butler_360.jpg",
-        "title": "Crater Floor Polygonal Fractures & Regolith Pavement",
+        "url": "/data/landmarks/sedona_hirise_sim3464.jpg",
+        "title": "USGS SIM 3464 HiRISE Orthomosaic of Sedona Crater",
+        "source": "NASA / JPL / University of Arizona HiRISE"
+      },
+      {
+        "url": "/data/landmarks/sedona_polygons_sol14.jpg",
+        "title": "Sol 14 Navcam Polygonal Fractures & Floor Pavestones",
         "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "/data/landmarks/landing_site_tracks.jpg",
-        "title": "Rover Mobility & Soil Disruption at Sedona Contact",
-        "source": "NASA / JPL-Caltech"
-      },
-      {
-        "url": "/panoramas/jezero_tracks_floor.jpg",
-        "title": "Sedona Floor Olivine Bedrock & Sand Dunes",
-        "source": "NASA / JPL-Caltech"
+        "url": "/data/landmarks/sedona_bellegarde_watson.jpg",
+        "title": "PIA24770 Bellegarde Abrasion Patch on Fractured Bedrock",
+        "source": "NASA / JPL-Caltech / WATSON"
       }
     ],
     "soil_regolith": {
@@ -605,24 +605,24 @@
         "source": "NASA / JPL / University of Arizona HiRISE"
       },
       {
-        "url": "/panoramas/crater_rim_drive.jpg",
-        "title": "Fresh Impact Ejecta & Boulder Distribution Field",
+        "url": "/data/landmarks/hartwell_base_pia26402.jpg",
+        "title": "PIA26402 Perseverance Location at Base of Crater Rim Wall",
+        "source": "NASA / JPL-Caltech / HiRISE"
+      },
+      {
+        "url": "/data/landmarks/hartwell_navcam_sol721.jpg",
+        "title": "Sol 721 High-Elevation Overlook Across Hartwell Basin",
         "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "/data/landmarks/rim_drill.jpg",
-        "title": "Impact-Shocked Noachian Target Rock Characterization",
-        "source": "NASA / JPL-Caltech"
+        "url": "/data/landmarks/hartwell_sol59_panorama.jpg",
+        "title": "Sol 59 High-Resolution Panorama of Fresh Crater Ejecta",
+        "source": "NASA / JPL-Caltech / ASU"
       },
       {
-        "url": "/panoramas/western_rim_view.jpg",
-        "title": "Hartwell Rim Elevated Perspective across Jezero",
-        "source": "NASA / JPL-Caltech"
-      },
-      {
-        "url": "/data/landmarks/belva_panorama.jpg",
-        "title": "Comparative Impact Morphology & Terraced Breccia",
-        "source": "NASA / JPL-Caltech"
+        "url": "/data/landmarks/hartwell_hirise_angelica.jpg",
+        "title": "USGS SIM 3464 HiRISE Secondary Crater Morphology",
+        "source": "NASA / JPL / USGS Astrogeology"
       }
     ],
     "soil_regolith": {
