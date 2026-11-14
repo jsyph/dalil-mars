@@ -7,7 +7,7 @@
     "GUI"
   ],
   "scripts": {
-    "dev": "npm --prefix GUI run dev",
+    "dev": "npm --prefix GUI run dev --",
     "build": "npm --prefix GUI run build",
     "preview": "npm --prefix GUI run preview"
   }
