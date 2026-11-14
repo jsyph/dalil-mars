@@ -145,6 +145,45 @@ class SolarPhysics:
         return False
 
 
+class CommsPhysics:
+    """RF Line-of-Sight & Relay Propagation Engine.
+
+    Models UHF (437 MHz) and S-Band direct line-of-sight propagation across the 20.2m
+    Jezero DTM topography from Hab Alpha's 40m primary comms mast and regional relay towers.
+    Computes terrain occlusion, free-space path loss (FSPL), and RF blackout zones.
+    """
+    HAB_MAST_HEIGHT_M = 40.0
+    RELAY_MAST_HEIGHT_M = 25.0
+    ROVER_ANTENNA_HEIGHT_M = 2.0
+    EVA_ANTENNA_HEIGHT_M = 1.8
+    CARRIER_FREQ_MHZ = 437.0
+
+    @staticmethod
+    def test_line_of_sight(elev_matrix: np.ndarray, r1: int, c1: int, z1: float, r2: int, c2: int, z2: float, clearance_m: float = 1.0) -> bool:
+        """Ray-marches line-of-sight between two 3D points across DTM elevation matrix."""
+        dist_pixels = np.hypot(r2 - r1, c2 - c1)
+        if dist_pixels < 2:
+            return True
+
+        steps = max(2, int(dist_pixels / 3.0))
+        rs = np.linspace(r1, r2, steps).astype(int)
+        cs = np.linspace(c1, c2, steps).astype(int)
+        ts = np.linspace(0.0, 1.0, steps)
+
+        ray_z = z1 + ts * (z2 - z1)
+        terrain_z = elev_matrix[rs, cs]
+
+        occluded = np.any(terrain_z[1:-1] > (ray_z[1:-1] + clearance_m))
+        return bool(not occluded)
+
+    @classmethod
+    def calculate_free_space_path_loss(cls, distance_km: float, freq_mhz: float | None = None) -> float:
+        """Computes Free Space Path Loss (FSPL) in dB: FSPL = 20*log10(d_km) + 20*log10(f_mhz) + 32.44."""
+        f = freq_mhz if freq_mhz is not None else cls.CARRIER_FREQ_MHZ
+        d = max(0.001, distance_km)
+        return float(round(20.0 * np.log10(d) + 20.0 * np.log10(f) + 32.44, 1))
+
+
 # =============================================================================
 # 3. MOBILITY & LIFE-SUPPORT PHYSICS PROFILES
 # =============================================================================
@@ -296,9 +335,42 @@ class DalilMarsEngine:
                 {"name": "Hab Alpha (Octavia E. Butler Landing)", "lat": 18.444627, "lon": 77.450886, "isShelter": True}
             ]
 
+        # 6. Primary Mast & Regional Relay Towers
+        hab_lat, hab_lon = 18.444627, 77.450886
+        hr, hc = self.latlon_to_grid(hab_lat, hab_lon)
+        hz = float(self.elev_matrix[hr, hc]) + CommsPhysics.HAB_MAST_HEIGHT_M if self.elev_matrix is not None else -2530.0
+
+        self.comms_towers = [
+            {
+                "name": "Hab Alpha 40m Main Mast",
+                "type": "primary",
+                "lat": hab_lat,
+                "lon": hab_lon,
+                "grid_r": hr,
+                "grid_c": hc,
+                "antenna_z_m": hz,
+                "mast_height_m": CommsPhysics.HAB_MAST_HEIGHT_M,
+            }
+        ]
+
+        for st in self.charging_stations + self.shelters:
+            if "Alpha" not in st["name"]:
+                sr, sc = self.latlon_to_grid(st["lat"], st["lon"])
+                sz = float(self.elev_matrix[sr, sc]) + CommsPhysics.RELAY_MAST_HEIGHT_M if self.elev_matrix is not None else -2530.0
+                self.comms_towers.append({
+                    "name": f"{st['name']} Relay (25m)",
+                    "type": "relay",
+                    "lat": st["lat"],
+                    "lon": st["lon"],
+                    "grid_r": sr,
+                    "grid_c": sc,
+                    "antenna_z_m": sz,
+                    "mast_height_m": CommsPhysics.RELAY_MAST_HEIGHT_M,
+                })
+
         self.intra_bound = self.M * np.sqrt(2.0) * self.pixel_res * 1.0
         elapsed = time.time() - t0
-        sys.stderr.write(f"Engine ready in {elapsed:.2f}s! ({H}x{W} fine nodes, {self.cH}x{self.cW} macro-cells, {len(self.shelters)} shelters)\n")
+        sys.stderr.write(f"Engine ready in {elapsed:.2f}s! ({H}x{W} fine nodes, {self.cH}x{self.cW} macro-cells, {len(self.shelters)} shelters, {len(self.comms_towers)} comms towers)\n")
 
     def latlon_to_grid(self, lat: float, lon: float) -> tuple[int, int]:
         x = self.mars_radius * np.radians(lon - 180.0)
@@ -926,6 +998,49 @@ class DalilMarsEngine:
         safe_horizon = bool(pnr_dist_km is None)
         walkback_status = "SAFE_HORIZON_MAINTAINED" if safe_horizon else f"POINT_OF_NO_RETURN_EXCEEDED_AT_KM_{pnr_dist_km}"
 
+        # 6. RF Line-of-Sight Comms Shadow Analysis
+        direct_hab_count = 0
+        relay_count = 0
+        blackout_count = 0
+        blackout_dist_km = 0.0
+        curr_blackout_run = 0.0
+        max_blackout_run_km = 0.0
+
+        for idx, item in enumerate(full_telemetry):
+            c_info = self.evaluate_rf_comms(item["lat"], item["lon"], mode=mode)
+            item["comms_status"] = c_info["status"]
+            item["comms_link"] = c_info["active_link"]
+            item["signal_quality"] = c_info["signal_quality"]
+            item["path_loss_db"] = c_info["path_loss_db"]
+            item["direct_hab_los"] = bool(c_info["direct_hab_los"])
+
+            seg_len_km = item["dist_km"] - (full_telemetry[idx - 1]["dist_km"] if idx > 0 else 0.0)
+
+            if c_info["direct_hab_los"]:
+                direct_hab_count += 1
+                curr_blackout_run = 0.0
+            elif c_info["status"] == "RELAY_CONNECTED":
+                relay_count += 1
+                curr_blackout_run = 0.0
+            else:
+                blackout_count += 1
+                blackout_dist_km += seg_len_km
+                curr_blackout_run += seg_len_km
+                max_blackout_run_km = max(max_blackout_run_km, curr_blackout_run)
+
+        n_points = max(1, len(full_telemetry))
+        comms_cov_pct = float(round(((direct_hab_count + relay_count) / n_points) * 100.0, 1))
+        direct_hab_pct = float(round((direct_hab_count / n_points) * 100.0, 1))
+        relay_pct = float(round((relay_count / n_points) * 100.0, 1))
+        blackout_pct = float(round((blackout_count / n_points) * 100.0, 1))
+
+        if comms_cov_pct >= 95.0:
+            comms_rating = "FULL_COMMS_COVERAGE"
+        elif comms_cov_pct >= 70.0:
+            comms_rating = "INTERMITTENT_SHADOWS"
+        else:
+            comms_rating = "SEVERE_RF_BLACKOUT_ZONES"
+
         # Construct GeoJSON FeatureCollection
         features = [
             {
@@ -947,6 +1062,8 @@ class DalilMarsEngine:
                     "dangerous_slope_km": round(total_caution_km, 2),
                     "red_nodes_avoided": total_red_avoided,
                     "battery_remaining_pct": final_battery_pct,
+                    "comms_coverage_pct": comms_cov_pct,
+                    "comms_status": comms_rating,
                 },
             },
             {
@@ -1030,6 +1147,17 @@ class DalilMarsEngine:
                 "minimum_walkback_o2_margin_pct": round(min_walkback_o2_margin, 1),
                 "primary_abort_shelter": primary_abort_shelter,
                 "status": walkback_status,
+            },
+            "rf_comms": {
+                "status": comms_rating,
+                "total_comms_coverage_pct": comms_cov_pct,
+                "direct_hab_coverage_pct": direct_hab_pct,
+                "relay_coverage_pct": relay_pct,
+                "blackout_pct": blackout_pct,
+                "blackout_distance_km": float(round(blackout_dist_km, 2)),
+                "longest_continuous_blackout_km": float(round(max_blackout_run_km, 2)),
+                "primary_mast": "Hab Alpha (40m Tower)",
+                "available_relays_count": len(self.comms_towers) - 1,
             },
         }
 
@@ -1657,6 +1785,52 @@ class DalilMarsEngine:
             "best_route": best_route,
         }
 
+    def evaluate_rf_comms(self, lat: float, lon: float, mode: str = "rover") -> dict:
+        """Evaluates RF line-of-sight connectivity from a given position to base mast and relays."""
+        pr, pc = self.latlon_to_grid(lat, lon)
+        h_ant = CommsPhysics.ROVER_ANTENNA_HEIGHT_M if mode == "rover" else CommsPhysics.EVA_ANTENNA_HEIGHT_M
+        pz = float(self.elev_matrix[pr, pc]) + h_ant if self.elev_matrix is not None else -2550.0
+
+        active_link = None
+        best_tower = None
+        min_path_loss = np.inf
+        direct_hab_los = False
+
+        for tow in self.comms_towers:
+            has_los = CommsPhysics.test_line_of_sight(
+                self.elev_matrix, pr, pc, pz, tow["grid_r"], tow["grid_c"], tow["antenna_z_m"]
+            )
+            dist_km = (np.hypot(tow["grid_r"] - pr, tow["grid_c"] - pc) * self.pixel_res) / 1000.0
+            pl_db = CommsPhysics.calculate_free_space_path_loss(dist_km)
+
+            if tow["type"] == "primary" and has_los:
+                direct_hab_los = True
+
+            if has_los and pl_db < min_path_loss:
+                min_path_loss = pl_db
+                best_tower = tow
+
+        if best_tower:
+            status = "DIRECT_HAB_LOS" if best_tower["type"] == "primary" else "RELAY_CONNECTED"
+            active_link = best_tower["name"]
+            sig_quality = "OPTIMAL" if min_path_loss < 95.0 else ("GOOD" if min_path_loss < 110.0 else "MARGINAL")
+        else:
+            status = "RF_BLACKOUT"
+            active_link = "NONE (Terrain Occluded)"
+            sig_quality = "BLACKOUT"
+            min_path_loss = None
+
+        dist_to_hab_km = round((np.hypot(self.comms_towers[0]["grid_r"] - pr, self.comms_towers[0]["grid_c"] - pc) * self.pixel_res) / 1000.0, 2)
+
+        return {
+            "status": status,
+            "active_link": active_link,
+            "signal_quality": sig_quality,
+            "direct_hab_los": bool(direct_hab_los),
+            "path_loss_db": float(round(min_path_loss, 1)) if min_path_loss is not None else None,
+            "distance_to_hab_km": dist_to_hab_km,
+        }
+
     @staticmethod
     def _compass_bearing(lat1, lon1, lat2, lon2):
         dLon = np.radians(lon2 - lon1)
@@ -1849,6 +2023,17 @@ def find_optimal_departure(
 
 optimize_departure_window = find_optimal_departure
 departure_window = find_optimal_departure
+
+
+def evaluate_rf_comms(location, mode: str = "rover") -> dict:
+    """Evaluates RF line-of-sight connectivity and link budget from coordinates or POI to Hab Alpha and relay masts."""
+    eng = get_engine()
+    _, _, lat, lon = eng._resolve_coords(location)
+    return eng.evaluate_rf_comms(lat, lon, mode=mode)
+
+
+evaluate_comms = evaluate_rf_comms
+comms = evaluate_rf_comms
 
 
 def get_waypoints() -> list[dict]:
@@ -2058,6 +2243,26 @@ def run_http_server(port: int = 8000, host: str = "0.0.0.0"):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/api/comms", methods=["GET", "POST"])
+    def comms_endpoint():
+        try:
+            if request.method == "POST":
+                data = request.get_json(force=True)
+            else:
+                data = request.args
+
+            loc = data.get("location") or data.get("coords")
+            if not loc:
+                lat = float(data.get("lat", 0.0))
+                lon = float(data.get("lon", 0.0))
+                loc = (lat, lon)
+            mode = data.get("mode", "rover")
+
+            res = evaluate_rf_comms(loc, mode=mode)
+            return jsonify(res)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     print(f"Dalil-Mars REST API Server listening on http://{host}:{port}")
     print("Endpoints:")
     print("  - GET  /api/health")
@@ -2066,6 +2271,7 @@ def run_http_server(port: int = 8000, host: str = "0.0.0.0"):
     print("  - POST /api/route")
     print("  - POST /api/tour")
     print("  - POST /api/departure")
+    print("  - POST /api/comms")
     app.run(host=host, port=port, debug=False)
 
 
@@ -2083,6 +2289,7 @@ def main():
     parser.add_argument("--max-hours", type=float, default=6.0, help="Max mission time budget in hours for science tour (default 6.0).")
     parser.add_argument("--dwell-min", type=float, default=25.0, help="Dwell/science time in minutes per stop (default 25.0).")
     parser.add_argument("--find-departure", action="store_true", help="Analyze diurnal solar conditions to find optimal departure window.")
+    parser.add_argument("--comms", nargs=2, type=float, metavar=("LAT", "LON"), help="Evaluate RF line-of-sight and comms link from coordinates: LAT LON.")
     parser.add_argument("--mode", choices=["on_foot", "rover"], default="on_foot", help="Transportation mode.")
     parser.add_argument("--lst", type=float, default=14.0, help="Martian Local Solar Time (hours: 0.0 to 24.0).")
     parser.add_argument("--weather", choices=["nominal", "dust_storm", "solar_storm"], default="nominal", help="Weather state.")
@@ -2105,7 +2312,7 @@ def main():
 
     engine = get_engine()
 
-    if args.demo or (not args.start and not args.end and not args.abort and not args.tour and not args.find_departure):
+    if args.demo or (not args.start and not args.end and not args.abort and not args.tour and not args.find_departure and not args.comms):
         print("\n" + "=" * 65)
         print(" RUNNING 3 DALIL-MARS MISSION TEST SCENARIOS")
         print("=" * 65)
@@ -2235,6 +2442,11 @@ def main():
                 print(f"  Walkback Horizon:    {wb['status']} (Min Batt Margin: {wb['minimum_walkback_battery_margin_pct']}%, Min O2 Margin: {wb['minimum_walkback_o2_margin_pct']}%)")
                 if wb.get("primary_abort_shelter"):
                     print(f"  Abort Shelter:       {wb['primary_abort_shelter']}")
+            if "rf_comms" in s:
+                rf = s["rf_comms"]
+                print(f"  RF Line-of-Sight:    {rf['status']} ({rf['total_comms_coverage_pct']}% coverage, Direct Hab: {rf['direct_hab_coverage_pct']}%, Relay: {rf['relay_coverage_pct']}%)")
+                if rf["blackout_distance_km"] > 0:
+                    print(f"  RF Blackout Shadow:  {rf['blackout_distance_km']} km in terrain shadow (Longest: {rf['longest_continuous_blackout_km']} km)")
             print("\n  Turn-by-turn Navigation:")
             for step in res["navigation_steps"]:
                 print(f"    {step['step']}. {step['instruction']} - {step['detail']}")
@@ -2307,6 +2519,23 @@ def main():
                 dwell = f" [{st['dwell_time_min']}m dwell]" if st["dwell_time_min"] > 0 else ""
                 print(f"    Stop {st['stop_index']}: {st['name']:<35} Arrive {st['arrival_lst']}{dep}{dwell} | Batt: {st['battery_arrival_pct']}%")
                 print(f"            {st['notes']}")
+            print("=" * 65 + "\n")
+
+    elif args.comms:
+        res = evaluate_rf_comms(tuple(args.comms), mode=args.mode)
+        if args.json:
+            print(json.dumps(res, indent=2))
+        else:
+            print("\n" + "=" * 65)
+            print(" DALIL-MARS RF LINE-OF-SIGHT & LINK BUDGET DIAGNOSTIC")
+            print("=" * 65)
+            print(f"  Location:            {args.comms[0]:.6f}° N, {args.comms[1]:.6f}° E")
+            print(f"  RF Status:           {res['status']} (Signal Quality: {res['signal_quality']})")
+            print(f"  Active Link:         {res['active_link']}")
+            print(f"  Direct Hab LOS:      {res['direct_hab_los']}")
+            print(f"  Distance to Hab:     {res['distance_to_hab_km']} km")
+            if res["path_loss_db"] is not None:
+                print(f"  Path Loss (FSPL):    {res['path_loss_db']} dB (at 437 MHz UHF)")
             print("=" * 65 + "\n")
 
 
