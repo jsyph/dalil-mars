@@ -131,7 +131,7 @@ const FALLBACK_SNAPSHOT = {
   currentManeuver: {
     icon: 'straight',
     distanceText: '2800 m',
-    instruction: 'Awaiting navigation link from EVA Tablet',
+    instruction: 'Follow A* corridor WNW toward Three Forks Sample Depot',
     subtitle: 'Drag to look around • WASD to walk • Arrow keys to pan',
   },
   weatherCondition: {
@@ -168,7 +168,13 @@ const FALLBACK_SNAPSHOT = {
     sol: '1133',
     pressure: 778.9,
   },
-  routePathCoords: [],
+  routePathCoords: [
+    [18.444627, 77.450886],
+    [18.4472, 77.4415],
+    [18.4501, 77.4310],
+    [18.4534, 77.4178],
+    [18.4565, 77.4035],
+  ],
 };
 
 export default function VisorHudPage() {
@@ -184,10 +190,44 @@ export default function VisorHudPage() {
   const [screenMarkerCoords, setScreenMarkerCoords] = useState({});
   const dragRef = useRef({ active: false, x: 0, y: 0, yaw: 0, pitch: 0 });
 
+  const rootRef = useRef(null);
+  const [xrSession, setXrSession] = useState(null);
+  const [xrSupported, setXrSupported] = useState(false);
+
+  const isArMode = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('mode') === 'visor-ar' || params.get('bg') === 'transparent';
+  }, []);
   const isTransparentBg = useMemo(
     () => new URLSearchParams(window.location.search).get('bg') === 'transparent',
     []
   );
+
+  useEffect(() => {
+    if (!isArMode || !navigator.xr) return;
+    const xrMode = isTransparentBg ? 'immersive-ar' : 'immersive-vr';
+    navigator.xr.isSessionSupported(xrMode).then(setXrSupported).catch(() => {});
+  }, [isArMode, isTransparentBg]);
+
+  const startArSession = useCallback(async () => {
+    if (!navigator.xr || xrSession) return;
+    try {
+      const mode = isTransparentBg ? 'immersive-ar' : 'immersive-vr';
+      const session = await navigator.xr.requestSession(mode, {
+        requiredFeatures: ['local-floor'],
+      });
+      session.addEventListener('end', () => setXrSession(null));
+      setXrSession(session);
+    } catch (err) {
+      console.warn('WebXR session start:', err?.message || err);
+    }
+  }, [xrSession, isTransparentBg]);
+
+  useEffect(() => {
+    if (isArMode && xrSupported && !xrSession) {
+      startArSession();
+    }
+  }, [isArMode, xrSupported, xrSession, startArSession]);
 
   useEffect(() => {
     const unsubscribe = subscribeVisorState((nextSnapshot, ts) => {
@@ -213,6 +253,8 @@ export default function VisorHudPage() {
     latestMeda = FALLBACK_SNAPSHOT.latestMeda,
     routePathCoords = [],
   } = snapshot;
+  const activeRoutePathCoords =
+    routePathCoords?.length >= 2 ? routePathCoords : FALLBACK_SNAPSHOT.routePathCoords;
 
   const bodyHeading = liveNavState?.heading ?? 0;
   const viewHeading = normalizeHeading(bodyHeading + lookYawOffset);
@@ -286,6 +328,31 @@ export default function VisorHudPage() {
   const keysPressedRef = useRef(new Set());
   const moveStateRef = useRef({ curLat, curLon, viewHeading, bodyHeading });
   moveStateRef.current = { curLat, curLon, viewHeading, bodyHeading };
+
+  // Move astronaut smoothly from Quest 2 Touch controller thumbstick (forward, strafe in [-1, 1])
+  const moveByStick = useCallback((forward, strafe, dt) => {
+    const { curLat: lat, curLon: lon, viewHeading: vh, bodyHeading: bh } = moveStateRef.current;
+    const relOffsetDeg = (Math.atan2(strafe, forward) * 180) / Math.PI;
+    const moveBearing = normalizeHeading(vh + relOffsetDeg);
+    const mag = Math.min(1, Math.hypot(forward, strafe));
+    const distM = WALK_SPEED_MPS * mag * dt;
+    const [nextLat, nextLon] = stepMarsCoordinates(lat, lon, moveBearing, distM);
+
+    moveStateRef.current.curLat = nextLat;
+    moveStateRef.current.curLon = nextLon;
+
+    setSnapshot((prev) => ({
+      ...prev,
+      navPlaying: false,
+      liveNavState: {
+        ...prev.liveNavState,
+        active: true,
+        currentLatLon: [nextLat, nextLon],
+        heading: bh,
+      },
+    }));
+    sendVisorCommand('MANUAL_MOVE', { lat: nextLat, lon: nextLon, heading: bh });
+  }, []);
 
   // Smooth continuous WASD movement via requestAnimationFrame + Arrow keys for head look
   useEffect(() => {
@@ -536,6 +603,12 @@ export default function VisorHudPage() {
 
   return (
     <div
+      ref={rootRef}
+      onClick={(e) => {
+        if (isArMode && xrSupported && !xrSession && !e.target?.closest?.('button,a')) {
+          startArSession();
+        }
+      }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -544,23 +617,42 @@ export default function VisorHudPage() {
         isTransparentBg ? 'bg-transparent' : isLowLight ? 'bg-slate-950' : 'bg-slate-950'
       }`}
     >
-      {/* DEDICATED 3D TERRAIN MOUNT SLOT (USGS SIM 3464 Three.js First-Person Terrain) */}
+      {/* DEDICATED 3D TERRAIN MOUNT SLOT (USGS SIM 3464 Three.js First-Person Terrain; Martian world hidden in AR mode) */}
       <div id="visor-3d-terrain-slot" className="pointer-events-none absolute inset-0 z-0">
-        {!isTransparentBg && (
-          <Visor3DTerrain
-            currentLatLon={[curLat, curLon]}
-            viewHeading={viewHeading}
-            lookPitchDeg={lookPitchDeg}
-            routePathCoords={routePathCoords}
-            isOffRoute={isOffRoute}
-            isDusty={isDusty}
-            isLowLight={isLowLight}
-            showContours={showContours}
-            onGroundElevation={setGroundElevM}
-            onProjectedScreenMarkers={setScreenMarkerCoords}
-          />
-        )}
+        <Visor3DTerrain
+          currentLatLon={[curLat, curLon]}
+          viewHeading={viewHeading}
+          lookPitchDeg={lookPitchDeg}
+          routePathCoords={activeRoutePathCoords}
+          projectedMarkers={projectedMarkers}
+          isOffRoute={isOffRoute}
+          isDusty={isDusty}
+          isLowLight={isLowLight}
+          showContours={showContours}
+          arPassthrough={isTransparentBg}
+          xrSession={xrSession}
+          hudState={snapshot}
+          targetBearingDeg={targetGuidance?.bearing ?? null}
+          targetDistM={targetGuidance?.distM ?? null}
+          onXrHeadYaw={(yaw) => setLookYawOffset(normalizeSignedAngle(yaw))}
+          onXrStickMove={moveByStick}
+          onGroundElevation={setGroundElevM}
+          onProjectedScreenMarkers={setScreenMarkerCoords}
+        />
       </div>
+
+      {/* Prominent Enter VR/AR Prompt when in AR mode on Quest Browser */}
+      {isArMode && !xrSession && (
+        <div className="pointer-events-auto fixed inset-x-0 bottom-24 z-40 flex justify-center">
+          <button
+            onClick={startArSession}
+            className="flex items-center gap-2.5 rounded-full border-2 border-emerald-400 bg-emerald-950/90 px-6 py-3 text-sm font-extrabold tracking-wider text-emerald-100 shadow-[0_0_28px_rgba(52,211,153,0.45)] hover:bg-emerald-900 cursor-pointer backdrop-blur-md"
+          >
+            <Eye className="h-5 w-5 text-emerald-300" />
+            ENTER VR / AR PASSTHROUGH
+          </button>
+        </div>
+      )}
 
       {/* DUST STORM & LOW-LIGHT ATMOSPHERIC VISOR EFFECTS */}
       {isDusty && (
@@ -595,14 +687,15 @@ export default function VisorHudPage() {
 
       {/* SYNTHETIC WIREFRAME CONTOUR, HORIZON & PROJECTED A* GROUND PATH */}
       <div className="pointer-events-none absolute inset-0 z-10">
-        <div
-          className="absolute inset-0"
-          style={{
-            background: isTransparentBg
-              ? 'radial-gradient(ellipse at center, transparent 58%, rgba(2, 6, 23, 0.55) 100%)'
-              : 'radial-gradient(ellipse at center, rgba(8, 47, 73, 0.14) 0%, rgba(2, 6, 23, 0.85) 100%)',
-          }}
-        />
+        {!isTransparentBg && (
+          <div
+            className="absolute inset-0"
+            style={{
+              background:
+                'radial-gradient(ellipse at center, rgba(8, 47, 73, 0.14) 0%, rgba(2, 6, 23, 0.85) 100%)',
+            }}
+          />
+        )}
 
         <svg
           viewBox="0 0 1000 600"
@@ -856,6 +949,30 @@ export default function VisorHudPage() {
               >
                 Contours: {showContours ? 'ON' : 'OFF'}
               </button>
+              {isArMode ? (
+                xrSession ? (
+                  <button
+                    onClick={() => xrSession.end()}
+                    className="rounded-full border border-red-400/70 bg-red-950/80 px-2.5 py-1 text-[11px] font-bold text-red-200 hover:bg-red-900/80 cursor-pointer backdrop-blur-md"
+                  >
+                    Exit AR
+                  </button>
+                ) : (
+                  <button
+                    onClick={startArSession}
+                    className="rounded-full border border-emerald-400/70 bg-emerald-950/80 px-2.5 py-1 text-[11px] font-bold text-emerald-200 hover:bg-emerald-900/80 cursor-pointer backdrop-blur-md"
+                  >
+                    {xrSupported ? 'Enter Quest 2 AR' : 'AR Transparent'}
+                  </button>
+                )
+              ) : (
+                <a
+                  href="?mode=visor-ar"
+                  className="rounded-full border border-emerald-400/50 bg-emerald-950/80 px-2.5 py-1 text-[11px] font-bold text-emerald-200 hover:bg-emerald-900/80 backdrop-blur-md"
+                >
+                  Quest 2 AR
+                </a>
+              )}
               {(lookYawOffset !== 0 || lookPitchDeg !== 0) && (
                 <button
                   onClick={() => {

@@ -35,8 +35,36 @@ init_dtm()
 
 latlon_crs = CRS.from_string('+proj=longlat +a=3396190 +b=3396190 +no_defs')
 
+def _get_engine_safe():
+    """Lazily retrieve the consolidated DalilMarsEngine instance if available."""
+    try:
+        from core.engine import get_engine
+        eng = get_engine()
+        if eng is not None and eng.elev_matrix is not None:
+            return eng
+    except Exception:
+        pass
+    return None
+
+
 def get_elevation_at_point(lat: float, lon: float) -> dict:
-    """Query elevation from the pre-cached in-memory HRSC DTM raster (sub-millisecond)."""
+    """Query elevation from the consolidated 20.2m DTM in DalilMarsEngine (primary) or HRSC fallback."""
+    eng = _get_engine_safe()
+    if eng is not None:
+        r, c = eng.latlon_to_grid(lat, lon)
+        H, W = eng.elev_matrix.shape
+        if 0 <= r < H and 0 <= c < W:
+            val = float(eng.elev_matrix[r, c])
+            if math.isfinite(val):
+                slope_val = float(eng.slope_matrix[r, c]) if eng.slope_matrix is not None else None
+                return {
+                    "lat": lat,
+                    "lon": lon,
+                    "elevation_m": round(val, 1),
+                    "slope_deg": round(slope_val, 1) if slope_val is not None and math.isfinite(slope_val) else None,
+                    "source": "consolidated_dtm_20m",
+                }
+
     if _dtm_arr is not None and _dtm_arr is not False:
         try:
             xs, ys = rasterio.warp.transform(latlon_crs, _dtm_crs, [lon], [lat])
@@ -69,9 +97,18 @@ def get_elevation_profile(points: List[Tuple[float, float]]) -> List[dict]:
 
 def get_slope_at_point(lat: float, lon: float, delta_deg: float = 0.001) -> float:
     """
-    Estimate slope in degrees at a point using finite difference
-    on adjacent elevation samples (~110 m apart at delta=0.001).
+    Return slope in degrees from Stage 2 consolidated slope matrix when available,
+    falling back to finite difference on elevation samples.
     """
+    eng = _get_engine_safe()
+    if eng is not None and eng.slope_matrix is not None:
+        r, c = eng.latlon_to_grid(lat, lon)
+        H, W = eng.slope_matrix.shape
+        if 0 <= r < H and 0 <= c < W:
+            s_val = float(eng.slope_matrix[r, c])
+            if math.isfinite(s_val):
+                return round(s_val, 2)
+
     e_n = get_elevation_at_point(lat + delta_deg, lon)["elevation_m"]
     e_s = get_elevation_at_point(lat - delta_deg, lon)["elevation_m"]
     e_e = get_elevation_at_point(lat, lon + delta_deg)["elevation_m"]
@@ -91,11 +128,29 @@ def get_dem_array(bbox: list, resolution: int = 64) -> dict:
     """
     Return a 2D elevation grid for a bounding box.
     bbox = [minLon, minLat, maxLon, maxLat]
-    Used by the A* router to build the cost graph.
+    Uses the Stage 1 consolidated 20.2m DTM in DalilMarsEngine when available.
     """
     min_lon, min_lat, max_lon, max_lat = bbox
     lats = np.linspace(max_lat, min_lat, resolution)
     lons = np.linspace(min_lon, max_lon, resolution)
+
+    eng = _get_engine_safe()
+    if eng is not None:
+        H, W = eng.elev_matrix.shape
+        grid = np.zeros((resolution, resolution), dtype=np.float32)
+        for r_idx, lat in enumerate(lats):
+            for c_idx, lon in enumerate(lons):
+                er, ec = eng.latlon_to_grid(float(lat), float(lon))
+                er = max(0, min(H - 1, er))
+                ec = max(0, min(W - 1, ec))
+                val = float(eng.elev_matrix[er, ec])
+                grid[r_idx, c_idx] = val if math.isfinite(val) else -2500.0
+        return {
+            "grid": grid.tolist(),
+            "lats": lats.tolist(),
+            "lons": lons.tolist(),
+            "source": "consolidated_dtm_20m",
+        }
 
     try:
         import rasterio
