@@ -13,33 +13,28 @@
     "photos": [
       {
         "url": "/panoramas/octavia_butler_360.jpg",
-        "title": "Octavia E. Butler Landing 360° Panorama",
+        "title": "Octavia E. Butler Landing 360\u00b0 Panorama",
         "source": "NASA / JPL-Caltech / ASU Mastcam-Z"
       },
       {
-        "url": "data/landmarks/landing_site_1.png",
-        "title": "MRO CTX 5M Regional Context",
-        "source": "NASA / Caltech MRO CTX"
+        "url": "/data/landmarks/landing_site_pia.jpg",
+        "title": "PIA24483 Official Landing Site Touchdown Vista",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/landing_site_2.png",
-        "title": "High-Resolution Pavement Detail",
-        "source": "USGS SIM 3464 CTX Ortho"
+        "url": "/data/landmarks/landing_site_pan.jpg",
+        "title": "Sol 3 Mastcam-Z High-Definition Horizon Mosaic",
+        "source": "NASA / JPL-Caltech / ASU"
       },
       {
-        "url": "data/landmarks/landing_site_3.png",
-        "title": "HRSC Topographic Relief (DEM)",
-        "source": "ESA Mars Express HRSC"
+        "url": "/data/landmarks/landing_site_tracks.jpg",
+        "title": "PIA25171 Perseverance Rover Wheel Tracks on Floor Pavement",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/landing_site_4.png",
-        "title": "Hypsometric Elevation DTM",
-        "source": "USGS SIM 3464 DTM"
-      },
-      {
-        "url": "data/landmarks/landing_site_5.png",
-        "title": "THEMIS Nighttime Thermal IR",
-        "source": "NASA Mars Odyssey THEMIS"
+        "url": "/panoramas/jezero_tracks_floor.jpg",
+        "title": "Perseverance Rover Ground Traversal Context",
+        "source": "NASA / JPL-Caltech"
       }
     ],
     "soil_regolith": {
@@ -55,7 +50,7 @@
       "mineralogy": "Pyroxene (augite/pigeonite), Plagioclase feldspar, Forsteritic olivine, minor Magnetite",
       "organics_biosignatures": "Below baseline detection limit (SHERLOC / SuperCam)",
       "perchlorate_content": "0.22 wt% (Nominal background)",
-      "grain_size": "Fine to medium sand (150–350 µm) with basalt pebble armor",
+      "grain_size": "Fine to medium sand (150\u2013350 \u00b5m) with basalt pebble armor",
       "soil_bearing_capacity": "160 kPa (High firmness / Nominal rover wheel traction)"
     },
     "rover_samples": [
@@ -72,38 +67,33 @@
       77.3625
     ],
     "elevation_m": -2402,
-    "usgs_unit": "Δm / Δss (Delta Remnant Outlier)",
-    "brief": "Prominent flat-topped erosional butte south of the main delta front. Mastcam-Z and SuperCam long-distance imaging revealed distinct steeply dipping deltaic foreset beds (15°–20°), confirming a sustained ancient paleolake highstand.",
+    "usgs_unit": "\u0394m / \u0394ss (Delta Remnant Outlier)",
+    "brief": "Prominent flat-topped erosional butte south of the main delta front. Mastcam-Z and SuperCam long-distance imaging revealed distinct steeply dipping deltaic foreset beds (15\u00b0\u201320\u00b0), confirming a sustained ancient paleolake highstand.",
     "photos": [
       {
         "url": "/panoramas/kodiak_butte_delta.jpg",
-        "title": "Mount Kodiak Ancient Delta Remnant",
-        "source": "NASA / JPL-Caltech SuperCam RMI"
+        "title": "Mount Kodiak Ancient Delta Remnant Panorama",
+        "source": "NASA / JPL-Caltech / ASU Mastcam-Z"
       },
       {
-        "url": "data/landmarks/kodiak_butte_1.png",
-        "title": "MRO CTX 5M Regional Context",
-        "source": "NASA / Caltech MRO CTX"
+        "url": "/data/landmarks/kodiak_outcrop.jpg",
+        "title": "Steep Deltaic Foreset Bed Strata on Kodiak Butte",
+        "source": "NASA / JPL-Caltech / SuperCam"
       },
       {
-        "url": "data/landmarks/kodiak_butte_2.png",
-        "title": "Stratified Butte Scarp Detail",
-        "source": "USGS SIM 3464 CTX Ortho"
+        "url": "/data/landmarks/kodiak_sol114.jpg",
+        "title": "Sol 114 High-Power Telescopic Scarp Observation",
+        "source": "NASA / JPL-Caltech / ASU"
       },
       {
-        "url": "data/landmarks/kodiak_butte_3.png",
-        "title": "HRSC Topographic Relief (DEM)",
-        "source": "ESA Mars Express HRSC"
+        "url": "/panoramas/van_zyl_overlook_360.jpg",
+        "title": "Van Zyl Overlook Perspective of Kodiak Butte",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/kodiak_butte_4.png",
-        "title": "Hypsometric Elevation DTM",
-        "source": "USGS SIM 3464 DTM"
-      },
-      {
-        "url": "data/landmarks/kodiak_butte_5.png",
-        "title": "THEMIS Nighttime Thermal IR",
-        "source": "NASA Mars Odyssey THEMIS"
+        "url": "/panoramas/jezero_landing_site_360.jpg",
+        "title": "Crater Floor to Delta Scarp Landscape Transect",
+        "source": "NASA / JPL-Caltech"
       }
     ],
     "soil_regolith": {
@@ -119,7 +109,7 @@
       "mineralogy": "Fe/Mg smectite clays, Quartz/Hydrated silica, Calcium carbonate, Hematite",
       "organics_biosignatures": "High potential biosignature preservation zone (lacustrine depositional model)",
       "perchlorate_content": "0.14 wt% (Low)",
-      "grain_size": "Silt to fine sand (<63 µm to 125 µm); rounded boulder topsets",
+      "grain_size": "Silt to fine sand (<63 \u00b5m to 125 \u00b5m); rounded boulder topsets",
       "soil_bearing_capacity": "140 kPa (Moderately firm talus / slope slip risk on scarp)"
     },
     "rover_samples": [
@@ -135,38 +125,33 @@
       77.4042
     ],
     "elevation_m": -2426,
-    "usgs_unit": "Nvf / Δb (Delta Base Confluence)",
+    "usgs_unit": "Nvf / \u0394b (Delta Base Confluence)",
     "brief": "Historic surface cache depot for the NASA-ESA Mars Sample Return (MSR) campaign. Perseverance deposited 10 titanium sample tubes on the flat ground here between Dec 2022 and Jan 2023 as an operational backup.",
     "photos": [
       {
+        "url": "/data/landmarks/three_forks_selfie.jpg",
+        "title": "PIA25681 Perseverance Depot Selfie with Sample Cache",
+        "source": "NASA / JPL-Caltech / MSSS"
+      },
+      {
+        "url": "/data/landmarks/three_forks_tube_cache.jpg",
+        "title": "Sample Tube Deposition on Flat Basaltic Pavement",
+        "source": "NASA / JPL-Caltech / WATSON"
+      },
+      {
         "url": "/panoramas/jezero_floor_tracks.jpg",
         "title": "Three Forks Sample Depot Ground Vista",
-        "source": "NASA / JPL-Caltech Navcam"
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/three_forks_1.png",
-        "title": "MRO CTX 5M Regional Context",
-        "source": "NASA / Caltech MRO CTX"
+        "url": "/data/landmarks/landing_site_tracks.jpg",
+        "title": "Rover Mobility Corridor across Three Forks Basin",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/three_forks_2.png",
-        "title": "Flat Alluvial Depot Pavement",
-        "source": "USGS SIM 3464 CTX Ortho"
-      },
-      {
-        "url": "data/landmarks/three_forks_3.png",
-        "title": "HRSC Topographic Relief (DEM)",
-        "source": "ESA Mars Express HRSC"
-      },
-      {
-        "url": "data/landmarks/three_forks_4.png",
-        "title": "Hypsometric Elevation DTM",
-        "source": "USGS SIM 3464 DTM"
-      },
-      {
-        "url": "data/landmarks/three_forks_5.png",
-        "title": "THEMIS Nighttime Thermal IR",
-        "source": "NASA Mars Odyssey THEMIS"
+        "url": "/panoramas/octavia_butler_360.jpg",
+        "title": "Three Forks Depot Floor Geomorphic Context",
+        "source": "NASA / JPL-Caltech"
       }
     ],
     "soil_regolith": {
@@ -182,7 +167,7 @@
       "mineralogy": "Mixed basaltic debris, Magnesium carbonates, Fe-sulfates, minor smectite",
       "organics_biosignatures": "Depot zone: pristine tube hermetic sealing verified",
       "perchlorate_content": "0.28 wt% (Nominal)",
-      "grain_size": "Coarse grit (0.5–2.0 mm) over flat bedrock pavement",
+      "grain_size": "Coarse grit (0.5\u20132.0 mm) over flat bedrock pavement",
       "soil_bearing_capacity": "190 kPa (Optimal trafficability / Low slip)"
     },
     "rover_samples": [
@@ -195,7 +180,7 @@
   },
   {
     "id": "seitah_dunes",
-    "name": "SOUTH SÉÍTAH OLIVINE COMPLEX",
+    "name": "SOUTH S\u00c9\u00cdTAH OLIVINE COMPLEX",
     "category": "IGNEOUS_COMPLEX",
     "coords": [
       18.4312,
@@ -206,34 +191,29 @@
     "brief": "Navajo for \"amidst the sand\". A geologically unique layered ultramafic unit featuring heavy aeolian sand ripples and cumulate igneous rocks that crystallized deep inside a magma chamber before water filled the crater.",
     "photos": [
       {
-        "url": "/panoramas/van_zyl_overlook_360.jpg",
-        "title": "Van Zyl Overlook & Séítah 360° Photosphere",
+        "url": "/data/landmarks/seitah_ridge.jpg",
+        "title": "Artuby Ridge & S\u00e9\u00edtah Olivine Cumulate Layers",
         "source": "NASA / JPL-Caltech / ASU Mastcam-Z"
       },
       {
-        "url": "data/landmarks/seitah_dunes_1.png",
-        "title": "MRO CTX 5M Regional Context",
-        "source": "NASA / Caltech MRO CTX"
+        "url": "/data/landmarks/seitah_sol201.jpg",
+        "title": "Sol 201 Perseverance Entering S\u00e9\u00edtah Megaripple Dunes",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/seitah_dunes_2.png",
-        "title": "Transverse Aeolian Ridges (TARs)",
-        "source": "USGS SIM 3464 CTX Ortho"
+        "url": "/panoramas/van_zyl_overlook_360.jpg",
+        "title": "Van Zyl Overlook & S\u00e9\u00edtah 360\u00b0 Photosphere",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/seitah_dunes_3.png",
-        "title": "HRSC Topographic Relief (DEM)",
-        "source": "ESA Mars Express HRSC"
+        "url": "/data/landmarks/sedona_artuby.jpg",
+        "title": "Artuby Ridge Layered Bedrock & Regolith Pavement",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/seitah_dunes_4.png",
-        "title": "Hypsometric Elevation DTM",
-        "source": "USGS SIM 3464 DTM"
-      },
-      {
-        "url": "data/landmarks/seitah_dunes_5.png",
-        "title": "THEMIS Nighttime Thermal IR",
-        "source": "NASA Mars Odyssey THEMIS"
+        "url": "/panoramas/kodiak_butte_delta.jpg",
+        "title": "S\u00e9\u00edtah Basin Boundary with Jezero Delta Margin",
+        "source": "NASA / JPL-Caltech"
       }
     ],
     "soil_regolith": {
@@ -249,7 +229,7 @@
       "mineralogy": "Fo75 Olivine (>65 vol%), Magnesite, Siderite, Augite, Chromite",
       "organics_biosignatures": "Carbonate-bound abiotic organics detected by SHERLOC Raman",
       "perchlorate_content": "0.08 wt% (Very low)",
-      "grain_size": "Coarse olivine sand (500–1000 µm) in active aeolian ripples",
+      "grain_size": "Coarse olivine sand (500\u20131000 \u00b5m) in active aeolian ripples",
       "soil_bearing_capacity": "35 kPa (CRITICAL SLIP RISK: Wheel sinkage up to 60%)"
     },
     "rover_samples": [
@@ -266,38 +246,33 @@
       77.378
     ],
     "elevation_m": -2414,
-    "usgs_unit": "Δm (Fine-Grained Lacustrine Mudstone)",
+    "usgs_unit": "\u0394m (Fine-Grained Lacustrine Mudstone)",
     "brief": "Steep exposure of fine-grained deltaic mudstones deposited during a quiescent phase of Lake Jezero. Abrasion patch \"Swift Run\" revealed intense sulfate mineral concentrations and the highest biosignature preservation potential discovered to date.",
     "photos": [
       {
         "url": "/panoramas/wildcat_ridge_delta.jpg",
-        "title": "Wildcat Ridge Delta Front Outcrop",
-        "source": "NASA / JPL-Caltech Mastcam-Z Zoom"
+        "title": "Wildcat Ridge Delta Front Outcrop Panorama",
+        "source": "NASA / JPL-Caltech / ASU Mastcam-Z"
       },
       {
-        "url": "data/landmarks/wildcat_ridge_1.png",
-        "title": "MRO CTX 5M Regional Context",
-        "source": "NASA / Caltech MRO CTX"
+        "url": "/data/landmarks/wildcat_sampling.jpg",
+        "title": "PIA24928 Wildcat Ridge Mudstone Drilling & Core Extraction",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/wildcat_ridge_2.png",
-        "title": "Finely Laminated Escarpment",
-        "source": "USGS SIM 3464 CTX Ortho"
+        "url": "/data/landmarks/wildcat_sherloc.jpg",
+        "title": "PIA25245 SHERLOC & WATSON Fine-Scale Organic Spectrometry Patch",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/wildcat_ridge_3.png",
-        "title": "HRSC Topographic Relief (DEM)",
-        "source": "ESA Mars Express HRSC"
+        "url": "/data/landmarks/enchanted_delta.jpg",
+        "title": "Delta Front Basal Outcrop & Sandstone Strata",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/wildcat_ridge_4.png",
-        "title": "Hypsometric Elevation DTM",
-        "source": "USGS SIM 3464 DTM"
-      },
-      {
-        "url": "data/landmarks/wildcat_ridge_5.png",
-        "title": "THEMIS Nighttime Thermal IR",
-        "source": "NASA Mars Odyssey THEMIS"
+        "url": "/data/landmarks/enchanted_rocks.jpg",
+        "title": "Fine Lamination & Siltstone Grain Micro-Structure",
+        "source": "NASA / JPL-Caltech / WATSON"
       }
     ],
     "soil_regolith": {
@@ -313,7 +288,7 @@
       "mineralogy": "Ca-sulfates (Anhydrite/Gypsum), Smectite clay, Polycyclic aromatics, Halite",
       "organics_biosignatures": "CONFIRMED: Strongest SHERLOC 248 nm Raman peak (Aromatic ring hydrocarbons)",
       "perchlorate_content": "0.42 wt% (Elevated near surface salts)",
-      "grain_size": "Ultra-fine clay/silt (<10 µm) with crystalline sulfate veins",
+      "grain_size": "Ultra-fine clay/silt (<10 \u00b5m) with crystalline sulfate veins",
       "soil_bearing_capacity": "175 kPa (Dense cemented mudstone pavement)"
     },
     "rover_samples": [
@@ -335,33 +310,28 @@
     "photos": [
       {
         "url": "/panoramas/belva_crater_panorama.jpg",
-        "title": "Belva Crater Impact Basin Rim Vista",
-        "source": "NASA / JPL-Caltech Mastcam-Z"
+        "title": "Sol 772 Belva Crater 152-Image Mastcam-Z Mosaic",
+        "source": "NASA / JPL-Caltech / ASU Mastcam-Z"
       },
       {
-        "url": "data/landmarks/belva_crater_1.png",
-        "title": "MRO CTX 5M Regional Context",
-        "source": "NASA / Caltech MRO CTX"
+        "url": "/data/landmarks/belva_panorama.jpg",
+        "title": "Belva Impact Crater Inner Rim Terraces & Fault Scarps",
+        "source": "NASA / JPL-Caltech / SVS"
       },
       {
-        "url": "data/landmarks/belva_crater_2.png",
-        "title": "Ejecta Megablock Fracture Pattern",
-        "source": "USGS SIM 3464 CTX Ortho"
+        "url": "/panoramas/western_rim_view.jpg",
+        "title": "High-Elevation Belva Ejecta Ridge Overlook",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/belva_crater_3.png",
-        "title": "HRSC Topographic Relief (DEM)",
-        "source": "ESA Mars Express HRSC"
+        "url": "/panoramas/crater_rim_drive.jpg",
+        "title": "Impact Breccia Megablocks along Belva Margin",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/belva_crater_4.png",
-        "title": "Hypsometric Elevation DTM",
-        "source": "USGS SIM 3464 DTM"
-      },
-      {
-        "url": "data/landmarks/belva_crater_5.png",
-        "title": "THEMIS Nighttime Thermal IR",
-        "source": "NASA Mars Odyssey THEMIS"
+        "url": "/data/landmarks/hartwell_hirise_crater.jpg",
+        "title": "Secondary Impact Crater Geometry & Shock Fractures",
+        "source": "NASA / JPL / University of Arizona HiRISE"
       }
     ],
     "soil_regolith": {
@@ -398,33 +368,28 @@
     "photos": [
       {
         "url": "/panoramas/neretva_vallis_outflow.jpg",
-        "title": "Neretva Vallis River Channel & Outflow",
-        "source": "NASA / JPL-Caltech Mastcam-Z"
+        "title": "Neretva Vallis Ancient River Inflow Gorge Landscape",
+        "source": "NASA / JPL-Caltech / ASU Mastcam-Z"
       },
       {
-        "url": "data/landmarks/neretva_vallis_1.png",
-        "title": "MRO CTX 5M Regional Context",
-        "source": "NASA / Caltech MRO CTX"
+        "url": "/data/landmarks/neretva_atoko_point.jpg",
+        "title": "Sol 1175 \"Atoko Point\" Silica-Anorthosite Boulder in Neretva",
+        "source": "NASA / JPL-Caltech / SuperCam"
       },
       {
-        "url": "data/landmarks/neretva_vallis_2.png",
-        "title": "Canyon Floor Bedrock Pavement",
-        "source": "USGS SIM 3464 CTX Ortho"
+        "url": "/data/landmarks/neretva_ingenuity.jpg",
+        "title": "Ingenuity Mars Helicopter Airfield in Neretva Gorge",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/neretva_vallis_3.png",
-        "title": "HRSC Topographic Relief (DEM)",
-        "source": "ESA Mars Express HRSC"
+        "url": "/panoramas/western_rim_view.jpg",
+        "title": "Neretva Inflow Breach into Jezero Crater Basin",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/neretva_vallis_4.png",
-        "title": "Hypsometric Elevation DTM",
-        "source": "USGS SIM 3464 DTM"
-      },
-      {
-        "url": "data/landmarks/neretva_vallis_5.png",
-        "title": "THEMIS Nighttime Thermal IR",
-        "source": "NASA Mars Odyssey THEMIS"
+        "url": "/data/landmarks/enchanted_delta.jpg",
+        "title": "River Inflow Delta Fan Sedimentary Deposit",
+        "source": "NASA / JPL-Caltech"
       }
     ],
     "soil_regolith": {
@@ -456,38 +421,33 @@
       77.382
     ],
     "elevation_m": -2404,
-    "usgs_unit": "Δb (Basal Delta Bottomset Unit)",
+    "usgs_unit": "\u0394b (Basal Delta Bottomset Unit)",
     "brief": "A shallow outcrop nestled near the base of the delta scarp. It features finely laminated mudstones and siltstones that precipitated directly from suspension in the deepest, most quiet waters of the Jezero paleolake.",
     "photos": [
       {
-        "url": "/panoramas/jezero_rim_horizon.jpg",
-        "title": "Enchanted Lake Basal Delta Mudstone",
-        "source": "NASA / JPL-Caltech Mastcam-Z"
+        "url": "/data/landmarks/enchanted_rocks.jpg",
+        "title": "PIA25325 Enchanted Lake Fine-Grained Mudstone Lamination",
+        "source": "NASA / JPL-Caltech / WATSON"
       },
       {
-        "url": "data/landmarks/enchanted_lake_1.png",
-        "title": "MRO CTX 5M Regional Context",
-        "source": "NASA / Caltech MRO CTX"
+        "url": "/data/landmarks/enchanted_delta.jpg",
+        "title": "PIA24923 Delta Basal Scarp & Layered Siltstones",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/enchanted_lake_2.png",
-        "title": "Basal Bottomset Outcrop Shales",
-        "source": "USGS SIM 3464 CTX Ortho"
+        "url": "/panoramas/wildcat_ridge_delta.jpg",
+        "title": "Enchanted Lake to Wildcat Ridge Geological Contact",
+        "source": "NASA / JPL-Caltech / ASU Mastcam-Z"
       },
       {
-        "url": "data/landmarks/enchanted_lake_3.png",
-        "title": "HRSC Topographic Relief (DEM)",
-        "source": "ESA Mars Express HRSC"
+        "url": "/data/landmarks/wildcat_sampling.jpg",
+        "title": "Basal Lacustrine Mudstone Drilling Target",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/enchanted_lake_4.png",
-        "title": "Hypsometric Elevation DTM",
-        "source": "USGS SIM 3464 DTM"
-      },
-      {
-        "url": "data/landmarks/enchanted_lake_5.png",
-        "title": "THEMIS Nighttime Thermal IR",
-        "source": "NASA Mars Odyssey THEMIS"
+        "url": "/data/landmarks/kodiak_outcrop.jpg",
+        "title": "Distal Sedimentation Correlation with Kodiak Butte",
+        "source": "NASA / JPL-Caltech"
       }
     ],
     "soil_regolith": {
@@ -503,7 +463,7 @@
       "mineralogy": "Nontronite/Saponite smectites, Calcite/Ankerite, Opal-CT hydrated silica",
       "organics_biosignatures": "Elevated fluorescence signals in proximity to carbonate nodules",
       "perchlorate_content": "0.25 wt% (Moderate)",
-      "grain_size": "Sub-micron clay to fine silt (<20 µm)",
+      "grain_size": "Sub-micron clay to fine silt (<20 \u00b5m)",
       "soil_bearing_capacity": "165 kPa (Compacted mudstone bench)"
     },
     "rover_samples": [
@@ -524,34 +484,29 @@
     "brief": "The towering tectonic crater rim wall rising hundreds of meters above the basin floor. Formed during the giant Isidis impact event ~3.9 billion years ago, exposing the most ancient primordial crust of Mars.",
     "photos": [
       {
+        "url": "/panoramas/western_rim_view.jpg",
+        "title": "Jezero Western & Northern Rim Mountain Horizon",
+        "source": "NASA / JPL-Caltech / ASU Mastcam-Z"
+      },
+      {
         "url": "/panoramas/crater_rim_drive.jpg",
-        "title": "Jezero Northern Rim Traverse View",
-        "source": "NASA / JPL-Caltech Mastcam-Z"
+        "title": "Crater Rim Ascent Traverse & Ancient Noachian Crust",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/north_rim_1.png",
-        "title": "MRO CTX 5M Regional Context",
-        "source": "NASA / Caltech MRO CTX"
+        "url": "/data/landmarks/rim_panorama.jpg",
+        "title": "High-Definition Jezero North Rim Crest Panorama",
+        "source": "NASA / JPL-Caltech / ASU"
       },
       {
-        "url": "data/landmarks/north_rim_2.png",
-        "title": "Steep Tectonic Escarpment Scarp",
-        "source": "USGS SIM 3464 CTX Ortho"
+        "url": "/data/landmarks/rim_drill.jpg",
+        "title": "PIA26575 Scientific Bedrock Drilling on Ancient Noachian Rim",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/north_rim_3.png",
-        "title": "HRSC Topographic Relief (DEM)",
-        "source": "ESA Mars Express HRSC"
-      },
-      {
-        "url": "data/landmarks/north_rim_4.png",
-        "title": "Hypsometric Elevation DTM",
-        "source": "USGS SIM 3464 DTM"
-      },
-      {
-        "url": "data/landmarks/north_rim_5.png",
-        "title": "THEMIS Nighttime Thermal IR",
-        "source": "NASA Mars Odyssey THEMIS"
+        "url": "/panoramas/jezero_rim_horizon.jpg",
+        "title": "Sol Horizon Overlook across Jezero Basin",
+        "source": "NASA / JPL-Caltech"
       }
     ],
     "soil_regolith": {
@@ -568,7 +523,7 @@
       "organics_biosignatures": "None (Pre-biotic igneous basement)",
       "perchlorate_content": "0.19 wt% (Nominal)",
       "grain_size": "Shattered blocky regolith (5 cm to 4 m boulders on scree slopes)",
-      "soil_bearing_capacity": "180 kPa (High slope angle >18° / Slope rollover hazard)"
+      "soil_bearing_capacity": "180 kPa (High slope angle >18\u00b0 / Slope rollover hazard)"
     },
     "rover_samples": [
       "Targeted for Mars 2020 Extended Mission Crater Rim Ascent"
@@ -587,34 +542,29 @@
     "brief": "A well-preserved Noachian impact crater located in the southern Nili Planum highlands. Officially designated by the IAU/USGS after Sedona, Arizona, famous for oxidized terrestrial iron-rich sandstone formations.",
     "photos": [
       {
+        "url": "/data/landmarks/sedona_crater_floor.jpg",
+        "title": "PIA24746 Fractured Crater Floor Basalt & Dust Mantle",
+        "source": "NASA / JPL-Caltech"
+      },
+      {
+        "url": "/data/landmarks/sedona_artuby.jpg",
+        "title": "Artuby Ridge & Sedona Contact Olivine Pavement",
+        "source": "NASA / JPL-Caltech / ASU"
+      },
+      {
+        "url": "/panoramas/octavia_butler_360.jpg",
+        "title": "Crater Floor Polygonal Fractures & Regolith Pavement",
+        "source": "NASA / JPL-Caltech"
+      },
+      {
+        "url": "/data/landmarks/landing_site_tracks.jpg",
+        "title": "Rover Mobility & Soil Disruption at Sedona Contact",
+        "source": "NASA / JPL-Caltech"
+      },
+      {
         "url": "/panoramas/jezero_tracks_floor.jpg",
-        "title": "Sedona Crater Impact Cavity",
-        "source": "NASA / JPL-Caltech Navcam"
-      },
-      {
-        "url": "data/landmarks/sedona_crater_1.png",
-        "title": "MRO CTX 5M Regional Context",
-        "source": "NASA / Caltech MRO CTX"
-      },
-      {
-        "url": "data/landmarks/sedona_crater_2.png",
-        "title": "Central Peak & Terrace Walls",
-        "source": "USGS SIM 3464 CTX Ortho"
-      },
-      {
-        "url": "data/landmarks/sedona_crater_3.png",
-        "title": "HRSC Topographic Relief (DEM)",
-        "source": "ESA Mars Express HRSC"
-      },
-      {
-        "url": "data/landmarks/sedona_crater_4.png",
-        "title": "Hypsometric Elevation DTM",
-        "source": "USGS SIM 3464 DTM"
-      },
-      {
-        "url": "data/landmarks/sedona_crater_5.png",
-        "title": "THEMIS Nighttime Thermal IR",
-        "source": "NASA Mars Odyssey THEMIS"
+        "title": "Sedona Floor Olivine Bedrock & Sand Dunes",
+        "source": "NASA / JPL-Caltech"
       }
     ],
     "soil_regolith": {
@@ -630,7 +580,7 @@
       "mineralogy": "Ferric oxides (Hematite/Nanophase iron oxide), Smectite clay, Enstatite pyroxene",
       "organics_biosignatures": "Ancient Noachian hydrothermal alterites in crater floor",
       "perchlorate_content": "0.18 wt% (Nominal)",
-      "grain_size": "Fine ferric dust veneer over coarse angular impact ejecta (100 µm to 10 cm)",
+      "grain_size": "Fine ferric dust veneer over coarse angular impact ejecta (100 \u00b5m to 10 cm)",
       "soil_bearing_capacity": "170 kPa (Firm highland terrain / Stable traction)"
     },
     "rover_samples": [
@@ -650,34 +600,29 @@
     "brief": "Distinct secondary impact crater situated on the eastern floor of Jezero Crater. Officially approved by IAU/USGS nomenclature, it exposes deep subsurface ejecta layers that predate the deltaic sediment inflows.",
     "photos": [
       {
+        "url": "/data/landmarks/hartwell_hirise_crater.jpg",
+        "title": "HiRISE Color View of Hartwell Crater Impact Cavity & Ejecta",
+        "source": "NASA / JPL / University of Arizona HiRISE"
+      },
+      {
+        "url": "/panoramas/crater_rim_drive.jpg",
+        "title": "Fresh Impact Ejecta & Boulder Distribution Field",
+        "source": "NASA / JPL-Caltech"
+      },
+      {
+        "url": "/data/landmarks/rim_drill.jpg",
+        "title": "Impact-Shocked Noachian Target Rock Characterization",
+        "source": "NASA / JPL-Caltech"
+      },
+      {
         "url": "/panoramas/western_rim_view.jpg",
-        "title": "Hartwell Crater Regional Vista",
-        "source": "NASA / JPL-Caltech Mastcam-Z"
+        "title": "Hartwell Rim Elevated Perspective across Jezero",
+        "source": "NASA / JPL-Caltech"
       },
       {
-        "url": "data/landmarks/hartwell_crater_1.png",
-        "title": "MRO CTX 5M Regional Context",
-        "source": "NASA / Caltech MRO CTX"
-      },
-      {
-        "url": "data/landmarks/hartwell_crater_2.png",
-        "title": "Continuous Ejecta Blanket Detail",
-        "source": "USGS SIM 3464 CTX Ortho"
-      },
-      {
-        "url": "data/landmarks/hartwell_crater_3.png",
-        "title": "HRSC Topographic Relief (DEM)",
-        "source": "ESA Mars Express HRSC"
-      },
-      {
-        "url": "data/landmarks/hartwell_crater_4.png",
-        "title": "Hypsometric Elevation DTM",
-        "source": "USGS SIM 3464 DTM"
-      },
-      {
-        "url": "data/landmarks/hartwell_crater_5.png",
-        "title": "THEMIS Nighttime Thermal IR",
-        "source": "NASA Mars Odyssey THEMIS"
+        "url": "/data/landmarks/belva_panorama.jpg",
+        "title": "Comparative Impact Morphology & Terraced Breccia",
+        "source": "NASA / JPL-Caltech"
       }
     ],
     "soil_regolith": {
@@ -693,7 +638,7 @@
       "mineralogy": "Plagioclase, Augite, Olivine, secondary carbonate rinds",
       "organics_biosignatures": "Sterilized impact glass and basaltic floor regolith",
       "perchlorate_content": "0.31 wt% (Moderate)",
-      "grain_size": "Mixed coarse gravels (2–10 mm) and basaltic sand matrix",
+      "grain_size": "Mixed coarse gravels (2\u201310 mm) and basaltic sand matrix",
       "soil_bearing_capacity": "195 kPa (High bearing firmness / Minimal sinkage)"
     },
     "rover_samples": [

@@ -147,6 +147,14 @@ export default function App() {
   const [activeLandmark, setActiveLandmark] = useState(null);
   const [selectedQuickLandmarkId, setSelectedQuickLandmarkId] = useState('landing_site');
 
+  const handleCycleBasemap = () => {
+    setBasemap((current) => {
+      const idx = BASEMAP_OPTIONS.findIndex((m) => m.id === current);
+      const nextIdx = (idx + 1) % BASEMAP_OPTIONS.length;
+      return BASEMAP_OPTIONS[nextIdx].id;
+    });
+  };
+
   // Cartographic Layer Toggles
   const [layers, setLayers] = useState({
     hirise: false,
@@ -985,13 +993,13 @@ export default function App() {
         id: 'range-fault',
         type: 'warning',
         title: 'RESERVE FAULT WARNING',
-        message: 'Projected reserves below safe threshold. Starting monitored EVA walk.',
+        message: `Projected reserves below safe threshold. Starting monitored ${loadoutKey === 'rover' ? 'rover drive' : 'EVA walk'}.`,
       });
     } else {
       showToast({
         id: 'nav-started',
         type: 'info',
-        title: 'EVA TRAVERSE INITIATED',
+        title: `${loadoutKey === 'rover' ? 'ROVER DRIVE INITIATED' : 'EVA TRAVERSE INITIATED'}`,
         message: `${startPOI.name} -> ${endPOI.name} (${routeResult.distKm} km) // HDG ${liveNavState?.heading || 0} deg`,
       });
     }
@@ -1735,19 +1743,24 @@ export default function App() {
 
           {/* GOOGLE MAPS-STYLE BOTTOM-LEFT BASEMAP THUMBNAIL + MAP LAYERS POPOVER */}
           <div className="absolute bottom-3 left-2.5 z-[460] flex items-end gap-2">
-            {/* 1-Tap Quick Switch Card (Satellite <-> Terrain) */}
+            {/* 1-Tap Quick Switch Card (Cycles CTX / HRSC / DTM / THEMIS / VECTOR) */}
             <button
               type="button"
-              onClick={() => setBasemap((b) => (b === 'satellite' ? 'terrain' : 'satellite'))}
-              className="glove-btn min-h-[54px] min-w-[116px] bg-[#13161c]/95 hover:bg-[#191d24] border border-[#353c4a] rounded-[4px] p-2 flex items-center gap-2 cursor-pointer text-left"
-              title="Toggle Satellite vs Terrain Basemap"
+              onClick={handleCycleBasemap}
+              className="glove-btn min-h-[54px] min-w-[124px] bg-[#13161c]/95 hover:bg-[#191d24] border border-[#353c4a] rounded-[4px] p-2 flex items-center gap-2 cursor-pointer text-left"
+              title={`Basemap: ${BASEMAP_OPTIONS.find((m) => m.id === basemap)?.label || 'CTX SATELLITE'} (Tap to cycle all 5 modes)`}
             >
               <div className="h-9 w-9 rounded-[4px] border border-[#4f5767] bg-[#191d24] flex items-center justify-center shrink-0">
-                <MapIcon className="h-4 w-4 text-[#edf0f5]" />
+                <MapIcon className="h-4 w-4 text-[#22c55e]" />
               </div>
               <div className="font-mono leading-tight">
-                <div className="text-[9px] text-[#656d7d] uppercase">BASEMAP</div>
-                <div className="text-[11px] font-bold text-[#edf0f5] uppercase">
+                <div className="text-[9px] text-[#656d7d] uppercase flex items-center gap-1">
+                  <span>BASEMAP</span>
+                  <span className="text-[8px] text-[#8590a2]">
+                    {BASEMAP_OPTIONS.findIndex((m) => m.id === basemap) + 1}/{BASEMAP_OPTIONS.length}
+                  </span>
+                </div>
+                <div className="text-[11px] font-bold text-[#edf0f5] uppercase truncate max-w-[70px]">
                   {BASEMAP_OPTIONS.find((m) => m.id === basemap)?.short || 'SAT'}
                 </div>
               </div>
@@ -2220,16 +2233,21 @@ export default function App() {
               <div className="hidden md:flex absolute bottom-3 left-3 z-[460] items-end gap-2">
                 <button
                   type="button"
-                  onClick={() => setBasemap((b) => (b === 'satellite' ? 'terrain' : 'satellite'))}
-                  className="glove-btn min-h-[56px] min-w-[116px] bg-[#13161c]/95 hover:bg-[#191d24] border border-[#353c4a] rounded-[6px] p-2 flex items-center gap-2 cursor-pointer text-left"
-                  title="Quick Switch Satellite <-> Terrain"
+                  onClick={handleCycleBasemap}
+                  className="glove-btn min-h-[56px] min-w-[124px] bg-[#13161c]/95 hover:bg-[#191d24] border border-[#353c4a] rounded-[6px] p-2 flex items-center gap-2 cursor-pointer text-left"
+                  title={`Basemap: ${BASEMAP_OPTIONS.find((m) => m.id === basemap)?.label || 'CTX SATELLITE'} (Tap to cycle all 5 modes)`}
                 >
                   <div className="h-9 w-9 rounded-[4px] border border-[#4f5767] bg-[#191d24] flex items-center justify-center shrink-0">
-                    <MapIcon className="h-4 w-4 text-[#edf0f5]" />
+                    <MapIcon className="h-4 w-4 text-[#22c55e]" />
                   </div>
                   <div className="font-mono leading-tight">
-                    <div className="text-[9px] text-[#656d7d] uppercase">BASEMAP</div>
-                    <div className="text-[11px] font-bold text-[#edf0f5] uppercase">
+                    <div className="text-[9px] text-[#656d7d] uppercase flex items-center gap-1">
+                      <span>BASEMAP</span>
+                      <span className="text-[8px] text-[#8590a2]">
+                        {BASEMAP_OPTIONS.findIndex((m) => m.id === basemap) + 1}/{BASEMAP_OPTIONS.length}
+                      </span>
+                    </div>
+                    <div className="text-[11px] font-bold text-[#edf0f5] uppercase truncate max-w-[70px]">
                       {BASEMAP_OPTIONS.find((m) => m.id === basemap)?.short || 'SAT'}
                     </div>
                   </div>
@@ -2872,21 +2890,21 @@ export default function App() {
               <div className="absolute bottom-3 left-3 right-3 z-[450] flex flex-col items-center pointer-events-none">
                 <div className="pointer-events-auto w-full max-w-xl rounded-[6px] bg-[#13161c]/95 border border-[#353c4a] overflow-hidden">
                   {navMode === 'navigating' ? (
-                    /* STATE 1: ACTIVE EVA WALK CONTROLS */
+                    /* STATE 1: ACTIVE EVA WALK / ROVER DRIVE CONTROLS */
                     tripPanelCollapsed ? (
                       <div className="p-2 sm:p-2.5 flex items-center justify-between gap-2.5 bg-[#13161c]">
                         <button
                           type="button"
                           onClick={() => setTripPanelCollapsed(false)}
                           className="flex-1 min-w-0 text-left flex items-center gap-2.5 p-1 rounded-[4px] hover:bg-[#191d24] transition-colors cursor-pointer group"
-                          title="Expand Active Walk Panel"
+                          title={loadoutKey === 'rover' ? 'Expand Active Drive Panel' : 'Expand Active Walk Panel'}
                         >
                           <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[4px] bg-[#16a34a] text-[#0b0d11]">
                             <Navigation className="h-5 w-5" />
                           </span>
                           <div className="min-w-0">
                             <div className="text-xs font-bold text-[#edf0f5] truncate flex items-center gap-1.5">
-                              <span>EVA WALK IN PROGRESS</span>
+                              <span>{loadoutKey === 'rover' ? 'ROVER DRIVE IN PROGRESS' : 'EVA WALK IN PROGRESS'}</span>
                               <span className="text-[#22c55e]">•</span>
                               <span className="text-[#22c55e] font-mono">{liveNavState?.estTimeRemainingMin}m left</span>
                             </div>
@@ -2912,7 +2930,7 @@ export default function App() {
                             type="button"
                             onClick={() => setTripPanelCollapsed(false)}
                             className="glove-btn h-[44px] w-[44px] rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#edf0f5] flex items-center justify-center cursor-pointer"
-                            title="Expand Active Walk Panel"
+                            title={loadoutKey === 'rover' ? 'Expand Active Drive Panel' : 'Expand Active Walk Panel'}
                           >
                             <ChevronUp className="h-5 w-5 text-[#22c55e]" />
                           </button>
@@ -2922,13 +2940,13 @@ export default function App() {
                       <div className="p-3.5 space-y-3">
                         <div className="flex items-center justify-between pb-1 border-b border-[#242933]">
                           <span className="text-[10px] font-mono font-bold uppercase text-[#22c55e] flex items-center gap-1.5">
-                            <Navigation className="h-3.5 w-3.5" /> Active EVA Traversal
+                            <Navigation className="h-3.5 w-3.5" /> Active {loadoutKey === 'rover' ? 'Rover Traversal' : 'EVA Traversal'}
                           </span>
                           <button
                             type="button"
                             onClick={() => setTripPanelCollapsed(true)}
                             className="glove-btn px-2.5 py-1 rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#9da5b4] hover:text-[#edf0f5] font-mono text-[10px] font-bold uppercase flex items-center gap-1 cursor-pointer"
-                            title="Shrink Active Walk Panel"
+                            title={loadoutKey === 'rover' ? 'Shrink Active Drive Panel' : 'Shrink Active Walk Panel'}
                           >
                             <span>Shrink</span>
                             <ChevronDown className="h-3.5 w-3.5" />
@@ -2993,7 +3011,7 @@ export default function App() {
                           }`}
                         >
                           {navPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-                          <span>{navPlaying ? 'Pause Walk' : 'Resume Walk'}</span>
+                          <span>{navPlaying ? (loadoutKey === 'rover' ? 'Pause Drive' : 'Pause Walk') : (loadoutKey === 'rover' ? 'Resume Drive' : 'Resume Walk')}</span>
                         </button>
 
                         <button
@@ -3306,7 +3324,7 @@ export default function App() {
                           <div className="text-xs font-mono text-[#9da5b4] mt-0.5 flex items-center gap-2">
                             <span className="text-[#edf0f5] font-bold">{routeResult.distKm} km</span>
                             <span>|</span>
-                            <span>{routeResult.durationMin} min walk</span>
+                            <span>{routeResult.durationMin} min {loadoutKey === 'rover' ? 'drive' : 'walk'}</span>
                             <span>|</span>
                             <span>Elev {endPOI.elev} m</span>
                           </div>
@@ -3716,7 +3734,7 @@ export default function App() {
                     className="glove-btn flex-1 min-h-[44px] px-3 rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] text-[#0b0d11] font-mono text-xs font-bold uppercase flex items-center justify-center gap-2 border border-[#22c55e] cursor-pointer"
                   >
                     <Play className="h-4 w-4" />
-                    <span>{liveNavState?.idx > 0 && !liveNavState?.arrived ? 'RESUME EVA' : 'START EVA WALK'}</span>
+                    <span>{liveNavState?.idx > 0 && !liveNavState?.arrived ? (loadoutKey === 'rover' ? 'RESUME DRIVE' : 'RESUME EVA') : (loadoutKey === 'rover' ? 'START ROVER DRIVE' : 'START EVA WALK')}</span>
                   </button>
                 ) : (
                   <button
@@ -3725,7 +3743,7 @@ export default function App() {
                     className="glove-btn flex-1 min-h-[44px] px-3 rounded-[4px] bg-[#2c323f] hover:bg-[#353c4a] text-[#edf0f5] font-mono text-xs font-bold uppercase flex items-center justify-center gap-2 border border-[#4f5767] cursor-pointer"
                   >
                     <Pause className="h-4 w-4" />
-                    <span>PAUSE EVA</span>
+                    <span>{loadoutKey === 'rover' ? 'PAUSE DRIVE' : 'PAUSE EVA'}</span>
                   </button>
                 )}
 
