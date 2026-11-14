@@ -278,17 +278,25 @@ class DalilMarsEngine:
             raise FileNotFoundError(f"Missing Stage 6 heuristics at {mat_path}. Run ./preprocess 6 first!")
         self.all_pairs_4d = np.load(mat_path)
 
-        # 5. Virtual Base Charging Stations
+        # 5. Virtual Base Charging Stations & Pressurized Shelters
         haz_path = os.path.join(BASE_DIR, "src", "data", "jezero_science_hazards.json")
         self.charging_stations = []
+        self.shelters = []
         if os.path.exists(haz_path):
             with open(haz_path, "r") as f:
                 data = json.load(f)
-                self.charging_stations = [p for p in data.get("sciencePOIs", []) if p.get("isChargingStation")]
+                pois = data.get("sciencePOIs", [])
+                self.charging_stations = [p for p in pois if p.get("isChargingStation")]
+                self.shelters = [p for p in pois if p.get("isShelter")]
+
+        if not self.shelters:
+            self.shelters = [
+                {"name": "Hab Alpha (Octavia E. Butler Landing)", "lat": 18.444627, "lon": 77.450886, "isShelter": True}
+            ]
 
         self.intra_bound = self.M * np.sqrt(2.0) * self.pixel_res * 1.0
         elapsed = time.time() - t0
-        sys.stderr.write(f"Engine ready in {elapsed:.2f}s! ({H}x{W} fine nodes, {self.cH}x{self.cW} macro-cells)\n")
+        sys.stderr.write(f"Engine ready in {elapsed:.2f}s! ({H}x{W} fine nodes, {self.cH}x{self.cW} macro-cells, {len(self.shelters)} shelters)\n")
 
     def latlon_to_grid(self, lat: float, lon: float) -> tuple[int, int]:
         x = self.mars_radius * np.radians(lon - 180.0)
@@ -852,6 +860,70 @@ class DalilMarsEngine:
                 full_telemetry.append(item)
             dist_offset += l["dist_km"]
 
+        # 5. Dynamic Walkback Horizon & Point of No Return Analysis (Apollo/Artemis EVA Rule #1)
+        pnr_dist_km = None
+        min_walkback_batt_margin = 100.0
+        min_walkback_o2_margin = 100.0
+        primary_abort_shelter = None
+
+        for item in full_telemetry:
+            trav_frac = item["dist_km"] / max(0.001, total_dist_km)
+            batt_spent = trav_frac * total_batt_used
+            o2_spent = trav_frac * total_o2_used
+
+            current_batt = initial_battery_pct - batt_spent
+            current_o2 = initial_o2_pct - o2_spent
+
+            pr_r, pr_c = self.latlon_to_grid(item["lat"], item["lon"])
+            pI = min(max(0, pr_r // self.M), self.cH - 1)
+            pJ = min(max(0, pr_c // self.M), self.cW - 1)
+
+            best_sh = None
+            min_sh_dist = np.inf
+            for sh in self.shelters:
+                sr, sc = self.latlon_to_grid(sh["lat"], sh["lon"])
+                sI = min(max(0, sr // self.M), self.cH - 1)
+                sJ = min(max(0, sc // self.M), self.cW - 1)
+                d_m = float(self.all_pairs_4d[pI, pJ, sI, sJ])
+                if not np.isinf(d_m) and d_m < min_sh_dist:
+                    min_sh_dist = d_m
+                    best_sh = sh
+
+            if not best_sh and self.shelters:
+                best_sh = self.shelters[0]
+                min_sh_dist = np.hypot(pr_r - self.latlon_to_grid(best_sh["lat"], best_sh["lon"])[0],
+                                       pr_c - self.latlon_to_grid(best_sh["lat"], best_sh["lon"])[1]) * self.pixel_res
+
+            abort_dist_km = min_sh_dist / 1000.0 if not np.isinf(min_sh_dist) else 0.0
+            abort_time_hours = abort_dist_km / max(0.1, mode_prof["speedKmh"])
+            abort_time_min = round(abort_time_hours * 60.0)
+
+            abort_batt_cost = abort_dist_km * mode_prof.get("batteryDrainPerKm", 10.0)
+            abort_o2_liters = abort_time_min * mode_prof.get("o2RateLpm", 0.85) * 1.15
+            abort_o2_pct = (abort_o2_liters / SUIT_O2_CAPACITY_L) * 100.0
+
+            margin_batt = float(round(current_batt - abort_batt_cost, 1))
+            margin_o2 = float(round(current_o2 - abort_o2_pct, 1))
+            is_beyond_pnr = bool((margin_batt < SAFE_RESERVE_PCT) or (margin_o2 < SAFE_RESERVE_PCT))
+
+            item["nearest_shelter"] = str(best_sh["name"]) if best_sh else "Hab Alpha"
+            item["abort_dist_km"] = float(round(abort_dist_km, 2))
+            item["abort_time_min"] = int(abort_time_min)
+            item["walkback_battery_margin_pct"] = margin_batt
+            item["walkback_o2_margin_pct"] = margin_o2
+            item["is_beyond_horizon"] = is_beyond_pnr
+
+            if is_beyond_pnr and pnr_dist_km is None:
+                pnr_dist_km = float(item["dist_km"])
+
+            min_walkback_batt_margin = min(min_walkback_batt_margin, margin_batt)
+            min_walkback_o2_margin = min(min_walkback_o2_margin, margin_o2)
+            if primary_abort_shelter is None and best_sh:
+                primary_abort_shelter = str(best_sh["name"])
+
+        safe_horizon = bool(pnr_dist_km is None)
+        walkback_status = "SAFE_HORIZON_MAINTAINED" if safe_horizon else f"POINT_OF_NO_RETURN_EXCEEDED_AT_KM_{pnr_dist_km}"
+
         # Construct GeoJSON FeatureCollection
         features = [
             {
@@ -949,6 +1021,14 @@ class DalilMarsEngine:
             "shadow_pct": round(avg_shadow, 1),
             "pitstop_occurred": charging_station is not None,
             "charging_station_name": charging_station["name"] if charging_station else None,
+            "walkback_horizon": {
+                "safe_horizon_maintained": safe_horizon,
+                "point_of_no_return_km": pnr_dist_km,
+                "minimum_walkback_battery_margin_pct": round(min_walkback_batt_margin, 1),
+                "minimum_walkback_o2_margin_pct": round(min_walkback_o2_margin, 1),
+                "primary_abort_shelter": primary_abort_shelter,
+                "status": walkback_status,
+            },
         }
 
         nav_steps = self._generate_navigation_steps(
@@ -1045,6 +1125,51 @@ class DalilMarsEngine:
 
         return steps
 
+    def plan_emergency_abort(
+        self,
+        current_location,
+        mode: str = "on_foot",
+        lst_hours: float = 14.0,
+        initial_battery_pct: float = 100.0,
+        initial_o2_pct: float = 100.0,
+        weather: str = "nominal",
+        **kwargs,
+    ) -> dict:
+        """Calculates immediate, highest-priority emergency retreat route to the closest habitat or storm shelter."""
+        r_now, c_now, lat_now, lon_now = self._resolve_coords(current_location)
+        I_now = min(max(0, r_now // self.M), self.cH - 1)
+        J_now = min(max(0, c_now // self.M), self.cW - 1)
+
+        best_shelter = None
+        min_dist_m = np.inf
+        for sh in self.shelters:
+            sr, sc = self.latlon_to_grid(sh["lat"], sh["lon"])
+            sI = min(max(0, sr // self.M), self.cH - 1)
+            sJ = min(max(0, sc // self.M), self.cW - 1)
+            d = float(self.all_pairs_4d[I_now, J_now, sI, sJ])
+            if not np.isinf(d) and d < min_dist_m:
+                min_dist_m = d
+                best_shelter = sh
+
+        if not best_shelter and self.shelters:
+            best_shelter = self.shelters[0]
+
+        route_res = self.plan_route(
+            start=(lat_now, lon_now),
+            destination=(best_shelter["lat"], best_shelter["lon"]),
+            mode=mode,
+            lst_hours=lst_hours,
+            initial_battery_pct=initial_battery_pct,
+            initial_o2_pct=initial_o2_pct,
+            weather=weather,
+            allow_charging_pitstop=False,
+            **kwargs,
+        )
+
+        route_res["status"] = "EMERGENCY_ABORT_ACTIVE"
+        route_res["abort_target_shelter"] = best_shelter
+        return route_res
+
     @staticmethod
     def _compass_bearing(lat1, lon1, lat2, lon2):
         dLon = np.radians(lon2 - lon1)
@@ -1122,6 +1247,37 @@ def plan_route(
 # Method aliases
 route = plan_route
 plan_mission_route = plan_route
+
+
+def plan_emergency_abort(
+    current_location,
+    mode: str = "on_foot",
+    lst: float | None = None,
+    lst_hours: float = 14.0,
+    initial_battery: float | None = None,
+    initial_battery_pct: float = 100.0,
+    initial_o2: float | None = None,
+    initial_o2_pct: float = 100.0,
+    weather: str = "nominal",
+    **kwargs,
+) -> dict:
+    """Calculates immediate, highest-priority emergency retreat route to the closest habitat or storm shelter."""
+    lst_val = lst if lst is not None else lst_hours
+    batt_val = initial_battery if initial_battery is not None else initial_battery_pct
+    o2_val = initial_o2 if initial_o2 is not None else initial_o2_pct
+
+    return get_engine().plan_emergency_abort(
+        current_location=current_location,
+        mode=mode,
+        lst_hours=lst_val,
+        initial_battery_pct=batt_val,
+        initial_o2_pct=o2_val,
+        weather=weather,
+        **kwargs,
+    )
+
+
+abort = plan_emergency_abort
 
 
 def get_waypoints() -> list[dict]:
@@ -1267,6 +1423,7 @@ def main():
     parser.add_argument("--demo", action="store_true", help="Run 3 standard NASA mission test scenarios.")
     parser.add_argument("--start", nargs=2, type=float, metavar=("LAT", "LON"), help="Start coordinate (lat, lon).")
     parser.add_argument("--end", nargs=2, type=float, metavar=("LAT", "LON"), help="Destination coordinate (lat, lon).")
+    parser.add_argument("--abort", nargs=2, type=float, metavar=("LAT", "LON"), help="Emergency retreat coordinates: LAT LON (Apollo/Artemis Rule #1).")
     parser.add_argument("--mode", choices=["on_foot", "rover"], default="on_foot", help="Transportation mode.")
     parser.add_argument("--lst", type=float, default=14.0, help="Martian Local Solar Time (hours: 0.0 to 24.0).")
     parser.add_argument("--weather", choices=["nominal", "dust_storm", "solar_storm"], default="nominal", help="Weather state.")
@@ -1287,9 +1444,9 @@ def main():
         print(json.dumps(get_waypoints(), indent=2))
         return
 
-    engine = DalilMarsEngine()
+    engine = get_engine()
 
-    if args.demo or (not args.start and not args.end):
+    if args.demo or (not args.start and not args.end and not args.abort):
         print("\n" + "=" * 65)
         print(" RUNNING 3 DALIL-MARS MISSION TEST SCENARIOS")
         print("=" * 65)
@@ -1376,7 +1533,41 @@ def main():
             print(f"  Surface Lighting:    {s['sunlit_pct']}% sunlit, {s['shadow_pct']}% shadowed (tau={sol['optical_depth_tau']})")
             if s["pitstop_occurred"]:
                 print(f"  Charging Pit-Stop:   Docked at {s['charging_station_name']}")
+            if "walkback_horizon" in s:
+                wb = s["walkback_horizon"]
+                print(f"  Walkback Horizon:    {wb['status']} (Min Batt Margin: {wb['minimum_walkback_battery_margin_pct']}%, Min O2 Margin: {wb['minimum_walkback_o2_margin_pct']}%)")
+                if wb.get("primary_abort_shelter"):
+                    print(f"  Abort Shelter:       {wb['primary_abort_shelter']}")
             print("\n  Turn-by-turn Navigation:")
+            for step in res["navigation_steps"]:
+                print(f"    {step['step']}. {step['instruction']} - {step['detail']}")
+            print("=" * 65 + "\n")
+
+    elif args.abort:
+        res = plan_emergency_abort(
+            current_location=tuple(args.abort),
+            mode=args.mode,
+            lst_hours=args.lst,
+            weather=args.weather,
+            initial_battery_pct=args.battery,
+        )
+
+        if args.json:
+            print(json.dumps(res, indent=2))
+        else:
+            target = res.get("abort_target_shelter", {})
+            s = res["summary"]
+            print("\n" + "=" * 65)
+            print(" [EMERGENCY ABORT PROTOCOL ACTIVATED - APOLLO/ARTEMIS EVA RULE #1]")
+            print("=" * 65)
+            print(f"  Target Shelter:      {target.get('name', 'Nearest Shelter')}")
+            print(f"  Shelter Location:    {target.get('lat', 0.0):.6f}° N, {target.get('lon', 0.0):.6f}° E")
+            print(f"  Retreat Distance:    {s['total_distance_km']} km")
+            print(f"  Estimated Ingress:   {s['duration_formatted']} ({s['duration_min']} min)")
+            print(f"  Battery on Arrival:  {s['battery_remaining_pct']}% (Consumes {s['battery_used_pct']}%)")
+            print(f"  Oxygen on Arrival:   {s['o2_remaining_pct']}% (Consumes {s['o2_used_pct']}%)")
+            print(f"  Max Slope on Route:  {s['max_slope_deg']}° (Rating: {s['slope_safety_rating']})")
+            print("\n  Emergency Navigation Vector:")
             for step in res["navigation_steps"]:
                 print(f"    {step['step']}. {step['instruction']} - {step['detail']}")
             print("=" * 65 + "\n")
