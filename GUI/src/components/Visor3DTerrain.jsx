@@ -722,6 +722,9 @@ export default function Visor3DTerrain({
       markerAnchors,
       targetCamPos: new THREE.Vector3(),
       hasCamPos: false,
+      targetCamYaw: 0,
+      targetCamPitch: 0,
+      hasCamRot: false,
       lastProjPos: new THREE.Vector3(),
       lastProjYaw: null,
       lastProjPitch: null,
@@ -748,8 +751,16 @@ export default function Visor3DTerrain({
 
       const refs = sceneRefs.current;
       if (refs.hasCamPos) {
-        const alpha = 1 - Math.exp(-14 * dt);
-        camera.position.lerp(refs.targetCamPos, alpha);
+        const posAlpha = 1 - Math.exp(-6 * dt);
+        camera.position.lerp(refs.targetCamPos, posAlpha);
+      }
+      if (refs.hasCamRot) {
+        const rotAlpha = 1 - Math.exp(-7 * dt);
+        let yawDiff = refs.targetCamYaw - camera.rotation.y;
+        while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
+        while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
+        camera.rotation.y += yawDiff * rotAlpha;
+        camera.rotation.x += (refs.targetCamPitch - camera.rotation.x) * rotAlpha;
       }
       camera.updateMatrixWorld();
 
@@ -977,10 +988,17 @@ export default function Visor3DTerrain({
       refs.hasCamPos = true;
     }
 
-    camera.rotation.order = 'YXZ';
-    camera.rotation.y = -THREE.MathUtils.degToRad(viewHeading);
-    camera.rotation.x = THREE.MathUtils.degToRad(lookPitchDeg);
-    camera.rotation.z = 0;
+    const targetYaw = -THREE.MathUtils.degToRad(viewHeading);
+    const targetPitch = THREE.MathUtils.degToRad(lookPitchDeg);
+    refs.targetCamYaw = targetYaw;
+    refs.targetCamPitch = targetPitch;
+    if (!refs.hasCamRot) {
+      camera.rotation.order = 'YXZ';
+      camera.rotation.y = targetYaw;
+      camera.rotation.x = targetPitch;
+      camera.rotation.z = 0;
+      refs.hasCamRot = true;
+    }
     refs.onProjectedScreenMarkers = onProjectedScreenMarkers;
   }, [demData, currentLatLon, viewHeading, lookPitchDeg, onGroundElevation, onProjectedScreenMarkers]);
 

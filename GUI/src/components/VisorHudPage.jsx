@@ -44,7 +44,7 @@ const VISOR_FOV_DEG = 110; // ±55° horizontal field of view
 const HALF_FOV = VISOR_FOV_DEG / 2;
 const MARS_RADIUS_M = 3389500;
 const STEP_DISTANCE_M = 20;
-const WALK_SPEED_MPS = 42;
+const WALK_SPEED_MPS = 68;
 
 const CARDINALS = [
   { deg: 0, label: 'N' },
@@ -216,6 +216,32 @@ export default function VisorHudPage() {
 
   const bodyHeading = liveNavState?.heading ?? 0;
   const viewHeading = normalizeHeading(bodyHeading + lookYawOffset);
+
+  // Auto-center head-look yaw when automatic Walk mode starts so camera faces direction of travel
+  const prevNavPlayingRef = useRef(false);
+  useEffect(() => {
+    if (navPlaying && !prevNavPlayingRef.current) {
+      setLookYawOffset(0);
+    }
+    prevNavPlayingRef.current = navPlaying;
+  }, [navPlaying]);
+
+  // Sync camera gaze orientation to the 2D tactical map heading beam while in manual mode
+  const lastLookSyncRef = useRef(0);
+  useEffect(() => {
+    if (navPlaying) return;
+    const now = performance.now();
+    if (now - lastLookSyncRef.current >= 50) {
+      lastLookSyncRef.current = now;
+      sendVisorCommand('MANUAL_LOOK', { viewHeading });
+    } else {
+      const timer = setTimeout(() => {
+        lastLookSyncRef.current = performance.now();
+        sendVisorCommand('MANUAL_LOOK', { viewHeading });
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [viewHeading, navPlaying]);
   const [curLat, curLon] = liveNavState?.currentLatLon ?? [18.444627, 77.450886];
   const deviation = liveNavState?.routeDeviation;
   const isOffRoute = Boolean(deviation?.isOffRoute);
@@ -251,6 +277,7 @@ export default function VisorHudPage() {
         lat: nextLat,
         lon: nextLon,
         heading: bodyHeading,
+        viewHeading,
       });
     },
     [curLat, curLon, viewHeading, bodyHeading]
@@ -266,8 +293,8 @@ export default function VisorHudPage() {
     let lastTime = performance.now();
     let lastSyncTs = 0;
 
-    const flushSync = (lat, lon, heading) => {
-      sendVisorCommand('MANUAL_MOVE', { lat, lon, heading });
+    const flushSync = (lat, lon, heading, viewHdg) => {
+      sendVisorCommand('MANUAL_MOVE', { lat, lon, heading, viewHeading: viewHdg });
       lastSyncTs = performance.now();
     };
 
@@ -301,7 +328,7 @@ export default function VisorHudPage() {
           }));
 
           if (now - lastSyncTs >= 60) {
-            flushSync(nextLat, nextLon, bh);
+            flushSync(nextLat, nextLon, bh, vh);
           }
         }
       }
@@ -340,16 +367,18 @@ export default function VisorHudPage() {
       const key = e.key.toLowerCase();
       if (keysPressedRef.current.has(key)) {
         keysPressedRef.current.delete(key);
-        const { curLat: lat, curLon: lon, bodyHeading: bh } = moveStateRef.current;
-        flushSync(lat, lon, bh);
+        const { curLat: lat, curLon: lon, bodyHeading: bh, viewHeading: vh } =
+          moveStateRef.current;
+        flushSync(lat, lon, bh, vh);
       }
     };
 
     const onBlur = () => {
       if (keysPressedRef.current.size > 0) {
         keysPressedRef.current.clear();
-        const { curLat: lat, curLon: lon, bodyHeading: bh } = moveStateRef.current;
-        flushSync(lat, lon, bh);
+        const { curLat: lat, curLon: lon, bodyHeading: bh, viewHeading: vh } =
+          moveStateRef.current;
+        flushSync(lat, lon, bh, vh);
       }
     };
 

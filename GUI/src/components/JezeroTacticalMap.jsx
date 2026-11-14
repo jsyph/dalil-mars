@@ -1131,7 +1131,15 @@ export default function JezeroTacticalMap({
       return;
     }
 
-    const { currentLatLon, heading = 0, currentBattery = 85, isRecharging, active } = liveNavState;
+    const {
+      currentLatLon,
+      heading = 0,
+      viewHeading,
+      currentBattery = 85,
+      isRecharging,
+      active,
+    } = liveNavState;
+    const displayHeading = viewHeading ?? heading;
     const arrowColor = isRecharging
       ? APP_THEME.colors.ok
       : currentBattery < 20
@@ -1165,9 +1173,9 @@ export default function JezeroTacticalMap({
         ">${isRecharging ? 'CHG 100%' : `BAT ${Math.round(currentBattery)}%`}</div>
 
         <div class="nav-pulse-ring"></div>
-        <div class="nav-heading-beam" style="transform: translateX(-50%) rotate(${heading}deg); transform-origin: bottom center;"></div>
+        <div class="nav-heading-beam" style="transform: translateX(-50%) rotate(${displayHeading}deg); transform-origin: bottom center;"></div>
 
-        <div style="transform: rotate(${heading}deg); transform-origin: center center; display: flex; align-items: center; justify-content: center;">
+        <div style="transform: rotate(${displayHeading}deg); transform-origin: center center; display: flex; align-items: center; justify-content: center;">
           <svg viewBox="0 0 24 24" class="nav-chevron-arrow">
             <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" fill="${arrowColor}" stroke="#0b0d11" stroke-width="2" stroke-linejoin="round"/>
           </svg>
