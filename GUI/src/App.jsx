@@ -831,29 +831,31 @@ export default function App() {
       const { leg1Stats, leg2Stats } = routeResult.chargingStop;
       if (idx <= pitIdx && !hasCompletedPitStop && !isRecharging) {
         const leg1Progress = pitIdx > 0 ? idx / pitIdx : 1;
-        currentBattery = startBatteryPct - leg1Stats.batteryPercentUsed * leg1Progress;
-        currentO2 = startO2Pct - leg1Stats.o2PercentUsed * leg1Progress;
-        distCoveredKm = leg1Stats.distKm * leg1Progress;
+        currentBattery = startBatteryPct - (leg1Stats?.batteryPercentUsed ?? 0) * leg1Progress;
+        currentO2 = startO2Pct - (leg1Stats?.o2PercentUsed ?? 0) * leg1Progress;
+        distCoveredKm = (leg1Stats?.distKm ?? 0) * leg1Progress;
       } else if (isRecharging) {
         currentBattery = 100;
         currentO2 = 100;
-        distCoveredKm = leg1Stats.distKm;
+        distCoveredKm = leg1Stats?.distKm ?? 0;
       } else {
         const leg2Total = coords.length - 1 - pitIdx;
         const leg2Progress = leg2Total > 0 ? (idx - pitIdx) / leg2Total : 1;
-        currentBattery = 100 - leg2Stats.batteryPercentUsed * leg2Progress;
-        currentO2 = 100 - leg2Stats.o2PercentUsed * leg2Progress;
-        distCoveredKm = leg1Stats.distKm + leg2Stats.distKm * leg2Progress;
+        currentBattery = 100 - (leg2Stats?.batteryPercentUsed ?? 0) * leg2Progress;
+        currentO2 = 100 - (leg2Stats?.o2PercentUsed ?? 0) * leg2Progress;
+        distCoveredKm = (leg1Stats?.distKm ?? 0) + (leg2Stats?.distKm ?? 0) * leg2Progress;
       }
     } else {
       const progress = coords.length > 1 ? idx / (coords.length - 1) : 1;
-      currentBattery = startBatteryPct - routeResult.batteryUsedTotalPct * progress;
+      currentBattery = startBatteryPct - (routeResult.batteryUsedTotalPct ?? 0) * progress;
       currentO2 = startO2Pct - (routeResult.suitO2TankPercent || 0) * progress;
-      distCoveredKm = routeResult.distKm * progress;
+      distCoveredKm = (routeResult.distKm ?? 0) * progress;
     }
 
-    const effectiveBat = manualPosOverride?.batteryPct ?? currentBattery;
-    const effectiveO2 = manualPosOverride?.o2Pct ?? currentO2;
+    const effectiveBatRaw = manualPosOverride?.batteryPct ?? currentBattery;
+    const effectiveO2Raw = manualPosOverride?.o2Pct ?? currentO2;
+    const effectiveBat = Number.isFinite(effectiveBatRaw) ? effectiveBatRaw : startBatteryPct;
+    const effectiveO2 = Number.isFinite(effectiveO2Raw) ? effectiveO2Raw : startO2Pct;
     const effectiveDistCoveredKm = manualPosOverride?.distMovedKm ?? distCoveredKm;
     const effectiveIsRecharging = manualPosOverride
       ? Boolean(manualPosOverride.isRecharging)
@@ -1421,9 +1423,13 @@ export default function App() {
         setManualPosOverride((prev) => {
           const prevLat = prev ? prev.lat : ctx.currentLatLon?.[0] ?? data.lat;
           const prevLon = prev ? prev.lon : ctx.currentLatLon?.[1] ?? data.lon;
-          const prevBat = prev ? prev.batteryPct : ctx.currentBattery;
-          const prevO2 = prev ? prev.o2Pct : ctx.currentO2;
-          const prevDistKm = prev ? prev.distMovedKm : ctx.distCoveredKm;
+          const prevBatRaw = prev ? prev.batteryPct : ctx.currentBattery;
+          const prevO2Raw = prev ? prev.o2Pct : ctx.currentO2;
+          const prevBat = Number.isFinite(prevBatRaw) ? prevBatRaw : 85;
+          const prevO2 = Number.isFinite(prevO2Raw) ? prevO2Raw : 90;
+          const prevDistKm = Number.isFinite(prev ? prev.distMovedKm : ctx.distCoveredKm)
+            ? (prev ? prev.distMovedKm : ctx.distCoveredKm)
+            : 0;
 
           const stepKm = marsDistanceMeters(prevLat, prevLon, data.lat, data.lon) / 1000;
           const dustFactor = ctx.weatherKey === 'dust_storm' ? 1.25 : 1.0;

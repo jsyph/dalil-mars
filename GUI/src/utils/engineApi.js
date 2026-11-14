@@ -129,10 +129,14 @@ export function adaptEngineRouteToGui(
           leg1Stats: {
             distKm: Number((leg1.dist_km ?? 0).toFixed(2)),
             durationMin: leg1.duration_min ?? 0,
+            batteryPercentUsed: Number((leg1.battery_used_pct ?? 0).toFixed(1)),
+            o2PercentUsed: Number((leg1.o2_used_pct ?? 0).toFixed(1)),
           },
           leg2Stats: {
             distKm: Number((leg2.dist_km ?? 0).toFixed(2)),
             durationMin: leg2.duration_min ?? 0,
+            batteryPercentUsed: Number((leg2.battery_used_pct ?? 0).toFixed(1)),
+            o2PercentUsed: Number((leg2.o2_used_pct ?? 0).toFixed(1)),
           },
           arrivalAtStationBattery: Number((startBatteryPct - (leg1.battery_used_pct ?? 0)).toFixed(1)),
           arrivalAtStationO2: Number((startO2Pct - (leg1.o2_used_pct ?? 0)).toFixed(1)),
