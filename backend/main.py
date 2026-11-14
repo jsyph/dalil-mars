@@ -3,20 +3,37 @@ Jezero Crater Mission Planner — FastAPI Backend
 Entry point: uvicorn main:app --reload --port 8000
 """
 import os
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from dotenv import load_dotenv
 
-from routers import layers, elevation, routing, hazards, tiles
+from core.engine import get_engine
+from routers import engine_api, tiles
+
+try:
+    from routers import layers, elevation, hazards
+    _HAS_LEGACY_GIS = True
+except ImportError:
+    _HAS_LEGACY_GIS = False
 
 load_dotenv()
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Warm-load Dalil-Mars Tactical Pathfinding Engine once at startup
+    get_engine()
+    yield
+
 
 app = FastAPI(
     title="Jezero Mission Planner API",
     description="Backend for the Nili/Jezero Crater Mars mission planning web app.",
-    version="1.0.0",
+    version="2.0.0",
+    lifespan=lifespan,
 )
 
 # ── CORS ──────────────────────────────────────────────────────────
@@ -30,11 +47,13 @@ app.add_middleware(
 )
 
 # ── API Routers ───────────────────────────────────────────────────
-app.include_router(layers.router,    prefix="/api/layers",    tags=["Layers"])
-app.include_router(elevation.router, prefix="/api/elevation", tags=["Elevation"])
-app.include_router(routing.router,   prefix="/api/route",     tags=["Routing"])
-app.include_router(hazards.router,   prefix="/api/hazards",   tags=["Hazards"])
-app.include_router(tiles.router,     prefix="/tiles",         tags=["Tiles"])
+app.include_router(engine_api.router, prefix="/api", tags=["Dalil-Mars Engine"])
+app.include_router(tiles.router, prefix="/tiles", tags=["Tiles"])
+
+if _HAS_LEGACY_GIS:
+    app.include_router(layers.router,    prefix="/api/layers",    tags=["Layers"])
+    app.include_router(elevation.router, prefix="/api/elevation", tags=["Elevation"])
+    app.include_router(hazards.router,   prefix="/api/hazards",   tags=["Hazards"])
 
 # ── Ensure directories exist ──────────────────────────────────────
 os.makedirs("data/cache", exist_ok=True)
