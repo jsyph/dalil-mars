@@ -1157,7 +1157,7 @@ export default function App() {
       liveNavState,
       martianEnv,
       currentManeuver,
-      weatherCondition,
+      weatherCondition: weather,
       dustFrontState,
       nearestShelter,
       endPOI,
