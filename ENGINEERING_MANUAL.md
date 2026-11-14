@@ -61,7 +61,7 @@ Unlike generic pathfinders that treat terrain as an abstract cost grid, Dalil-Ma
                                          v
                       [ Pure Python Library API: import engine ]
     +-------------------------------------------------------------------------+
-    | • plan_route()                   • predict() / run_prediction()         |
+    | • plan_route()                   • predict() (Field Telemetry)          |
     | • plan_emergency_abort()         • plan_science_tour()                  |
     | • find_optimal_departure()       • evaluate_rf_comms()                  |
     | • get_waypoints() / get_weather()• get_charging_stations()              |
@@ -455,8 +455,8 @@ print(f"Direct Hab LOS: {comms_result['direct_hab_los']}")
 
 ---
 
-### Portable Field Computer: Real-Time Telemetry & State Prediction (`predict` / `run_prediction`)
-Designed for an astronaut's portable field computer, chest tablet, or spacesuit visor HUD. Rather than assuming nominal 100% life-support reserves, the field application streams live sensor telemetry (battery %, O2 %, biometric heart rate, coordinates) into `engine.predict()` (or `engine.run_prediction()`) at periodic intervals (e.g. every 10–60 seconds). The engine dynamically predicts metabolic burn rates, slope hazards underfoot, solar/shadow status, and instantaneous Apollo/Artemis Rule #1 walkback margins:
+### Portable Field Computer: Real-Time Telemetry & State Prediction (`predict`)
+Designed for an astronaut's portable field computer, chest tablet, or spacesuit visor HUD. Rather than assuming nominal 100% life-support reserves, the field application streams live sensor telemetry (battery %, O2 %, biometric heart rate, coordinates) into `engine.predict()` at periodic intervals (e.g. every 10–60 seconds). The engine dynamically predicts metabolic burn rates, slope hazards underfoot, solar/shadow status, and instantaneous Apollo/Artemis Rule #1 walkback margins:
 
 ```python
 import engine
@@ -711,7 +711,6 @@ def plan_route(
   * `allow_charging_pitstop`: If `True`, permits intermediate waypoint rerouting through charging shelters.
   * `uphill_penalty`: Custom scalar multiplier for gravitational slope resistance.
 * **Returns:** `dict` containing `"status"`, `"mode"`, `"start"`, `"destination"`, `"summary"`, `"geojson"`, and `"intermediate_stops"`.
-* **Aliases:** `route(...)`, `plan_mission_route(...)`.
 
 #### `plan_emergency_abort(...)`
 Calculates an immediate, highest-priority escape route to the nearest safe habitat or storm shelter under Apollo/Artemis Rule #1.
@@ -733,7 +732,6 @@ def plan_emergency_abort(
   * `initial_battery_pct`, `initial_o2_pct`: Current remaining reserves.
   * `weather`: Atmospheric model.
 * **Returns:** `dict` containing `"status"`, `"mode"`, `"current_location"`, `"abort_target_shelter"`, `"summary"`, and `"geojson"`.
-* **Alias:** `abort(...)`.
 
 #### `plan_science_tour(...)`
 Solves a Budgeted Orienteering Problem (TSP with time and energy budget constraints) across cataloged science landmarks.
@@ -760,7 +758,6 @@ def plan_science_tour(
   * `stay_duration_min`: On-site scientific sampling dwell time per visited landmark.
   * `mode`: `"rover"` or `"on_foot"`.
 * **Returns:** `dict` containing `"status"`, `"base_location"`, `"ordered_stops"`, `"total_tour_distance_km"`, `"total_tour_duration_min"`, `"legs"`, and `"geojson"`.
-* **Aliases:** `plan_tour(...)`, `tour(...)`.
 
 #### `find_optimal_departure(...)`
 Performs diurnal solar radiation, shadow, and thermal sweeps across daylight hours to determine the highest-efficiency departure window.
@@ -784,7 +781,6 @@ def find_optimal_departure(
   * `latest_lst`: Latest departure time to evaluate (e.g. `16.5` for 16:30 LST).
   * `step_hours`: Sweep resolution in hours (e.g. `0.5` for 30-minute steps).
 * **Returns:** `dict` containing `"status"`, `"recommended_window"`, `"best_departure"`, `"evaluations"`, and `"mode"`.
-* **Aliases:** `optimize_departure_window(...)`, `departure_window(...)`.
 
 #### `evaluate_rf_comms(...)`
 Calculates UHF line-of-sight visibility, Fresnel zone clearance, and Free-Space Path Loss from any coordinate to Hab Alpha and peripheral relay masts.
@@ -795,9 +791,8 @@ def evaluate_rf_comms(location: tuple[float, float] | str, mode: str = "rover") 
   * `location`: `(lat, lon)` or landmark name string.
   * `mode`: Mobility profile.
 * **Returns:** `dict` containing `"status"` (`"CONNECTED"` / `"BLACKOUT"`), `"direct_hab_los"` (`bool`), `"active_link"`, `"path_loss_db"`, `"masts_in_view"`, and `"all_links"`.
-* **Aliases:** `evaluate_comms(...)`, `comms(...)`.
 
-#### `predict(...)` / `run_prediction(...)`
+#### `predict(...)`
 High-frequency periodic telemetry evaluation designed for an astronaut's portable field computer or chest unit. Dynamically predicts consumption rates, local terrain hazards, solar insolation, and instantaneous Apollo/Artemis Rule #1 walkback margins without assuming arbitrary baseline reserves.
 ```python
 def predict(
@@ -837,7 +832,6 @@ def predict(
   * `"walkback_horizon"`: Apollo/Artemis Rule #1 margins, nearest shelter, retreat distance and ETA, and net abort buffer.
   * `"destination_projection"`: ETA, distance remaining, and predicted arrival battery and $O_2$ reserves (if `destination` provided).
   * `"emergency_abort_route"`: Full emergency escape route if warranted.
-* **Aliases:** `run_prediction(...)`, `predict_status(...)`, `predict_telemetry(...)`, `predict_life_support(...)`, `evaluate_field_telemetry(...)`, `monitor_eva_step(...)`, `predict_consumption(...)`.
 
 #### Environmental & Catalog Telemetry Functions
 * `get_waypoints() -> list[dict]`: Returns cataloged POIs, science sites, and habitats.

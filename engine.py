@@ -1197,7 +1197,7 @@ class DalilMarsEngine:
             "alert": weather_prof.get("alert"),
             "path_coords": full_coords,
             "legs": final_legs,
-            # Direct scalar properties for backwards-compatibility:
+            # Direct scalar summary properties:
             "direct_km": round(leg1["direct_km"], 2),
             "total_dist_km": round(total_dist_km, 2),
             "duration_min": total_duration_min,
@@ -2131,12 +2131,6 @@ class DalilMarsEngine:
             "emergency_abort_route": emergency_route,
         }
 
-    # Class aliases for field computer workflows
-    run_prediction = predict
-    predict_status = predict
-    predict_telemetry = predict
-    predict_life_support = predict
-
 
 _DEFAULT_ENGINE = None
 
@@ -2147,12 +2141,6 @@ def get_engine() -> DalilMarsEngine:
     if _DEFAULT_ENGINE is None:
         _DEFAULT_ENGINE = DalilMarsEngine()
     return _DEFAULT_ENGINE
-
-
-# Backward-compatibility alias
-MartianTacticalEngine = DalilMarsEngine
-DalilMarsRouter = DalilMarsEngine
-MartianRouter = DalilMarsEngine
 
 
 def plan_route(
@@ -2177,7 +2165,7 @@ def plan_route(
 ) -> dict:
     """High-level function API to plan an optimal, terrain-aware Martian route.
 
-    Supports flexible coordinate formats (lat/lon tuple, list, or dict) and parameter aliases.
+    Supports flexible coordinate formats (lat/lon tuple, list, or dict) and parameter overrides.
     Designed for portable astronaut field computers: accepts measured life-support telemetry
     (battery_pct, o2_pct) directly from spacesuit or rover sensors.
     """
@@ -2210,11 +2198,6 @@ def plan_route(
         uphill_penalty=climb_val,
         **kwargs,
     )
-
-
-# Method aliases
-route = plan_route
-plan_mission_route = plan_route
 
 
 def plan_emergency_abort(
@@ -2250,9 +2233,6 @@ def plan_emergency_abort(
         weather=weather,
         **kwargs,
     )
-
-
-abort = plan_emergency_abort
 
 
 def plan_science_tour(
@@ -2302,10 +2282,6 @@ def plan_science_tour(
     )
 
 
-plan_tour = plan_science_tour
-tour = plan_science_tour
-
-
 def find_optimal_departure(
     start,
     destination,
@@ -2342,19 +2318,11 @@ def find_optimal_departure(
     )
 
 
-optimize_departure_window = find_optimal_departure
-departure_window = find_optimal_departure
-
-
 def evaluate_rf_comms(location, mode: str = "rover") -> dict:
     """Evaluates RF line-of-sight connectivity and link budget from coordinates or POI to Hab Alpha and relay masts."""
     eng = get_engine()
     _, _, lat, lon = eng._resolve_coords(location)
     return eng.evaluate_rf_comms(lat, lon, mode=mode)
-
-
-evaluate_comms = evaluate_rf_comms
-comms = evaluate_rf_comms
 
 
 def predict(
@@ -2409,16 +2377,6 @@ def predict(
         include_abort_route=include_abort_route,
         **kwargs,
     )
-
-
-# Method aliases for field computer workflows
-run_prediction = predict
-predict_status = predict
-predict_telemetry = predict
-predict_life_support = predict
-evaluate_field_telemetry = predict
-monitor_eva_step = predict
-predict_consumption = predict
 
 
 def get_waypoints() -> list[dict]:
@@ -2515,37 +2473,17 @@ __all__ = [
     "CommsPhysics",
     "MOBILITY_PROFILES",
     "WEATHER_MODELS",
-    # Backward-Compatibility Class Aliases
-    "MartianTacticalEngine",
-    "DalilMarsRouter",
-    "MartianRouter",
-    # Singleton Access & Diagnostics
+    # Singleton & Status Access
     "get_engine",
     "get_engine_status",
-    # Mission Planning Library Functions
+    # Core Mission Planning Functions
     "plan_route",
-    "route",
-    "plan_mission_route",
     "plan_emergency_abort",
-    "abort",
     "plan_science_tour",
-    "plan_tour",
-    "tour",
     "find_optimal_departure",
-    "optimize_departure_window",
-    "departure_window",
     "evaluate_rf_comms",
-    "evaluate_comms",
-    "comms",
     # Portable Field Computer Telemetry & State Prediction
     "predict",
-    "run_prediction",
-    "predict_status",
-    "predict_telemetry",
-    "predict_life_support",
-    "evaluate_field_telemetry",
-    "monitor_eva_step",
-    "predict_consumption",
     # Environmental & Landmark Telemetry
     "get_waypoints",
     "get_charging_stations",
