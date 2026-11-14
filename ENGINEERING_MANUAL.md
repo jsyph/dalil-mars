@@ -61,7 +61,7 @@ Unlike generic pathfinders that treat terrain as an abstract cost grid, Dalil-Ma
                                          v
                       [ Pure Python Library API: import engine ]
     +-------------------------------------------------------------------------+
-    | • plan_route()                   • predict_life_support() (Field Monitor)|
+    | • plan_route()                   • predict() / run_prediction()         |
     | • plan_emergency_abort()         • plan_science_tour()                  |
     | • find_optimal_departure()       • evaluate_rf_comms()                  |
     | • get_waypoints() / get_weather()• get_charging_stations()              |
@@ -455,18 +455,18 @@ print(f"Direct Hab LOS: {comms_result['direct_hab_los']}")
 
 ---
 
-### Portable Field Computer: Real-Time Telemetry & Life Support Prediction
-Designed for an astronaut's portable field computer, chest tablet, or spacesuit visor HUD. Rather than assuming nominal 100% life-support reserves, the field application streams live sensor telemetry (battery %, O2 %, biometric heart rate, coordinates) into `engine.predict_life_support()` at periodic intervals (e.g. every 10–60 seconds). The engine dynamically predicts metabolic burn rates, slope hazards underfoot, solar/shadow status, and instantaneous Apollo/Artemis Rule #1 walkback margins:
+### Portable Field Computer: Real-Time Telemetry & State Prediction (`predict` / `run_prediction`)
+Designed for an astronaut's portable field computer, chest tablet, or spacesuit visor HUD. Rather than assuming nominal 100% life-support reserves, the field application streams live sensor telemetry (battery %, O2 %, biometric heart rate, coordinates) into `engine.predict()` (or `engine.run_prediction()`) at periodic intervals (e.g. every 10–60 seconds). The engine dynamically predicts metabolic burn rates, slope hazards underfoot, solar/shadow status, and instantaneous Apollo/Artemis Rule #1 walkback margins:
 
 ```python
 import engine
 
 # Periodic telemetry evaluation from spacesuit hardware sensors
-telemetry_step = engine.predict_life_support(
+telemetry_step = engine.predict(
     current_location=(18.4520, 77.4410),  # Astronaut GPS coordinates
-    battery_pct=72.5,                     # Measured from suit battery BMS
-    o2_pct=68.0,                          # Measured from primary PLSS O2 tank
-    destination=(18.4875, 77.3190),       # Intended science destination (optional)
+    battery=72.5,                         # Measured from suit battery BMS
+    o2=68.0,                              # Measured from primary PLSS O2 tank
+    destination="Kodiak Delta Remnant",   # Intended science destination (or coordinates)
     mode="on_foot",
     lst_hours=13.5,                       # Current Mars Local Solar Time
     heart_rate_bpm=105.0,                 # Suit biometric telemetry
@@ -582,10 +582,10 @@ class PortableSuitComputer:
         }
         """
         # Periodic assessment without assuming any default life-support states
-        assessment = engine.predict_life_support(
+        assessment = engine.predict(
             current_location=sensor_packet["coords"],
-            battery_pct=sensor_packet["battery_pct"],
-            o2_pct=sensor_packet["o2_pct"],
+            battery=sensor_packet["battery_pct"],
+            o2=sensor_packet["o2_pct"],
             destination=self.target_site,
             heart_rate_bpm=sensor_packet.get("heart_rate_bpm"),
             lst_hours=sensor_packet["lst_hours"],
@@ -797,13 +797,15 @@ def evaluate_rf_comms(location: tuple[float, float] | str, mode: str = "rover") 
 * **Returns:** `dict` containing `"status"` (`"CONNECTED"` / `"BLACKOUT"`), `"direct_hab_los"` (`bool`), `"active_link"`, `"path_loss_db"`, `"masts_in_view"`, and `"all_links"`.
 * **Aliases:** `evaluate_comms(...)`, `comms(...)`.
 
-#### `predict_life_support(...)`
+#### `predict(...)` / `run_prediction(...)`
 High-frequency periodic telemetry evaluation designed for an astronaut's portable field computer or chest unit. Dynamically predicts consumption rates, local terrain hazards, solar insolation, and instantaneous Apollo/Artemis Rule #1 walkback margins without assuming arbitrary baseline reserves.
 ```python
-def predict_life_support(
+def predict(
     current_location: tuple[float, float] | list[float] | dict | str,
-    battery_pct: float,
+    battery_pct: float | None = None,
+    battery: float | None = None,
     o2_pct: float | None = None,
+    o2: float | None = None,
     destination: tuple[float, float] | str | None = None,
     mode: str = "on_foot",
     lst_hours: float = 14.0,
@@ -816,9 +818,9 @@ def predict_life_support(
 ) -> dict
 ```
 * **Parameters:**
-  * `current_location`: Astronaut's instantaneous coordinate `(lat, lon)` or landmark.
-  * `battery_pct`: Current battery state-of-charge ($0.0 - 100.0\%$) streamed from BMS hardware.
-  * `o2_pct`: Primary PLSS oxygen tank percentage ($0.0 - 100.0\%$, relevant for `on_foot`).
+  * `current_location`: Astronaut's instantaneous coordinate `(lat, lon)` or landmark name.
+  * `battery` / `battery_pct`: Current battery state-of-charge ($0.0 - 100.0\%$) streamed from BMS hardware.
+  * `o2` / `o2_pct`: Primary PLSS oxygen tank percentage ($0.0 - 100.0\%$, relevant for `on_foot`).
   * `destination`: Optional target coordinate or landmark where the astronaut is currently walking.
   * `mode`: `"on_foot"` (xEMU EVA spacesuit) or `"rover"`.
   * `lst_hours`: Current Mars Local Solar Time.
@@ -835,7 +837,7 @@ def predict_life_support(
   * `"walkback_horizon"`: Apollo/Artemis Rule #1 margins, nearest shelter, retreat distance and ETA, and net abort buffer.
   * `"destination_projection"`: ETA, distance remaining, and predicted arrival battery and $O_2$ reserves (if `destination` provided).
   * `"emergency_abort_route"`: Full emergency escape route if warranted.
-* **Aliases:** `evaluate_field_telemetry(...)`, `monitor_eva_step(...)`, `predict_consumption(...)`.
+* **Aliases:** `run_prediction(...)`, `predict_status(...)`, `predict_telemetry(...)`, `predict_life_support(...)`, `evaluate_field_telemetry(...)`, `monitor_eva_step(...)`, `predict_consumption(...)`.
 
 #### Environmental & Catalog Telemetry Functions
 * `get_waypoints() -> list[dict]`: Returns cataloged POIs, science sites, and habitats.

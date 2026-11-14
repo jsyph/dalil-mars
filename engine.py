@@ -386,7 +386,10 @@ class DalilMarsEngine:
         return lat, lon
 
     def _resolve_coords(self, pt) -> tuple[int, int, float, float]:
-        if isinstance(pt, dict):
+        if isinstance(pt, str):
+            poi = self._resolve_poi_target(pt)
+            c1, c2 = float(poi["lat"]), float(poi["lon"])
+        elif isinstance(pt, dict):
             if "lat" in pt and "lon" in pt:
                 c1, c2 = float(pt["lat"]), float(pt["lon"])
             elif "row" in pt and "col" in pt:
@@ -396,7 +399,7 @@ class DalilMarsEngine:
         elif isinstance(pt, (list, tuple)) and len(pt) >= 2:
             c1, c2 = float(pt[0]), float(pt[1])
         else:
-            raise ValueError(f"Invalid coordinate format: {pt}. Expected (lat, lon) or [row, col]")
+            raise ValueError(f"Invalid coordinate format: {pt}. Expected (lat, lon), [row, col], or landmark name")
 
         if abs(c1) <= 90.0 and abs(c2) <= 360.0:
             lat, lon = c1, c2
@@ -1312,7 +1315,13 @@ class DalilMarsEngine:
         if isinstance(target, str):
             t_low = target.lower().strip()
             for p in self.all_pois:
-                if t_low in p["name"].lower():
+                p_name_low = p["name"].lower()
+                if t_low in p_name_low or p_name_low in t_low:
+                    return p
+            t_tokens = [w for w in t_low.replace("-", " ").split() if len(w) >= 3]
+            for p in self.all_pois:
+                p_tokens = [w for w in p["name"].lower().replace("-", " ").split() if len(w) >= 3]
+                if any(tok in p_tokens for tok in t_tokens):
                     return p
             if "," in target:
                 parts = [float(x.strip()) for x in target.split(",")]
@@ -1839,7 +1848,7 @@ class DalilMarsEngine:
         dirs = ["North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest"]
         return dirs[int(round(brng / 45.0)) % 8]
 
-    def predict_life_support(
+    def predict(
         self,
         current_location,
         battery_pct: float,
@@ -2122,6 +2131,12 @@ class DalilMarsEngine:
             "emergency_abort_route": emergency_route,
         }
 
+    # Class aliases for field computer workflows
+    run_prediction = predict
+    predict_status = predict
+    predict_telemetry = predict
+    predict_life_support = predict
+
 
 _DEFAULT_ENGINE = None
 
@@ -2342,7 +2357,7 @@ evaluate_comms = evaluate_rf_comms
 comms = evaluate_rf_comms
 
 
-def predict_life_support(
+def predict(
     current_location,
     battery_pct: float | None = None,
     battery: float | None = None,
@@ -2359,7 +2374,7 @@ def predict_life_support(
     include_abort_route: bool = False,
     **kwargs,
 ) -> dict:
-    """Periodic real-time life support prediction and walkback monitor for astronaut portable field computers.
+    """Periodic real-time state prediction and walkback monitor for astronaut portable field computers.
 
     Evaluates measured telemetry from suit/rover hardware sensors. Dynamically predicts consumption rates,
     terrain hazards underfoot, solar insolation/shadows, RF comms link, and Apollo/Artemis Rule #1 walkback margins.
@@ -2380,7 +2395,7 @@ def predict_life_support(
 
     lst_val = lst if lst is not None else lst_hours
 
-    return get_engine().predict_life_support(
+    return get_engine().predict(
         current_location=current_location,
         battery_pct=batt_val,
         o2_pct=o2_val,
@@ -2397,9 +2412,13 @@ def predict_life_support(
 
 
 # Method aliases for field computer workflows
-evaluate_field_telemetry = predict_life_support
-monitor_eva_step = predict_life_support
-predict_consumption = predict_life_support
+run_prediction = predict
+predict_status = predict
+predict_telemetry = predict
+predict_life_support = predict
+evaluate_field_telemetry = predict
+monitor_eva_step = predict
+predict_consumption = predict
 
 
 def get_waypoints() -> list[dict]:
@@ -2518,7 +2537,11 @@ __all__ = [
     "evaluate_rf_comms",
     "evaluate_comms",
     "comms",
-    # Portable Field Computer Telemetry & Life-Support Prediction
+    # Portable Field Computer Telemetry & State Prediction
+    "predict",
+    "run_prediction",
+    "predict_status",
+    "predict_telemetry",
     "predict_life_support",
     "evaluate_field_telemetry",
     "monitor_eva_step",
