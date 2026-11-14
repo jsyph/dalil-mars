@@ -1,0 +1,404 @@
+[
+  {
+    "id": "octavia_butler_360",
+    "poiId": "hab-alpha",
+    "title": "Octavia E. Butler Landing 360\u00b0 Photosphere",
+    "sol": 3,
+    "lat": 18.444627,
+    "lon": 77.450886,
+    "elevation": -2570,
+    "type": "360_sphere",
+    "is360": true,
+    "initialLon": 180,
+    "locationName": "Hab Alpha (Octavia E. Butler Landing)",
+    "associatedPOI": "Hab Alpha (Octavia E. Butler Landing)",
+    "instrument": "NASA Mastcam-Z Dual Imager (Stereo Multi-Spectral)",
+    "caption": "NASA Perseverance's historic first 360-degree cylindrical panorama, stitched from 142 individual high-resolution exposures on Sol 3. Shows the distant northern rim of Jezero Crater, rocky ripples, and the initial touchdown site on Mars.",
+    "attribution": "NASA / JPL-Caltech / ASU / MSSS",
+    "image": "/panoramas/octavia_butler_360.jpg",
+    "hotspots": [
+      {
+        "name": "Jezero Crater North Rim",
+        "yaw": 15,
+        "pitch": 5,
+        "desc": "Ancient crater wall rising 600m above the floor"
+      },
+      {
+        "name": "Perseverance Touchdown Mark",
+        "yaw": 180,
+        "pitch": -22,
+        "desc": "Sky Crane retro-rocket scour zone"
+      },
+      {
+        "name": "Delta Scarp Horizon",
+        "yaw": 275,
+        "pitch": 2,
+        "desc": "River delta deposit fans 2.1 km to the west"
+      }
+    ]
+  },
+  {
+    "id": "van_zyl_overlook_360",
+    "poiId": "seitah-ridge",
+    "title": "Van Zyl Overlook & S\u00e9\u00edtah 360\u00b0 Photosphere",
+    "sol": 68,
+    "lat": 18.4315,
+    "lon": 77.432,
+    "elevation": -2582,
+    "type": "360_sphere",
+    "is360": true,
+    "initialLon": 180,
+    "locationName": "S\u00e9\u00edtah Olivine Cumulate",
+    "associatedPOI": "S\u00e9\u00edtah Olivine Cumulate",
+    "instrument": "NASA Perseverance Navcam 360 Scan & Mastcam-Z",
+    "caption": "Spectacular 360\u00b0 Navcam and Mastcam-Z panorama captured from Van Zyl Overlook overlooking the rugged S\u00e9\u00edtah olivine cumulate unit where the rover was stationed during Ingenuity Mars Helicopter flight trials. Features layered sedimentary strata and basaltic sand dunes.",
+    "attribution": "NASA / JPL-Caltech / ASU / MSSS",
+    "image": "/panoramas/van_zyl_navcam_360.jpg",
+    "hotspots": [
+      {
+        "name": "Wright Brothers Airfield",
+        "yaw": 90,
+        "pitch": -8,
+        "desc": "Flat landing zone where Ingenuity made the first powered flight on another planet"
+      },
+      {
+        "name": "S\u00e9\u00edtah Olivine Strata",
+        "yaw": 210,
+        "pitch": -12,
+        "desc": "Ancient igneous cumulate outcrop altered by liquid groundwater"
+      }
+    ]
+  },
+  {
+    "id": "delta_front_solar_waystation",
+    "poiId": "station-delta-solar",
+    "title": "Delta Front Solar Waystation Vista",
+    "sol": 44,
+    "lat": 18.4585,
+    "lon": 77.411,
+    "elevation": -2510,
+    "type": "panorama_wide",
+    "is360": true,
+    "initialLon": 180,
+    "locationName": "Delta Front Solar Waystation",
+    "associatedPOI": "Delta Front Solar Waystation",
+    "instrument": "Mastcam-Z Dual Imager & Navcam Sol 44 Survey",
+    "caption": "Wide panoramic vista facing the base of the Jezero western delta fan. Demonstrates the flat terrain chosen for the autonomous solar & micro-reactor charging waystation at the junction between the crater floor and river delta.",
+    "attribution": "NASA / JPL-Caltech / ASU",
+    "image": "/panoramas/delta_front_sol44_panorama.jpg",
+    "hotspots": [
+      {
+        "name": "Solar Array Foundation",
+        "yaw": 0,
+        "pitch": -4,
+        "desc": "Flat deltaic mudstone pavement ideal for solar power generation"
+      },
+      {
+        "name": "Western Delta Scarp",
+        "yaw": 280,
+        "pitch": 6,
+        "desc": "Stratified cliffs ascending toward delta top"
+      }
+    ]
+  },
+  {
+    "id": "three_forks_depot",
+    "poiId": "three_forks",
+    "title": "Three Forks Mars Sample Depot Ground View",
+    "sol": 680,
+    "lat": 18.4565,
+    "lon": 77.4035,
+    "elevation": -2518,
+    "type": "panorama_wide",
+    "is360": true,
+    "initialLon": 180,
+    "locationName": "Three Forks Sample Depot",
+    "associatedPOI": "Three Forks Sample Depot",
+    "instrument": "Navcam Stereo Panoramic Imager (NASA PIA25736)",
+    "caption": "Authentic high-resolution Mastcam-Z and Navcam panorama looking across the flat, drop-zone terrain of Three Forks where NASA's Perseverance cached 10 titanium sample tubes as a backup repository for the Mars Sample Return campaign.",
+    "attribution": "NASA / JPL-Caltech / ASU",
+    "image": "/panoramas/three_forks_depot_panorama.jpg",
+    "hotspots": [
+      {
+        "name": "Sample Depot Cache Zone",
+        "yaw": -15,
+        "pitch": -12,
+        "desc": "Surveyed drop locations for hermetically sealed titanium sample cores"
+      },
+      {
+        "name": "Delta River Inflow Channel",
+        "yaw": 45,
+        "pitch": 4,
+        "desc": "Ancient fluvial channel cutting into crater floor"
+      }
+    ]
+  },
+  {
+    "id": "kodiak_butte_delta",
+    "poiId": "kodiak_butte",
+    "title": "Mount Kodiak Ancient Delta Remnant",
+    "sol": 114,
+    "lat": 18.4368,
+    "lon": 77.4105,
+    "elevation": -2525,
+    "type": "panorama_wide",
+    "is360": true,
+    "initialLon": 180,
+    "locationName": "Kodiak Delta Remnant",
+    "associatedPOI": "Kodiak Delta Remnant",
+    "instrument": "SuperCam RMI & Mastcam-Z Telephoto",
+    "caption": "High-definition view of Kodiak Butte, an isolated erosional remnant of the western delta fan. The steep inclined strata (foreset beds) sandwiched between horizontal layers are conclusive proof of an ancient river feeding a standing lake on Mars.",
+    "attribution": "NASA / JPL-Caltech / LANL / CNES / ASU",
+    "image": "/panoramas/kodiak_butte_delta.jpg",
+    "hotspots": [
+      {
+        "name": "Delta Topset Beds",
+        "yaw": 0,
+        "pitch": 8,
+        "desc": "Horizontal gravel sheets from late-stage fluvial flow"
+      },
+      {
+        "name": "Steep Foreset Delta Front",
+        "yaw": 15,
+        "pitch": -5,
+        "desc": "Sediments dumped rapidly at river mouth into standing lake"
+      }
+    ]
+  },
+  {
+    "id": "hawksbill_gap_wildcat",
+    "poiId": "wildcat_ridge",
+    "title": "Hawksbill Gap & Wildcat Ridge Astrobiology Outcrop",
+    "sol": 518,
+    "lat": 18.464,
+    "lon": 77.389,
+    "elevation": -2485,
+    "type": "panorama_wide",
+    "is360": true,
+    "initialLon": 180,
+    "locationName": "Wildcat Ridge Outcrop",
+    "associatedPOI": "Hawksbill Gap (ISRU Water Clays)",
+    "instrument": "Mastcam-Z Multi-Spectral Zoom & SHERLOC UV",
+    "caption": "Ultra high-resolution panorama of the Hawksbill Gap and Wildcat Ridge sedimentary outcrop. Rich in hydrated smectite clays (4-7% H2O) suitable for water harvesting and preservation of potential ancient Martian biosignatures.",
+    "attribution": "NASA / JPL-Caltech / ASU",
+    "image": "/panoramas/wildcat_ridge_delta.jpg",
+    "hotspots": [
+      {
+        "name": "Hydrated Clay Strata",
+        "yaw": -10,
+        "pitch": -8,
+        "desc": "Fine-grained lacustrine mudstone rich in phyllosilicates"
+      },
+      {
+        "name": "Wildcat Ridge Core Hole",
+        "yaw": 25,
+        "pitch": -14,
+        "desc": "Target drill abrasion where aromatics were detected"
+      }
+    ]
+  },
+  {
+    "id": "belva_crater_panorama",
+    "poiId": "belva_crater",
+    "title": "Belva Crater Impact Basin Rim Vista",
+    "sol": 772,
+    "lat": 18.5085,
+    "lon": 77.4892,
+    "elevation": -2445,
+    "type": "panorama_wide",
+    "is360": true,
+    "initialLon": 180,
+    "locationName": "Belva Crater Rim",
+    "associatedPOI": "Belva Crater Rim",
+    "instrument": "Mastcam-Z Multi-Spectral 152-Image Mosaic",
+    "caption": "Panoramic mosaic looking inside the 0.9-kilometer-wide Belva impact crater. Craters act as natural geologic cuts, exposing steep dipping beds that reveal ancient Martian mega-floods and lake currents.",
+    "attribution": "NASA / JPL-Caltech / ASU / MSSS",
+    "image": "/panoramas/belva_crater_panorama.jpg",
+    "hotspots": [
+      {
+        "name": "Belva Dipping Beds",
+        "yaw": 120,
+        "pitch": -10,
+        "desc": "Steep downward-angled sedimentary layers from ancient river bars"
+      },
+      {
+        "name": "Impact Breccia Wall",
+        "yaw": 240,
+        "pitch": -18,
+        "desc": "Shocked rock clasts and melt sheets from meteoritic impact"
+      }
+    ]
+  },
+  {
+    "id": "belva_ridge_power_relay",
+    "poiId": "station-belva-relay",
+    "title": "Belva Ridge Power & O2 Relay Rim Drive",
+    "sol": 950,
+    "lat": 18.4795,
+    "lon": 77.352,
+    "elevation": -2420,
+    "type": "panorama_wide",
+    "is360": true,
+    "initialLon": 180,
+    "locationName": "Belva Ridge Power & O2 Relay",
+    "associatedPOI": "Belva Ridge Power & O2 Relay",
+    "instrument": "Mastcam-Z Dual Imager Traverse Survey",
+    "caption": "Perseverance's expansive view traversing along the northern ridge drive toward the Belva Relay Station. High ground provides reliable line-of-sight for power transmission and communications relays across the crater.",
+    "attribution": "NASA / JPL-Caltech / ASU",
+    "image": "/panoramas/crater_rim_drive.jpg",
+    "hotspots": [
+      {
+        "name": "Relay Tower Vantage",
+        "yaw": 10,
+        "pitch": 5,
+        "desc": "Elevated ridge post ensuring continuous orbital comms link"
+      },
+      {
+        "name": "Crater Rim Traverse Trail",
+        "yaw": 190,
+        "pitch": -10,
+        "desc": "Stable bedrock pathway bypassing loose sand drifts"
+      }
+    ]
+  },
+  {
+    "id": "neretva_vallis_outflow",
+    "poiId": "neretva_vallis",
+    "title": "Neretva Vallis River Channel & Bright Angel Outflow",
+    "sol": 1150,
+    "lat": 18.4875,
+    "lon": 77.319,
+    "elevation": -2375,
+    "type": "panorama_wide",
+    "is360": true,
+    "initialLon": 180,
+    "locationName": "Neretva Vallis Outflow (Bright Angel)",
+    "associatedPOI": "Neretva Vallis Outflow (Bright Angel)",
+    "instrument": "Mastcam-Z Stereo Imager (NASA PIA26699)",
+    "caption": "Perseverance's survey of 'Crocodile Bridge' and the ancient channel bed of Neretva Vallis, an ancient river system that breached the western rim of Jezero Crater and carved deep gorges with bright carbonate and silica outcrops.",
+    "attribution": "NASA / JPL-Caltech / ASU",
+    "image": "/panoramas/neretva_vallis_outflow.jpg",
+    "hotspots": [
+      {
+        "name": "Crocodile Bridge Bedrock",
+        "yaw": 0,
+        "pitch": -12,
+        "desc": "Hydrated silica bedrock polished by catastrophic fluvial discharge"
+      },
+      {
+        "name": "Inflow Gorge Canyon",
+        "yaw": 310,
+        "pitch": 8,
+        "desc": "Rim breach where river torrent entered Jezero lake"
+      }
+    ]
+  },
+  {
+    "id": "western_rim_lookout",
+    "poiId": "western_rim",
+    "title": "Jezero Western Rim Lookout Ridge Summit Vista",
+    "sol": 1210,
+    "lat": 18.435594,
+    "lon": 77.233223,
+    "elevation": -1936,
+    "type": "panorama_wide",
+    "is360": true,
+    "initialLon": 180,
+    "locationName": "Jezero Western Rim (Lookout Ridge)",
+    "associatedPOI": "Jezero Western Rim (Lookout Ridge)",
+    "instrument": "Mastcam-Z Telephoto Mosaic (NASA PIA26530)",
+    "caption": "Breathtaking panoramic rim view captured at +634 meters above the crater floor. Unfolds the entire expanse of Jezero Crater, from the western rim peaks across the river delta to the landing site over 20 kilometers away.",
+    "attribution": "NASA / JPL-Caltech / ASU / MSSS",
+    "image": "/panoramas/western_rim_view.jpg",
+    "hotspots": [
+      {
+        "name": "Crater Floor Vista",
+        "yaw": 90,
+        "pitch": -15,
+        "desc": "Full crater panorama extending 45 kilometers to eastern rim"
+      },
+      {
+        "name": "High-Ground Comms Mast",
+        "yaw": 180,
+        "pitch": 10,
+        "desc": "Emergency shelter post with unobstructed orbital coverage"
+      }
+    ]
+  },
+  {
+    "id": "enchanted_lake_vista",
+    "poiId": "enchanted_lake",
+    "title": "Enchanted Lake Basal Delta Mudstone",
+    "sol": 480,
+    "lat": 18.514,
+    "lon": 77.382,
+    "elevation": -2404,
+    "type": "panorama_wide",
+    "is360": true,
+    "initialLon": 180,
+    "locationName": "Enchanted Lake Basal Outcrop",
+    "associatedPOI": "Enchanted Lake Basal Outcrop",
+    "instrument": "Mastcam-Z Multi-Spectral Horizon Survey",
+    "caption": "High-resolution surface survey of finely laminated lacustrine mudstone and clay shale at the foot of the delta scarp looking toward distant crater rims.",
+    "attribution": "NASA / JPL-Caltech / ASU",
+    "image": "/panoramas/jezero_rim_wide_panorama.jpg",
+    "hotspots": []
+  },
+  {
+    "id": "north_rim_vista",
+    "poiId": "north_rim",
+    "title": "Jezero Northern Rim Wall Escarpment",
+    "sol": 44,
+    "lat": 18.65,
+    "lon": 77.46,
+    "elevation": -1850,
+    "type": "panorama_wide",
+    "is360": true,
+    "initialLon": 180,
+    "locationName": "Jezero Northern Rim Wall",
+    "associatedPOI": "Jezero Northern Rim Wall",
+    "instrument": "Mastcam-Z Long-Range Sol 44 Telephoto Mosaic",
+    "caption": "Traverse viewpoint looking up at the 600m sheer impact crater rim wall and ancient Noachian crustal megabreccia overlooking the crater floor.",
+    "attribution": "NASA / JPL-Caltech / ASU",
+    "image": "/panoramas/north_rim_sol44_panorama.jpg",
+    "hotspots": []
+  },
+  {
+    "id": "sedona_crater_vista",
+    "poiId": "sedona_crater",
+    "title": "Sedona Crater Impact Cavity Bedrock Panorama",
+    "sol": 14,
+    "lat": 17.8356,
+    "lon": 77.5341,
+    "elevation": -2490,
+    "type": "panorama_wide",
+    "is360": true,
+    "initialLon": 180,
+    "locationName": "Sedona Crater",
+    "associatedPOI": "Sedona Crater",
+    "instrument": "Mastcam-Z Gigapixel Bedrock Mosaic (NASA PIA26753)",
+    "caption": "Authentic high-resolution panoramic vista across fractured crater floor olivine-basalt bedrock and basaltic sand ripples at the Sedona Crater impact perimeter.",
+    "attribution": "NASA / JPL-Caltech / ASU",
+    "image": "/panoramas/sedona_crater_panorama.jpg",
+    "hotspots": []
+  },
+  {
+    "id": "hartwell_crater_vista",
+    "poiId": "hartwell_crater",
+    "title": "Hartwell Crater Ejecta & Eastern Traverse Panorama",
+    "sol": 59,
+    "lat": 18.5257,
+    "lon": 77.7146,
+    "elevation": -2380,
+    "type": "panorama_wide",
+    "is360": true,
+    "initialLon": 180,
+    "locationName": "Hartwell Crater",
+    "associatedPOI": "Hartwell Crater",
+    "instrument": "Mastcam-Z High-Resolution Sol 59 Panorama",
+    "caption": "Authentic Sol 59 full-color panoramic vista of the eastern traverse facing the continuous ejecta blanket and raised rim of Hartwell Crater.",
+    "attribution": "NASA / JPL-Caltech / ASU",
+    "image": "/panoramas/hartwell_sol59_panorama.jpg",
+    "hotspots": []
+  }
+]

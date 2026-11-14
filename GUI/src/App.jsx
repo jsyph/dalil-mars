@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -132,7 +132,7 @@ export default function App() {
   // Terminal Dual-Mode UX ('astronaut' = Glove-first Google Maps Tablet UI | 'developer' = Ground Control Terminal)
   const [uiMode, setUiMode] = useState('astronaut');
   const [navMode, setNavMode] = useState('browse');
-  const [followAstronaut, setFollowAstronaut] = useState(true);
+  const [followAstronaut, setFollowAstronaut] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showLayersSheet, setShowLayersSheet] = useState(false);
   const [showLegendSheet, setShowLegendSheet] = useState(false);
@@ -150,6 +150,7 @@ export default function App() {
   // Camera & Locating State
   const [locatePulse, setLocatePulse] = useState(null);
   const [flyToTarget, setFlyToTarget] = useState(null);
+  const locateTimerRef = useRef(null);
 
   // Basemap & Hillshade Blend State
   const [basemap, setBasemap] = useState('satellite');
@@ -426,8 +427,11 @@ export default function App() {
           ? 'hab-alpha'
           : target === 'seitah_dunes'
           ? 'seitah-ridge'
+          : target === 'wildcat_ridge'
+          ? 'hawksbill-gap'
           : target;
       const targetNorm = normalizeKey(aliasTarget);
+      const rawTargetNorm = normalizeKey(target);
 
       match =
         viewerArchiveList.find(
@@ -436,8 +440,11 @@ export default function App() {
             p.poiId === target ||
             p.poiId === aliasTarget ||
             normalizeKey(p.poiId) === targetNorm ||
+            normalizeKey(p.poiId) === rawTargetNorm ||
             normalizeKey(p.id) === targetNorm ||
-            p.title.toLowerCase().includes(target.toLowerCase())
+            normalizeKey(p.id) === rawTargetNorm ||
+            normalizeKey(p.title).includes(rawTargetNorm) ||
+            normalizeKey(p.locationName).includes(rawTargetNorm)
         ) || null;
 
       if (!match) {
@@ -485,7 +492,7 @@ export default function App() {
     showToast({
       id: `pano-${Date.now()}`,
       type: 'info',
-      title: match.is360 ? '360 PHOTOSPHERE LOADED' : 'SURFACE IMAGERY LOADED',
+      title: match.type === '360_sphere' ? '360 PHOTOSPHERE LOADED' : 'PANORAMIC VISTA LOADED',
       message: `${match.locationName || match.title}`,
     });
   };
@@ -1191,38 +1198,72 @@ export default function App() {
   }, [liveNavState?.heading]);
 
   // Actions
-  const triggerLocateAstronaut = (zoomLevel = 14.5) => {
-    setFollowAstronaut(true);
-    setLocatePulse({
-      timestamp: Date.now(),
-      zoom: zoomLevel,
-      showWave: true,
+  const handleUserMapPan = useCallback(() => {
+    setFollowAstronaut((prev) => {
+      if (prev) {
+        showToast({
+          id: 'gps-unlocked',
+          type: 'nominal',
+          title: 'GPS UNTETHERED',
+          message: 'Camera lock released. Free pan active.',
+        });
+        return false;
+      }
+      return false;
     });
-    if (pinTagTimerRef.current) clearTimeout(pinTagTimerRef.current);
-    setShowLocationPinTag(true);
-    pinTagTimerRef.current = setTimeout(() => {
-      setShowLocationPinTag(false);
-    }, 4200);
+    setShowLocationPinTag(false);
+  }, []);
 
+  const triggerLocateAstronaut = (zoomLevel = 14.5, forceFollow = null) => {
     const lat = liveNavState?.currentLatLon ? liveNavState.currentLatLon[0] : startPOI.lat;
     const lon = liveNavState?.currentLatLon ? liveNavState.currentLatLon[1] : startPOI.lon;
     const elev = estimateElev(lat, lon);
+
+    // If already locked and no explicit override given, clicking toggles GPS lock off
+    const nextFollow = forceFollow !== null ? forceFollow : !followAstronaut;
+    setFollowAstronaut(nextFollow);
+
+    // One-shot smooth fly-to & radar pulse
+    setLocatePulse({
+      timestamp: Date.now(),
+      zoom: zoomLevel,
+      latLon: [lat, lon],
+      showWave: nextFollow,
+    });
+
+    if (locateTimerRef.current) clearTimeout(locateTimerRef.current);
+    locateTimerRef.current = setTimeout(() => {
+      setLocatePulse(null);
+    }, 4500);
+
+    if (pinTagTimerRef.current) clearTimeout(pinTagTimerRef.current);
+    if (nextFollow) {
+      setShowLocationPinTag(true);
+      pinTagTimerRef.current = setTimeout(() => {
+        setShowLocationPinTag(false);
+      }, 3500);
+    } else {
+      setShowLocationPinTag(false);
+    }
+
     showToast({
       id: 'gps-lock',
-      type: 'info',
-      title: 'GPS FIX LOCKED',
-      message: `${lat.toFixed(4)} N, ${lon.toFixed(4)} E // ELEV ${elev} m`,
+      type: nextFollow ? 'info' : 'nominal',
+      title: nextFollow ? 'GPS FIX LOCKED' : 'GPS CAMERA FREED',
+      message: nextFollow
+        ? `${lat.toFixed(4)} N, ${lon.toFixed(4)} E // CAMERA TETHER ACTIVE`
+        : `FREE PAN ENABLED // DRAG MAP FREELY`,
     });
   };
 
   const handleCompassReset = () => {
     setCompassRotation((r) => r + 360);
-    triggerLocateAstronaut(13.5);
+    triggerLocateAstronaut(13.5, true);
   };
 
   const handleCompassClick = () => {
     setCompassRotation((r) => r + 360);
-    triggerLocateAstronaut(14.5);
+    triggerLocateAstronaut(14.5, true);
   };
 
   const switchUiMode = (nextMode) => {
@@ -1264,8 +1305,7 @@ export default function App() {
     }
     setNavMode('navigating');
     setNavPlaying(true);
-    setFollowAstronaut(true);
-    triggerLocateAstronaut(14.5);
+    triggerLocateAstronaut(14.5, true);
   };
 
   const stopNavigation = () => {
@@ -1494,6 +1534,8 @@ export default function App() {
     setNavMode('browse');
     setNavStepIdx(0);
     setNavPlaying(false);
+    setFollowAstronaut(false);
+    setShowLocationPinTag(false);
     setFlyToTarget({ latLon: [targetPOI.lat, targetPOI.lon], zoom: 13.5, timestamp: Date.now() });
     showToast({
       id: 'route-set',
@@ -1512,6 +1554,8 @@ export default function App() {
     setNavStepIdx(0);
     setNavPlaying(false);
     setNavMode('browse');
+    setFollowAstronaut(false);
+    setShowLocationPinTag(false);
     if (target) {
       setFlyToTarget({ latLon: [target.lat, target.lon], zoom: 13.8, timestamp: Date.now() });
     }
@@ -1567,6 +1611,8 @@ export default function App() {
     setStartId('custom-origin');
     setEndId('custom-dest');
     setAstronautLocId('custom-origin');
+    setFollowAstronaut(false);
+    setShowLocationPinTag(false);
     setFlyToTarget({ latLon: [(oLat + dLat) / 2, (oLon + dLon) / 2], zoom: 12.5, timestamp: Date.now() });
     showToast({
       id: 'coord-applied',
@@ -1578,6 +1624,8 @@ export default function App() {
 
   const handleQuickLandmarkClick = (lm) => {
     setSelectedQuickLandmarkId(lm.id);
+    setFollowAstronaut(false);
+    setShowLocationPinTag(false);
     setFlyToTarget({ latLon: lm.coords, zoom: 14, timestamp: Date.now() });
     showToast({
       id: `lm-${lm.id}`,
@@ -1861,11 +1909,15 @@ export default function App() {
           <button
             type="button"
             onClick={() => triggerLocateAstronaut(15)}
-            className="glove-btn min-h-[36px] px-2.5 rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer"
-            title="Lock GPS and Zoom to EVA Position"
+            className={`glove-btn min-h-[36px] px-2.5 rounded-[4px] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+              followAstronaut
+                ? 'bg-[#191d24] text-[#22c55e] border border-[#22c55e]'
+                : 'bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a]'
+            }`}
+            title={followAstronaut ? 'GPS Locked (Camera Following) - Click to Unlock' : 'Locate EVA Position & Center Camera'}
           >
-            <Crosshair className="h-3.5 w-3.5 text-[#22c55e]" />
-            <span>LOCATE EVA</span>
+            <Crosshair className={`h-3.5 w-3.5 ${followAstronaut ? 'text-[#22c55e]' : 'text-[#9da5b4]'}`} />
+            <span>{followAstronaut ? 'EVA LOCKED' : 'LOCATE EVA'}</span>
           </button>
 
           <button
@@ -1973,6 +2025,8 @@ export default function App() {
             onNavigateToPOI={(id) => handleNavigateToPOI(id)}
             onSetOrigin={(id) => handleSetOrigin(id)}
             onSelectLandmark={(lm) => {
+              setFollowAstronaut(false);
+              setShowLocationPinTag(false);
               if (typeof lm === 'string') {
                 const found = landmarksData.find((l) => l.id === lm);
                 if (found) setActiveLandmark(found);
@@ -1983,6 +2037,7 @@ export default function App() {
             onAddDrawVertex={handleAddDrawVertex}
             onDeleteZone={handleDeleteZone}
             onCursorMove={setCursorTelemetry}
+            onUserPan={handleUserMapPan}
           />
 
           {uiMode === 'developer' && (
@@ -2599,13 +2654,13 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => triggerLocateAstronaut(15)}
-                  title="Locate EVA: Smooth GPS Zoom & Radar Wave"
-                  className={`glove-btn flex h-12 w-12 items-center justify-center rounded-[6px] border cursor-pointer ${
+                  title={followAstronaut ? 'GPS Locked (Camera Following) - Click to Unlock' : 'Locate EVA: Smooth GPS Zoom & Radar Wave'}
+                  className={`glove-btn flex h-12 w-12 items-center justify-center rounded-[6px] border cursor-pointer transition-colors ${
                     followAstronaut
                       ? 'bg-[#16a34a] text-[#0b0d11] border-[#22c55e]'
                       : 'bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border-[#353c4a]'
                   }`}
-                  aria-label="Locate EVA Position"
+                  aria-label={followAstronaut ? 'Unlock GPS Camera' : 'Locate EVA Position'}
                 >
                   <Crosshair className="h-6 w-6" />
                 </button>
