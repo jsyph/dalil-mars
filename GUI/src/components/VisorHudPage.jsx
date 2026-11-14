@@ -131,7 +131,7 @@ const FALLBACK_SNAPSHOT = {
   currentManeuver: {
     icon: 'straight',
     distanceText: '2800 m',
-    instruction: 'Follow A* corridor WNW toward Three Forks Sample Depot',
+    instruction: 'Awaiting navigation link from EVA Tablet',
     subtitle: 'Drag to look around • WASD to walk • Arrow keys to pan',
   },
   weatherCondition: {
@@ -168,14 +168,16 @@ const FALLBACK_SNAPSHOT = {
     sol: '1133',
     pressure: 778.9,
   },
-  routePathCoords: [
-    [18.444627, 77.450886],
-    [18.4472, 77.4415],
-    [18.4501, 77.4310],
-    [18.4534, 77.4178],
-    [18.4565, 77.4035],
-  ],
+  routePathCoords: [],
 };
+
+const QUEST_FALLBACK_ROUTE = [
+  [18.444627, 77.450886],
+  [18.4472, 77.4415],
+  [18.4501, 77.4310],
+  [18.4534, 77.4178],
+  [18.4565, 77.4035],
+];
 
 export default function VisorHudPage() {
   const [snapshot, setSnapshot] = useState(() => readCachedVisorState() || FALLBACK_SNAPSHOT);
@@ -196,7 +198,7 @@ export default function VisorHudPage() {
 
   const isArMode = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get('mode') === 'visor-ar' || params.get('bg') === 'transparent';
+    return params.get('mode') === 'visor-ar';
   }, []);
   const isTransparentBg = useMemo(
     () => new URLSearchParams(window.location.search).get('bg') === 'transparent',
@@ -254,7 +256,11 @@ export default function VisorHudPage() {
     routePathCoords = [],
   } = snapshot;
   const activeRoutePathCoords =
-    routePathCoords?.length >= 2 ? routePathCoords : FALLBACK_SNAPSHOT.routePathCoords;
+    routePathCoords?.length >= 2
+      ? routePathCoords
+      : isArMode
+        ? QUEST_FALLBACK_ROUTE
+        : routePathCoords;
 
   const bodyHeading = liveNavState?.heading ?? 0;
   const viewHeading = normalizeHeading(bodyHeading + lookYawOffset);
@@ -617,28 +623,30 @@ export default function VisorHudPage() {
         isTransparentBg ? 'bg-transparent' : isLowLight ? 'bg-slate-950' : 'bg-slate-950'
       }`}
     >
-      {/* DEDICATED 3D TERRAIN MOUNT SLOT (USGS SIM 3464 Three.js First-Person Terrain; Martian world hidden in AR mode) */}
+      {/* DEDICATED 3D TERRAIN MOUNT SLOT (USGS SIM 3464 Three.js First-Person Terrain; Martian world hidden in desktop transparent AR mode) */}
       <div id="visor-3d-terrain-slot" className="pointer-events-none absolute inset-0 z-0">
-        <Visor3DTerrain
-          currentLatLon={[curLat, curLon]}
-          viewHeading={viewHeading}
-          lookPitchDeg={lookPitchDeg}
-          routePathCoords={activeRoutePathCoords}
-          projectedMarkers={projectedMarkers}
-          isOffRoute={isOffRoute}
-          isDusty={isDusty}
-          isLowLight={isLowLight}
-          showContours={showContours}
-          arPassthrough={isTransparentBg}
-          xrSession={xrSession}
-          hudState={snapshot}
-          targetBearingDeg={targetGuidance?.bearing ?? null}
-          targetDistM={targetGuidance?.distM ?? null}
-          onXrHeadYaw={(yaw) => setLookYawOffset(normalizeSignedAngle(yaw))}
-          onXrStickMove={moveByStick}
-          onGroundElevation={setGroundElevM}
-          onProjectedScreenMarkers={setScreenMarkerCoords}
-        />
+        {(!isTransparentBg || isArMode) && (
+          <Visor3DTerrain
+            currentLatLon={[curLat, curLon]}
+            viewHeading={viewHeading}
+            lookPitchDeg={lookPitchDeg}
+            routePathCoords={activeRoutePathCoords}
+            projectedMarkers={projectedMarkers}
+            isOffRoute={isOffRoute}
+            isDusty={isDusty}
+            isLowLight={isLowLight}
+            showContours={showContours}
+            arPassthrough={isTransparentBg}
+            xrSession={xrSession}
+            hudState={snapshot}
+            targetBearingDeg={targetGuidance?.bearing ?? null}
+            targetDistM={targetGuidance?.distM ?? null}
+            onXrHeadYaw={(yaw) => setLookYawOffset(normalizeSignedAngle(yaw))}
+            onXrStickMove={moveByStick}
+            onGroundElevation={setGroundElevM}
+            onProjectedScreenMarkers={setScreenMarkerCoords}
+          />
+        )}
       </div>
 
       {/* Prominent Enter VR/AR Prompt when in AR mode on Quest Browser */}
@@ -687,12 +695,13 @@ export default function VisorHudPage() {
 
       {/* SYNTHETIC WIREFRAME CONTOUR, HORIZON & PROJECTED A* GROUND PATH */}
       <div className="pointer-events-none absolute inset-0 z-10">
-        {!isTransparentBg && (
+        {(!isTransparentBg || !isArMode) && (
           <div
             className="absolute inset-0"
             style={{
-              background:
-                'radial-gradient(ellipse at center, rgba(8, 47, 73, 0.14) 0%, rgba(2, 6, 23, 0.85) 100%)',
+              background: isTransparentBg
+                ? 'radial-gradient(ellipse at center, transparent 58%, rgba(2, 6, 23, 0.55) 100%)'
+                : 'radial-gradient(ellipse at center, rgba(8, 47, 73, 0.14) 0%, rgba(2, 6, 23, 0.85) 100%)',
             }}
           />
         )}

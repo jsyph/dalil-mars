@@ -723,7 +723,21 @@ export default function App() {
       }
 
       setNavStepIdx((prev) => {
-        const next = Math.min(totalPoints - 1, prev + navSpeed * 0.1);
+        const coords = routeResult.pathCoords;
+        const idxFloor = Math.min(totalPoints - 2, Math.max(0, Math.floor(prev)));
+        const segLenM = Math.max(
+          2,
+          marsDistanceMeters(
+            coords[idxFloor][0],
+            coords[idxFloor][1],
+            coords[idxFloor + 1][0],
+            coords[idxFloor + 1][1]
+          )
+        );
+        // Constant brisk ground speed (~70 m/s at 1x) over 150ms ticks; Visor3DTerrain interpolates at 60 FPS
+        const stepMeters = 10.5 * navSpeed;
+        const deltaIdx = stepMeters / segLenM;
+        const next = Math.min(totalPoints - 1, prev + deltaIdx);
 
         if (pitIdx !== null && !hasCompletedPitStop && prev < pitIdx && next >= pitIdx) {
           setRechargeTicksRemaining(45);
@@ -773,7 +787,7 @@ export default function App() {
 
         return next;
       });
-    }, 33);
+    }, 150);
 
     return () => clearInterval(timer);
   }, [
@@ -807,7 +821,23 @@ export default function App() {
 
     let heading = 0;
     if (floorIdx < coords.length - 1) {
-      const lookAheadIdx = Math.min(coords.length - 1, floorIdx + 2);
+      // Look ahead ~80m along the path so A* grid vertices never cause abrupt heading snaps
+      let lookAheadIdx = floorIdx + 1;
+      let accumM = marsDistanceMeters(
+        currentLatLon[0],
+        currentLatLon[1],
+        coords[lookAheadIdx][0],
+        coords[lookAheadIdx][1]
+      );
+      while (accumM < 80 && lookAheadIdx < coords.length - 1) {
+        accumM += marsDistanceMeters(
+          coords[lookAheadIdx][0],
+          coords[lookAheadIdx][1],
+          coords[lookAheadIdx + 1][0],
+          coords[lookAheadIdx + 1][1]
+        );
+        lookAheadIdx += 1;
+      }
       heading = calculateBearingDegrees(
         currentLatLon[0],
         currentLatLon[1],

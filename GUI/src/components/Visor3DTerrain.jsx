@@ -671,7 +671,7 @@ export default function Visor3DTerrain({
       depthWrite: false,
     });
     const dustPoints = new THREE.Points(dustGeo, dustMat);
-    dustPoints.visible = false;
+    scene.add(dustPoints);
 
     // Synthetic AR contour wireframe overlay
     const wireframeMat = new THREE.MeshBasicMaterial({
@@ -722,6 +722,10 @@ export default function Visor3DTerrain({
       return sp;
     };
 
+    const xrMarkersGroup = new THREE.Group();
+    xrMarkersGroup.visible = Boolean(arPassthrough);
+    scene.add(xrMarkersGroup);
+
     const markerAnchors = [];
     const { sciencePOIs = [], hazardZones = [] } = scienceHazardsData;
     for (const poi of sciencePOIs) {
@@ -738,7 +742,7 @@ export default function Visor3DTerrain({
       });
       const beacon = new THREE.Mesh(beaconGeo, beaconMat);
       beacon.position.set(wx, wy + 110, wz);
-      scene.add(beacon);
+      xrMarkersGroup.add(beacon);
 
       const pin = makeWaypointSprite(
         poi.name || 'POI',
@@ -747,7 +751,7 @@ export default function Visor3DTerrain({
         poi.isChargingStation ? '#fde68a' : '#a5f3fc'
       );
       pin.position.set(wx, wy + 265, wz);
-      scene.add(pin);
+      xrMarkersGroup.add(pin);
 
       markerAnchors.push({
         id: `poi-${poi.id}`,
@@ -771,7 +775,7 @@ export default function Visor3DTerrain({
       });
       const ring = new THREE.Mesh(ringGeo, ringMat);
       ring.position.set(wx, wy + 8, wz);
-      scene.add(ring);
+      xrMarkersGroup.add(ring);
 
       const hPin = makeWaypointSprite(
         hz.name || 'HAZARD',
@@ -780,7 +784,7 @@ export default function Visor3DTerrain({
         '#fecaca'
       );
       hPin.position.set(wx, wy + 95, wz);
-      scene.add(hPin);
+      xrMarkersGroup.add(hPin);
 
       markerAnchors.push({
         id: `hz-${hz.id}`,
@@ -793,6 +797,7 @@ export default function Visor3DTerrain({
       camera,
       vrRig,
       renderer,
+      xrMarkersGroup,
       wireframeMat,
       skyCanvas,
       skyTexture,
@@ -944,11 +949,11 @@ export default function Visor3DTerrain({
       }
 
       if (refs.hasCamPos) {
-        const posAlpha = 1 - Math.exp(-6 * dt);
+        const posAlpha = 1 - Math.exp(-8 * dt);
         vrRig.position.lerp(refs.targetCamPos, posAlpha);
       }
       if (!renderer.xr.isPresenting && refs.hasCamRot) {
-        const rotAlpha = 1 - Math.exp(-7 * dt);
+        const rotAlpha = 1 - Math.exp(-6 * dt);
         let yawDiff = refs.targetCamYaw - camera.rotation.y;
         while (yawDiff > Math.PI) yawDiff -= Math.PI * 2;
         while (yawDiff < -Math.PI) yawDiff += Math.PI * 2;
@@ -968,11 +973,11 @@ export default function Visor3DTerrain({
         !renderer.xr.isPresenting &&
         refs.onProjectedScreenMarkers &&
         refs.markerAnchors?.length &&
-        (camera.position.distanceTo(refs.lastProjPos) > 0.15 ||
+        (vrRig.position.distanceTo(refs.lastProjPos) > 0.15 ||
           refs.lastProjYaw !== camera.rotation.y ||
           refs.lastProjPitch !== camera.rotation.x)
       ) {
-        refs.lastProjPos.copy(camera.position);
+        refs.lastProjPos.copy(vrRig.position);
         refs.lastProjYaw = camera.rotation.y;
         refs.lastProjPitch = camera.rotation.x;
         const projected = {};
@@ -1038,8 +1043,9 @@ export default function Visor3DTerrain({
 
   // Attach/detach WebXR session (supports both Full 3D Mars VR and AR Passthrough)
   useEffect(() => {
-    const { renderer, camera, vrRig } = sceneRefs.current;
+    const { renderer, camera, vrRig, xrMarkersGroup } = sceneRefs.current;
     if (!renderer || !camera || !vrRig || !xrSession) return;
+    if (xrMarkersGroup) xrMarkersGroup.visible = true;
 
     // Align vrRig forward (-Z) to the initial route heading so Quest 2 faces straight down the route
     vrRig.rotation.order = 'YXZ';
@@ -1151,6 +1157,7 @@ export default function Visor3DTerrain({
     });
 
     return () => {
+      if (xrMarkersGroup) xrMarkersGroup.visible = Boolean(arPassthrough);
       camera.remove(hudMesh);
       vrRig.remove(pathGroup);
       vrRig.rotation.y = 0;
@@ -1292,27 +1299,6 @@ export default function Visor3DTerrain({
     });
     const ribbonMesh = new THREE.Mesh(ribbonGeo, ribbonMat);
     routeGroup.add(ribbonMesh);
-
-    // Add glowing waypoint pylons along the route + tall destination beacon so the full route is visible end-to-end
-    for (let i = 0; i < rawPts.length; i++) {
-      const [mx, my] = rawPts[i];
-      const wx = mx - originX;
-      const wz = -(my - originY);
-      const wy = (sampleDemElevation(demData, mx, my) - baseElev) * VERTICAL_EXAGGERATION;
-      const isEnd = i === rawPts.length - 1;
-      const h = isEnd ? 320 : 120;
-      const r = isEnd ? 14 : 7;
-      const postGeo = new THREE.CylinderGeometry(r, r, h, 8);
-      const postMat = new THREE.MeshBasicMaterial({
-        color: isEnd ? 0x34d399 : routeColor,
-        transparent: true,
-        opacity: isEnd ? 0.85 : 0.65,
-        fog: false,
-      });
-      const post = new THREE.Mesh(postGeo, postMat);
-      post.position.set(wx, wy + h / 2, wz);
-      routeGroup.add(post);
-    }
 
     scene.add(routeGroup);
     sceneRefs.current.routeLine = routeGroup;
