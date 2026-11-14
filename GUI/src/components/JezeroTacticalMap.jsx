@@ -92,6 +92,7 @@ export default function JezeroTacticalMap({
   onAddDrawVertex,
   onDeleteZone,
   onCursorMove,
+  onUserPan,
 }) {
   const mapContainerRef = useRef(null);
   const mapInstanceRef = useRef(null);
@@ -102,6 +103,11 @@ export default function JezeroTacticalMap({
   const reliefOverlayRef = useRef(null);
   const opmTileRef = useRef(null);
 
+  // Animation and interaction tracking refs
+  const lastFlyToTargetTimestampRef = useRef(null);
+  const lastLocatePulseTimestampRef = useRef(null);
+  const lastPannedCoordRef = useRef(null);
+
   // Refs for stable event listeners inside map init
   const activeDrawModeRef = useRef(activeDrawMode);
   const onAddDrawVertexRef = useRef(onAddDrawVertex);
@@ -109,6 +115,7 @@ export default function JezeroTacticalMap({
   const hazardZonesRef = useRef(hazardZones);
   const drawnZonesRef = useRef(drawnZones);
   const landmarksRef = useRef(landmarks);
+  const onUserPanRef = useRef(onUserPan);
 
   useEffect(() => {
     activeDrawModeRef.current = activeDrawMode;
@@ -117,6 +124,7 @@ export default function JezeroTacticalMap({
     hazardZonesRef.current = hazardZones;
     drawnZonesRef.current = drawnZones;
     landmarksRef.current = landmarks;
+    onUserPanRef.current = onUserPan;
   });
 
   // Dispatch bridge for Leaflet HTML popup buttons
@@ -395,6 +403,12 @@ export default function JezeroTacticalMap({
     };
     map.on('mousemove', handleMouseMove);
 
+    // Disengage GPS camera tether when user manually pans/drags the map
+    const handleDragStart = () => {
+      onUserPanRef.current?.();
+    };
+    map.on('dragstart', handleDragStart);
+
     const resizeObserver =
       typeof ResizeObserver !== 'undefined'
         ? new ResizeObserver(() => {
@@ -411,6 +425,7 @@ export default function JezeroTacticalMap({
       if (resizeObserver) resizeObserver.disconnect();
       map.off('click', handleMapClick);
       map.off('mousemove', handleMouseMove);
+      map.off('dragstart', handleDragStart);
       if (liveMarkerRef.current) {
         liveMarkerRef.current.remove();
         liveMarkerRef.current = null;
@@ -507,10 +522,12 @@ export default function JezeroTacticalMap({
     }
   }, [basemap, reliefBlend]);
 
-  // Fly-to when Quick Landmark, Target, or Origin changes
+  // Fly-to when Quick Landmark, Target, or Origin changes (runs once per unique timestamp)
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map || !flyToTarget?.timestamp || !flyToTarget.latLon) return;
+    if (lastFlyToTargetTimestampRef.current === flyToTarget.timestamp) return;
+    lastFlyToTargetTimestampRef.current = flyToTarget.timestamp;
 
     map.flyTo(flyToTarget.latLon, flyToTarget.zoom || 14, {
       animate: true,
@@ -519,17 +536,22 @@ export default function JezeroTacticalMap({
     });
   }, [flyToTarget]);
 
-  // Smooth Animated Fly-To Zoom when Locate EVA / North Pin is pressed
+  // Smooth Animated Fly-To Zoom when Locate EVA / North Pin is pressed (runs once per unique timestamp)
   useEffect(() => {
     const map = mapInstanceRef.current;
-    if (!map || !locatePulse?.timestamp || !liveNavState?.currentLatLon) return;
+    if (!map || !locatePulse?.timestamp) return;
+    if (lastLocatePulseTimestampRef.current === locatePulse.timestamp) return;
+    lastLocatePulseTimestampRef.current = locatePulse.timestamp;
 
-    map.flyTo(liveNavState.currentLatLon, locatePulse.zoom || 14.5, {
+    const targetCoords = locatePulse.latLon || liveNavState?.currentLatLon;
+    if (!targetCoords) return;
+
+    map.flyTo(targetCoords, locatePulse.zoom || 14.5, {
       animate: true,
       duration: 1.0,
       easeLinearity: 0.25,
     });
-  }, [locatePulse, liveNavState?.currentLatLon]);
+  }, [locatePulse]);
 
   // Render Traverse Waypoints & Slope Telemetry
   useEffect(() => {
@@ -1201,9 +1223,17 @@ export default function JezeroTacticalMap({
     }
 
     if (followAstronaut && active) {
-      map.panTo(currentLatLon, { animate: true, duration: 0.35 });
+      const prev = lastPannedCoordRef.current;
+      const moved =
+        !prev ||
+        Math.abs(prev[0] - currentLatLon[0]) > 0.00002 ||
+        Math.abs(prev[1] - currentLatLon[1]) > 0.00002;
+      if (moved) {
+        lastPannedCoordRef.current = currentLatLon;
+        map.panTo(currentLatLon, { animate: true, duration: 0.35 });
+      }
     }
-  }, [liveNavState, followAstronaut, locatePulse]);
+  }, [liveNavState, followAstronaut]);
 
   return (
     <div className="relative w-full h-full bg-[#0b0d11]">
