@@ -1,0 +1,14 @@
+# Jezero Crater Mission Planner — Backend
+fastapi
+uvicorn[standard]
+networkx
+shapely
+numpy
+scipy
+python-dotenv
+httpx
+gdal
+fiona
+rasterio
+geopandas
+pyproj
