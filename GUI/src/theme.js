@@ -41,8 +41,8 @@ export const APP_THEME = {
     lg: '16px',
   },
   regionalBounds: [
-    [17.7000, 76.7980],
-    [18.7013, 77.8009],
+    [17.084077, 76.795971],
+    [19.319730, 77.801146],
   ],
   routeLine: {
     haloColor: '#0b0d11',

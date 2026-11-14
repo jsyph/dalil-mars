@@ -7,7 +7,7 @@
       18.4446,
       77.4509
     ],
-    "elevation_m": -2565,
+    "elevation_m": -2563.0,
     "usgs_unit": "Cf (Crater Floor Fractured Unit)",
     "brief": "Touchdown location of the Mars 2020 Perseverance rover on Sol 0 (February 18, 2021). Comprises a flat, fractured basaltic lava or impact-melt sheet blanketed with a thin veneer of aeolian sand.",
     "photos": [
@@ -56,7 +56,8 @@
     "rover_samples": [
       "Core #01: Roubion (Ablated/Gas)",
       "Witness Tube #01 (Cleanroom baseline)"
-    ]
+    ],
+    "slope_deg": 2.6
   },
   {
     "id": "kodiak_butte",
@@ -66,7 +67,7 @@
       18.4981,
       77.3625
     ],
-    "elevation_m": -2402,
+    "elevation_m": -2389.5,
     "usgs_unit": "\u0394m / \u0394ss (Delta Remnant Outlier)",
     "brief": "Prominent flat-topped erosional butte south of the main delta front. Mastcam-Z and SuperCam long-distance imaging revealed distinct steeply dipping deltaic foreset beds (15\u00b0\u201320\u00b0), confirming a sustained ancient paleolake highstand.",
     "photos": [
@@ -114,7 +115,8 @@
     },
     "rover_samples": [
       "Long-range spectroscopic survey target (SuperCam ChemCam/LIBS)"
-    ]
+    ],
+    "slope_deg": 1.0
   },
   {
     "id": "three_forks",
@@ -124,7 +126,7 @@
       18.5284,
       77.4042
     ],
-    "elevation_m": -2426,
+    "elevation_m": -2444.2,
     "usgs_unit": "Nvf / \u0394b (Delta Base Confluence)",
     "brief": "Historic surface cache depot for the NASA-ESA Mars Sample Return (MSR) campaign. Perseverance deposited 10 titanium sample tubes on the flat ground here between Dec 2022 and Jan 2023 as an operational backup.",
     "photos": [
@@ -176,7 +178,8 @@
       "Tube #10: Malay",
       "Tube #12: Amalik",
       "Tube #14: Mageik"
-    ]
+    ],
+    "slope_deg": 6.6
   },
   {
     "id": "seitah_dunes",
@@ -186,7 +189,7 @@
       18.4312,
       77.4398
     ],
-    "elevation_m": -2569,
+    "elevation_m": -2566.2,
     "usgs_unit": "Oc (Olivine-Rich Cumulate Unit)",
     "brief": "Navajo for \"amidst the sand\". A geologically unique layered ultramafic unit featuring heavy aeolian sand ripples and cumulate igneous rocks that crystallized deep inside a magma chamber before water filled the crater.",
     "photos": [
@@ -235,7 +238,8 @@
     "rover_samples": [
       "Core #05: Dourbes (Abraded)",
       "Core #06: Salette (Ultramafic Cumulate)"
-    ]
+    ],
+    "slope_deg": 0.6
   },
   {
     "id": "wildcat_ridge",
@@ -245,7 +249,7 @@
       18.5345,
       77.378
     ],
-    "elevation_m": -2414,
+    "elevation_m": -2436.5,
     "usgs_unit": "\u0394m (Fine-Grained Lacustrine Mudstone)",
     "brief": "Steep exposure of fine-grained deltaic mudstones deposited during a quiescent phase of Lake Jezero. Abrasion patch \"Swift Run\" revealed intense sulfate mineral concentrations and the highest biosignature preservation potential discovered to date.",
     "photos": [
@@ -294,7 +298,8 @@
     "rover_samples": [
       "Core #09: Swift Run (Ablated)",
       "Core #10: Wildcat Ridge (Sealed tube #09)"
-    ]
+    ],
+    "slope_deg": 1.6
   },
   {
     "id": "belva_crater",
@@ -304,7 +309,7 @@
       18.5085,
       77.4892
     ],
-    "elevation_m": -2549,
+    "elevation_m": -2560.3,
     "usgs_unit": "Cb (Impact Crater Ejecta & Megablocks)",
     "brief": "A 1-km diameter impact crater excavated into the delta and crater floor. Deep structural walls expose dramatic dipping cross-sections, faulted bedrock, and polymict impact breccias thrown from deep beneath the volcanic floor.",
     "photos": [
@@ -352,7 +357,8 @@
     },
     "rover_samples": [
       "Belva Rim Mastcam-Z 360-degree gigapixel mosaic and spectral survey"
-    ]
+    ],
+    "slope_deg": 1.2
   },
   {
     "id": "neretva_vallis",
@@ -362,7 +368,7 @@
       18.608,
       77.185
     ],
-    "elevation_m": -2109,
+    "elevation_m": -2145.7,
     "usgs_unit": "Nvf (Fluvial Channel Canyon Floor)",
     "brief": "The monumental canyon carved through the western rim of Jezero Crater by ancient Martian rivers. Floods carrying boulders over a meter across breached the crater wall and dumped billions of cubic meters of sediment into the lake.",
     "photos": [
@@ -410,7 +416,8 @@
     },
     "rover_samples": [
       "Neretva Vallis breach survey & boulder field navigation"
-    ]
+    ],
+    "slope_deg": 5.3
   },
   {
     "id": "enchanted_lake",
@@ -420,7 +427,7 @@
       18.514,
       77.382
     ],
-    "elevation_m": -2404,
+    "elevation_m": -2414.3,
     "usgs_unit": "\u0394b (Basal Delta Bottomset Unit)",
     "brief": "A shallow outcrop nestled near the base of the delta scarp. It features finely laminated mudstones and siltstones that precipitated directly from suspension in the deepest, most quiet waters of the Jezero paleolake.",
     "photos": [
@@ -469,7 +476,8 @@
     "rover_samples": [
       "Core #07: Sturgis (Ablated)",
       "Core #08: Thornton Gap (Lacustrine core)"
-    ]
+    ],
+    "slope_deg": 2.0
   },
   {
     "id": "north_rim",
@@ -479,7 +487,7 @@
       18.65,
       77.46
     ],
-    "elevation_m": -2420,
+    "elevation_m": -2425.7,
     "usgs_unit": "Cr (Pre-Noachian Crustal Rim Breccia)",
     "brief": "The towering tectonic crater rim wall rising hundreds of meters above the basin floor. Formed during the giant Isidis impact event ~3.9 billion years ago, exposing the most ancient primordial crust of Mars.",
     "photos": [
@@ -527,7 +535,8 @@
     },
     "rover_samples": [
       "Targeted for Mars 2020 Extended Mission Crater Rim Ascent"
-    ]
+    ],
+    "slope_deg": 1.6
   },
   {
     "id": "sedona_crater",
@@ -537,7 +546,7 @@
       17.8356,
       77.5341
     ],
-    "elevation_m": -3032,
+    "elevation_m": -3024.1,
     "usgs_unit": "Ah (Ancient Southern Highlands Plateau)",
     "brief": "A well-preserved Noachian impact crater located in the southern Nili Planum highlands. Officially designated by the IAU/USGS after Sedona, Arizona, famous for oxidized terrestrial iron-rich sandstone formations.",
     "photos": [
@@ -585,7 +594,8 @@
     },
     "rover_samples": [
       "USGS SIM 3464 Regional Stratigraphic Type Locality"
-    ]
+    ],
+    "slope_deg": 2.6
   },
   {
     "id": "hartwell_crater",
@@ -595,7 +605,7 @@
       18.5257,
       77.7146
     ],
-    "elevation_m": -2603,
+    "elevation_m": -2608.4,
     "usgs_unit": "Cfe (Eastern Crater Floor & Ejecta Blanket)",
     "brief": "Distinct secondary impact crater situated on the eastern floor of Jezero Crater. Officially approved by IAU/USGS nomenclature, it exposes deep subsurface ejecta layers that predate the deltaic sediment inflows.",
     "photos": [
@@ -643,6 +653,7 @@
     },
     "rover_samples": [
       "Jezero Basin Eastern Floor Stratigraphic Reference"
-    ]
+    ],
+    "slope_deg": 7.7
   }
 ]

@@ -7,41 +7,44 @@
       "sol": 0,
       "lat": 18.444627,
       "lon": 77.450886,
-      "elev": -2570,
+      "elev": -2563.0,
       "minerals": "Basaltic Regolith",
       "description": "Primary pressurized habitat & surface operations hub. Equipped with solar array, life support recharge, and MRO orbital comms relay.",
       "isShelter": true,
       "isChargingStation": true,
       "powerOutputKw": 40,
-      "o2RefillRateLpm": 32
+      "o2RefillRateLpm": 32,
+      "slope_deg": 2.6
     },
     {
       "id": "seitah-ridge",
-      "name": "Séítah Olivine Cumulate",
+      "name": "S\u00e9\u00edtah Olivine Cumulate",
       "type": "science",
       "sol": 200,
       "lat": 18.4315,
-      "lon": 77.4320,
-      "elev": -2582,
+      "lon": 77.432,
+      "elev": -2559.5,
       "minerals": "Olivine, Carbonate, Sulfate",
       "description": "Ancient magma chamber exposure altered by liquid water. High scientific value for planetary evolution and paleoclimate records.",
       "isShelter": false,
-      "isChargingStation": false
+      "isChargingStation": false,
+      "slope_deg": 1.8
     },
     {
       "id": "station-delta-solar",
       "name": "Delta Front Solar Waystation",
       "type": "charging",
       "sol": 400,
-      "lat": 18.4585,
-      "lon": 77.4110,
-      "elev": -2510,
+      "lat": 18.459759,
+      "lon": 77.41087,
+      "elev": -2472.0,
       "minerals": "Deltaic Mudstone Pad",
       "description": "Autonomous solar & KILOPOWER micro-reactor charging pad + high-pressure O2/water refill kiosk at the base of the western delta.",
       "isShelter": true,
       "isChargingStation": true,
       "powerOutputKw": 25,
-      "o2RefillRateLpm": 24
+      "o2RefillRateLpm": 24,
+      "slope_deg": 8.5
     },
     {
       "id": "three-forks",
@@ -50,11 +53,12 @@
       "sol": 680,
       "lat": 18.4565,
       "lon": 77.4035,
-      "elev": -2518,
+      "elev": -2512.2,
       "minerals": "10 Cached Titanium Sample Tubes",
       "description": "Mars Sample Return backup depot. Contains 10 sealed igneous, sedimentary, and regolith cores ready for retrieval.",
       "isShelter": false,
-      "isChargingStation": false
+      "isChargingStation": false,
+      "slope_deg": 5.7
     },
     {
       "id": "kodiak-butte",
@@ -63,24 +67,26 @@
       "sol": 150,
       "lat": 18.4368,
       "lon": 77.4105,
-      "elev": -2525,
+      "elev": -2534.0,
       "minerals": "Phyllosilicates, Mudstone",
-      "description": "Isolated butte preserving Gilbert-type delta foreset and topset beds—definitive proof of an ancient Jezero lake.",
+      "description": "Isolated butte preserving Gilbert-type delta foreset and topset beds\u2014definitive proof of an ancient Jezero lake.",
       "isShelter": false,
-      "isChargingStation": false
+      "isChargingStation": false,
+      "slope_deg": 7.9
     },
     {
       "id": "hawksbill-gap",
       "name": "Hawksbill Gap (ISRU Water Clays)",
       "type": "isru",
       "sol": 450,
-      "lat": 18.4640,
-      "lon": 77.3890,
-      "elev": -2485,
+      "lat": 18.464,
+      "lon": 77.389,
+      "elev": -2463.3,
       "minerals": "Hydrated Smectite Clays (4-7% H2O)",
       "description": "Primary In-Situ Resource Utilization (ISRU) target. Hydrated clay strata suitable for thermal water extraction and propellant synthesis.",
       "isShelter": false,
-      "isChargingStation": false
+      "isChargingStation": false,
+      "slope_deg": 7.8
     },
     {
       "id": "belva-crater",
@@ -88,12 +94,13 @@
       "type": "science",
       "sol": 780,
       "lat": 18.4785,
-      "lon": 77.3670,
-      "elev": -2445,
+      "lon": 77.367,
+      "elev": -2405.8,
       "minerals": "Breccia, Impact Melts",
       "description": "800m impact crater exposing deep stratigraphy beneath the delta fan. Steep inner walls require tether or rover assist.",
       "isShelter": false,
-      "isChargingStation": false
+      "isChargingStation": false,
+      "slope_deg": 1.5
     },
     {
       "id": "station-belva-relay",
@@ -101,14 +108,15 @@
       "type": "charging",
       "sol": 950,
       "lat": 18.4795,
-      "lon": 77.3520,
-      "elev": -2420,
+      "lon": 77.352,
+      "elev": -2401.7,
       "minerals": "Sulfate-Bearing Ridge",
       "description": "Mid-crater autonomous rover/suit fast-charge depot and emergency pressurized storm pod.",
       "isShelter": true,
       "isChargingStation": true,
       "powerOutputKw": 25,
-      "o2RefillRateLpm": 24
+      "o2RefillRateLpm": 24,
+      "slope_deg": 6.4
     },
     {
       "id": "neretva-vallis",
@@ -116,12 +124,13 @@
       "type": "isru",
       "sol": 1150,
       "lat": 18.4875,
-      "lon": 77.3190,
-      "elev": -2375,
+      "lon": 77.319,
+      "elev": -2338.4,
       "minerals": "Sulfates, Hydrated Silica, Carbonates",
       "description": "Ancient river valley that carved through Jezero's western rim. High potential for preserved biosignatures and subsurface ice.",
       "isShelter": false,
-      "isChargingStation": false
+      "isChargingStation": false,
+      "slope_deg": 4.5
     },
     {
       "id": "western-rim",
@@ -130,70 +139,160 @@
       "sol": 2022,
       "lat": 18.435594,
       "lon": 77.233223,
-      "elev": -1936,
+      "elev": -1914.3,
       "minerals": "Noachian Crustal Carbonates",
       "description": "Forward Emergency Shelter & High-Ground Comms Post (+634m above crater floor). Unobstructed line-of-sight for orbital relay.",
       "isShelter": true,
       "isChargingStation": true,
       "powerOutputKw": 35,
-      "o2RefillRateLpm": 28
+      "o2RefillRateLpm": 28,
+      "slope_deg": 7.8
     }
   ],
   "hazardZones": [
     {
-      "id": "haz-seitah-dunes",
-      "name": "Séítah Aeolian Sand Trap",
-      "type": "sand",
-      "severity": "high",
-      "maxSlope": 14,
-      "lat": 18.4375,
-      "lon": 77.4280,
-      "radiusMeters": 480,
-      "description": "Deep unconsolidated wind-blown ripples. High sinkage risk for weighted astronauts and wheeled carts."
-    },
-    {
-      "id": "haz-delta-scarp",
-      "name": "Eastern Delta Scarp Cliff",
+      "id": "stage24-haz-01",
+      "name": "Stage 2/4 Steep Escarpment #1",
       "type": "cliff",
       "severity": "critical",
-      "maxSlope": 26,
-      "lat": 18.4500,
-      "lon": 77.4165,
-      "radiusMeters": 550,
-      "description": "Sheer 24°-28° fractured sandstone cliff face. Impassable on foot without climbing gear."
+      "maxSlope": 61.3,
+      "lat": 17.865993,
+      "lon": 77.488243,
+      "elev": -2265.6,
+      "radiusMeters": 740,
+      "description": "Consolidated 20.2m DTM barrier cluster: 61.3\u00b0 peak slope at -2266m elevation (87% blocked cells in 646m sector)."
     },
     {
-      "id": "haz-belva-boulders",
-      "name": "Belva Ejecta Boulder Field",
-      "type": "boulders",
-      "severity": "high",
-      "maxSlope": 19,
-      "lat": 18.4730,
-      "lon": 77.3750,
-      "radiusMeters": 620,
-      "description": "Dense meter-scale ejecta blocks. High trip/suit-puncture hazard; slows EVA pace by 60%."
-    },
-    {
-      "id": "haz-margin-scree",
-      "name": "Margin Unit Loose Scree",
-      "type": "cliff",
-      "severity": "medium",
-      "maxSlope": 17,
-      "lat": 18.4680,
-      "lon": 77.3420,
-      "radiusMeters": 500,
-      "description": "Unstable carbonate talus slope. Avoid during heavy sample transport."
-    },
-    {
-      "id": "haz-rim-escarpment",
-      "name": "Western Rim Escarpment",
+      "id": "stage24-haz-02",
+      "name": "Stage 2/4 Steep Escarpment #2",
       "type": "cliff",
       "severity": "critical",
-      "maxSlope": 24,
-      "lat": 18.4550,
-      "lon": 77.2720,
+      "maxSlope": 61.5,
+      "lat": 18.312851,
+      "lon": 77.209426,
+      "elev": -1973.0,
+      "radiusMeters": 460,
+      "description": "Consolidated 20.2m DTM barrier cluster: 61.5\u00b0 peak slope at -1973m elevation (28% blocked cells in 646m sector)."
+    },
+    {
+      "id": "stage24-haz-03",
+      "name": "Stage 2/4 Steep Escarpment #3",
+      "type": "cliff",
+      "severity": "critical",
+      "maxSlope": 53.3,
+      "lat": 17.814524,
+      "lon": 77.497106,
+      "elev": -2611.4,
+      "radiusMeters": 790,
+      "description": "Consolidated 20.2m DTM barrier cluster: 53.3\u00b0 peak slope at -2611m elevation (98% blocked cells in 646m sector)."
+    },
+    {
+      "id": "stage24-haz-04",
+      "name": "Stage 2/4 Steep Escarpment #4",
+      "type": "cliff",
+      "severity": "critical",
+      "maxSlope": 70.5,
+      "lat": 18.090615,
+      "lon": 77.459612,
+      "elev": -2095.5,
+      "radiusMeters": 530,
+      "description": "Consolidated 20.2m DTM barrier cluster: 70.5\u00b0 peak slope at -2096m elevation (44% blocked cells in 646m sector)."
+    },
+    {
+      "id": "stage24-haz-05",
+      "name": "Stage 2/4 Steep Escarpment #5",
+      "type": "cliff",
+      "severity": "critical",
+      "maxSlope": 66.6,
+      "lat": 18.025171,
+      "lon": 77.738088,
+      "elev": -2011.3,
+      "radiusMeters": 570,
+      "description": "Consolidated 20.2m DTM barrier cluster: 66.6\u00b0 peak slope at -2011m elevation (52% blocked cells in 646m sector)."
+    },
+    {
+      "id": "stage24-haz-06",
+      "name": "Stage 2/4 Steep Escarpment #6",
+      "type": "cliff",
+      "severity": "critical",
+      "maxSlope": 51.7,
+      "lat": 17.887467,
+      "lon": 77.562549,
+      "elev": -2207.4,
+      "radiusMeters": 780,
+      "description": "Consolidated 20.2m DTM barrier cluster: 51.7\u00b0 peak slope at -2207m elevation (95% blocked cells in 646m sector)."
+    },
+    {
+      "id": "stage24-haz-07",
+      "name": "Stage 2/4 Steep Escarpment #7",
+      "type": "cliff",
+      "severity": "critical",
+      "maxSlope": 63.2,
+      "lat": 17.771236,
+      "lon": 77.770129,
+      "elev": -2557.8,
+      "radiusMeters": 590,
+      "description": "Consolidated 20.2m DTM barrier cluster: 63.2\u00b0 peak slope at -2558m elevation (56% blocked cells in 646m sector)."
+    },
+    {
+      "id": "stage24-haz-08",
+      "name": "Stage 2/4 Steep Escarpment #8",
+      "type": "cliff",
+      "severity": "critical",
+      "maxSlope": 58.9,
+      "lat": 18.519408,
+      "lon": 77.182498,
+      "elev": -2017.0,
+      "radiusMeters": 370,
+      "description": "Consolidated 20.2m DTM barrier cluster: 58.9\u00b0 peak slope at -2017m elevation (9% blocked cells in 646m sector)."
+    },
+    {
+      "id": "stage24-haz-09",
+      "name": "Stage 2/4 Steep Escarpment #9",
+      "type": "cliff",
+      "severity": "critical",
+      "maxSlope": 47.6,
+      "lat": 17.793732,
+      "lon": 77.56698,
+      "elev": -2207.8,
+      "radiusMeters": 790,
+      "description": "Consolidated 20.2m DTM barrier cluster: 47.6\u00b0 peak slope at -2208m elevation (97% blocked cells in 646m sector)."
+    },
+    {
+      "id": "stage24-haz-10",
+      "name": "Stage 2/4 Steep Escarpment #10",
+      "type": "cliff",
+      "severity": "critical",
+      "maxSlope": 48.8,
+      "lat": 18.962857,
+      "lon": 77.563572,
+      "elev": -2019.1,
       "radiusMeters": 750,
-      "description": "Steep crater wall ascent (>22° slope). Requires switching to northern switchback corridor."
+      "description": "Consolidated 20.2m DTM barrier cluster: 48.8\u00b0 peak slope at -2019m elevation (89% blocked cells in 646m sector)."
+    },
+    {
+      "id": "stage24-haz-11",
+      "name": "Stage 2/4 Steep Escarpment #11",
+      "type": "cliff",
+      "severity": "critical",
+      "maxSlope": 55.2,
+      "lat": 18.666315,
+      "lon": 76.972192,
+      "elev": -2166.1,
+      "radiusMeters": 640,
+      "description": "Consolidated 20.2m DTM barrier cluster: 55.2\u00b0 peak slope at -2166m elevation (66% blocked cells in 646m sector)."
+    },
+    {
+      "id": "stage24-haz-12",
+      "name": "Stage 2/4 Steep Escarpment #12",
+      "type": "cliff",
+      "severity": "critical",
+      "maxSlope": 48.7,
+      "lat": 18.427037,
+      "lon": 77.194769,
+      "elev": -1983.1,
+      "radiusMeters": 430,
+      "description": "Consolidated 20.2m DTM barrier cluster: 48.7\u00b0 peak slope at -1983m elevation (22% blocked cells in 646m sector)."
     }
   ]
 }

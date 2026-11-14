@@ -402,13 +402,14 @@ export default function Visor3DTerrain({
         const slopeApprox = Math.hypot((eRight - elev) / dx, (eDown - elev) / dy);
 
         const normH = Math.max(0, Math.min(1, (elev - minElev) / elevSpan));
-        // Martian basalt-to-ochre palette (brightened for clear visibility with NASA CTX mosaic)
-        let red = 0.82 + normH * 0.18;
-        let green = 0.48 + normH * 0.22;
-        let blue = 0.32 + normH * 0.16;
+        // Depth-aware Martian palette: deeper terrain is darker, upper terrain is lighter
+        const depthLum = Math.pow(normH, 0.9);
+        let red = 0.24 + depthLum * 0.72;
+        let green = 0.16 + depthLum * 0.58;
+        let blue = 0.13 + depthLum * 0.45;
         if (slopeApprox > 0.25) {
-          red = Math.min(1, red + 0.14);
-          green *= 0.92;
+          red = Math.min(1, red + 0.10);
+          green *= 0.94;
         }
         colors[idx * 3] = red;
         colors[idx * 3 + 1] = green;

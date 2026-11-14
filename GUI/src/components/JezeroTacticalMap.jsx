@@ -172,11 +172,11 @@ export default function JezeroTacticalMap({
     const map = L.map(mapContainerRef.current, {
       center: [18.455, 77.41],
       zoom: 12,
-      minZoom: 10,
+      minZoom: 8,
       maxZoom: 18,
       maxBounds: [
-        [17.6, 76.68],
-        [18.82, 77.92],
+        [16.5, 75.8],
+        [19.9, 78.8],
       ],
       maxBoundsViscosity: 0.75,
       preferCanvas: true,
@@ -199,10 +199,10 @@ export default function JezeroTacticalMap({
     opmTileRef.current = opmBasemap;
 
     const basemapUrls = {
-      satellite: '/data/ctx_mosaic_regional.png',
+      satellite: '/data/ctx_full_stage6.png',
       terrain: '/data/hrsc_hillshade.png',
-      elevation: '/data/hrsc_elevation_color.png',
-      themis: '/data/themis_night_ir.png',
+      elevation: '/data/consolidated_depth_map.png',
+      themis: '/data/consolidated_depth_map.png',
     };
 
     if (basemapUrls[basemap]) {
@@ -481,10 +481,10 @@ export default function JezeroTacticalMap({
     if (!map) return;
 
     const basemapUrls = {
-      satellite: '/data/ctx_mosaic_regional.png',
+      satellite: '/data/ctx_full_stage6.png',
       terrain: '/data/hrsc_hillshade.png',
-      elevation: '/data/hrsc_elevation_color.png',
-      themis: '/data/themis_night_ir.png',
+      elevation: '/data/consolidated_depth_map.png',
+      themis: '/data/consolidated_depth_map.png',
     };
 
     if (basemapOverlayRef.current) {
@@ -629,28 +629,6 @@ export default function JezeroTacticalMap({
           <p style="margin:0; color:#9da5b4; font-family:'Inter',sans-serif; font-size:11px; line-height:1.4;">${hz.description}</p>
         </div>
       `);
-
-      circle.addTo(hazards);
-    });
-
-    GROUND_CONTROL_SCIENCE_HAZARDS.forEach((h) => {
-      const circle = L.circle([h.lat, h.lon], {
-        radius: h.radius,
-        color: h.color,
-        fillColor: h.fillColor,
-        fillOpacity: 0.18,
-        weight: 1.5,
-        dashArray: '4, 4',
-      });
-
-      circle.bindTooltip(
-        `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.4;color:#edf0f5;">
-          <span style="color:#ef4444;font-weight:700;">[ZONE: ${h.name}]</span><br>
-          <span>TYPE: ${h.type}</span><br>
-          <span>STATUS: ${h.severity}</span>
-        </div>`,
-        { sticky: true, opacity: 0.96 }
-      );
 
       circle.addTo(hazards);
     });
