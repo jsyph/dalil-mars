@@ -60,6 +60,7 @@ import {
   computeMarswalkRoute,
   LOADOUT_PROFILES,
   marsDistanceMeters,
+  SUIT_O2_CAPACITY_LITERS,
   WEATHER_CONDITIONS,
 } from './utils/pathfinder';
 import { publishVisorState, subscribeVisorCommands } from './utils/visorSync';
@@ -120,6 +121,7 @@ export default function App() {
   const [startO2Pct, setStartO2Pct] = useState(90);
   const [autoChargingStop, setAutoChargingStop] = useState(true);
   const [showDirectComparison, setShowDirectComparison] = useState(false);
+  const [manualPosOverride, setManualPosOverride] = useState(null);
 
   // Martian Time-of-Day & Sol State
   const [selectedMissionSol] = useState(Number(latestMeda.sol) || 1133);
@@ -263,6 +265,7 @@ export default function App() {
     setNavStepIdx(0);
     setRechargeTicksRemaining(0);
     setHasCompletedPitStop(false);
+    setManualPosOverride(null);
     if (navMode === 'navigating') {
       setNavMode('browse');
     }
@@ -403,31 +406,86 @@ export default function App() {
       distCoveredKm = routeResult.distKm * progress;
     }
 
-    const clampedBat = Math.max(0, Math.min(100, Number(currentBattery.toFixed(1))));
-    const clampedO2 = Math.max(0, Math.min(100, Number(currentO2.toFixed(1))));
-    const distRemainingKm = Math.max(0, Number((routeResult.distKm - distCoveredKm).toFixed(2)));
-    const arrived = idx >= coords.length - 1 && !isRecharging;
+    const effectiveBat = manualPosOverride?.batteryPct ?? currentBattery;
+    const effectiveO2 = manualPosOverride?.o2Pct ?? currentO2;
+    const effectiveDistCoveredKm = manualPosOverride?.distMovedKm ?? distCoveredKm;
+    const effectiveIsRecharging = manualPosOverride
+      ? Boolean(manualPosOverride.isRecharging)
+      : isRecharging;
+
+    const clampedBat = Math.max(0, Math.min(100, Number(effectiveBat.toFixed(1))));
+    const clampedO2 = Math.max(0, Math.min(100, Number(effectiveO2.toFixed(1))));
+    const distRemainingKm = Math.max(
+      0,
+      Number((routeResult.distKm - effectiveDistCoveredKm).toFixed(2))
+    );
+    const arrived = idx >= coords.length - 1 && !effectiveIsRecharging;
     const progressPct = coords.length > 1 ? Math.round((idx / (coords.length - 1)) * 100) : 0;
 
     const effectiveSpeed =
       weatherKey === 'dust_storm' ? loadout.speedKmh * 0.65 : loadout.speedKmh;
     const estTimeRemainingMin = Math.round((distRemainingKm / effectiveSpeed) * 60);
 
+    const effectiveLatLon = manualPosOverride
+      ? [manualPosOverride.lat, manualPosOverride.lon]
+      : currentLatLon;
+    const effectiveHeading = manualPosOverride
+      ? Math.round(manualPosOverride.heading)
+      : Math.round(heading);
+
+    // Compute cross-track deviation from the planned A* corridor
+    let closestRouteDistM = 0;
+    let closestRoutePoint = effectiveLatLon;
+    if (coords.length) {
+      let bestD = Infinity;
+      for (const pt of coords) {
+        const d = marsDistanceMeters(effectiveLatLon[0], effectiveLatLon[1], pt[0], pt[1]);
+        if (d < bestD) {
+          bestD = d;
+          closestRoutePoint = pt;
+        }
+      }
+      closestRouteDistM = Math.round(bestD);
+    }
+
+    const returnBearing =
+      closestRouteDistM > 5
+        ? Math.round(
+            calculateBearingDegrees(
+              effectiveLatLon[0],
+              effectiveLatLon[1],
+              closestRoutePoint[0],
+              closestRoutePoint[1]
+            )
+          )
+        : effectiveHeading;
+
+    const routeDeviation = {
+      isOffRoute: closestRouteDistM > 90,
+      severity: closestRouteDistM > 180 ? 'critical' : closestRouteDistM > 90 ? 'warning' : 'nominal',
+      distMeters: closestRouteDistM,
+      returnBearing,
+      closestPoint: closestRoutePoint,
+      isManual: Boolean(manualPosOverride),
+    };
+
     return {
-      active: navMode === 'navigating' || navPlaying || idx > 0,
+      active: navMode === 'navigating' || navPlaying || idx > 0 || Boolean(manualPosOverride),
       idx,
       progressPct,
-      currentLatLon,
-      heading: Math.round(heading),
+      currentLatLon: effectiveLatLon,
+      heading: effectiveHeading,
       currentBattery: clampedBat,
       currentO2: clampedO2,
-      distCoveredKm: Number(distCoveredKm.toFixed(2)),
+      distCoveredKm: Number(effectiveDistCoveredKm.toFixed(2)),
       distRemainingKm,
       estTimeRemainingMin,
-      isRecharging,
-      arrived,
-      speedKmh: isRecharging ? 0 : effectiveSpeed,
-      heartRateBpm: isRecharging ? 72 : loadoutKey === 'heavy' ? 120 : 96,
+      isRecharging: effectiveIsRecharging,
+      dockedStation: manualPosOverride?.dockedStation || null,
+      arrived: arrived && !manualPosOverride,
+      speedKmh: effectiveIsRecharging ? 0 : effectiveSpeed,
+      heartRateBpm: effectiveIsRecharging ? 72 : loadoutKey === 'heavy' ? 120 : 96,
+      routeDeviation,
     };
   }, [
     routeResult,
@@ -441,6 +499,7 @@ export default function App() {
     loadoutKey,
     weatherKey,
     loadout.speedKmh,
+    manualPosOverride,
   ]);
 
   // Keep compass rotation aligned with heading unless manually reoriented
@@ -571,7 +630,11 @@ export default function App() {
       return {
         icon: 'charge',
         distanceText: '0 m',
-        instruction: `Docked at ${routeResult.chargingStop?.station?.name}`,
+        instruction: `Docked at ${
+          liveNavState.dockedStation?.name ||
+          routeResult.chargingStop?.station?.name ||
+          'Charging Station'
+        }`,
         subtitle: '⚡ Recharging battery to 100% & refilling O2...',
       };
     }
@@ -659,6 +722,9 @@ export default function App() {
   useEffect(() => {
     publishVisorState({
       navMode,
+      navPlaying,
+      navSpeed,
+      weatherKey,
       liveNavState,
       martianEnv,
       currentManeuver,
@@ -668,24 +734,118 @@ export default function App() {
       endPOI,
       loadout,
       latestMeda,
+      routePathCoords: routeResult?.pathCoords || [],
+      pitStopIndex: routeResult?.pitStopIndex ?? null,
     });
   }, [
     navMode,
+    navPlaying,
+    navSpeed,
+    weatherKey,
     liveNavState,
     martianEnv,
     currentManeuver,
-    weatherKey,
     dustFrontState,
     nearestShelter,
     endPOI,
     loadout,
     latestMeda,
+    routeResult?.pathCoords,
+    routeResult?.pitStopIndex,
   ]);
 
+  const manualMoveContextRef = useRef({});
+  manualMoveContextRef.current = {
+    loadout,
+    weatherKey,
+    currentLatLon: liveNavState?.currentLatLon,
+    currentBattery: liveNavState?.currentBattery ?? startBatteryPct,
+    currentO2: liveNavState?.currentO2 ?? startO2Pct,
+    distCoveredKm: liveNavState?.distCoveredKm ?? 0,
+    showToast,
+  };
+
   useEffect(() => {
-    return subscribeVisorCommands((command) => {
+    return subscribeVisorCommands((command, data) => {
       if (command === 'SHELTER_DIVERT') {
         triggerShelterDivertRef.current?.();
+      } else if (command === 'TOGGLE_PLAY') {
+        setNavPlaying((prev) => {
+          const next = !prev;
+          if (next) {
+            setNavMode('navigating');
+            setManualPosOverride(null);
+          }
+          return next;
+        });
+      } else if (command === 'SET_SPEED' && data?.speed) {
+        setNavSpeed(data.speed);
+      } else if (command === 'SET_WEATHER' && data?.weatherKey) {
+        setWeatherKey(data.weatherKey);
+      } else if (command === 'MANUAL_MOVE' && data?.lat !== undefined && data?.lon !== undefined) {
+        setNavPlaying(false);
+        setNavMode('navigating');
+        setFollowAstronaut(true);
+        const ctx = manualMoveContextRef.current;
+        let dockedStationName = null;
+        setManualPosOverride((prev) => {
+          const prevLat = prev ? prev.lat : ctx.currentLatLon?.[0] ?? data.lat;
+          const prevLon = prev ? prev.lon : ctx.currentLatLon?.[1] ?? data.lon;
+          const prevBat = prev ? prev.batteryPct : ctx.currentBattery;
+          const prevO2 = prev ? prev.o2Pct : ctx.currentO2;
+          const prevDistKm = prev ? prev.distMovedKm : ctx.distCoveredKm;
+
+          const stepKm = marsDistanceMeters(prevLat, prevLon, data.lat, data.lon) / 1000;
+          const dustFactor = ctx.weatherKey === 'dust_storm' ? 1.25 : 1.0;
+          const batDrain = stepKm * ctx.loadout.batteryDrainPerKm * dustFactor;
+          const stepMinutes = (stepKm / ctx.loadout.speedKmh) * 60;
+          const o2DrainPct = ((stepMinutes * ctx.loadout.o2RateLpm) / SUIT_O2_CAPACITY_LITERS) * 100;
+
+          const stations = scienceHazardsData.sciencePOIs.filter((p) => p.isChargingStation);
+          let nearestStation = null;
+          let nearestDist = Infinity;
+          for (const st of stations) {
+            const d = marsDistanceMeters(data.lat, data.lon, st.lat, st.lon);
+            if (d <= 120 && d < nearestDist) {
+              nearestDist = d;
+              nearestStation = st;
+            }
+          }
+
+          if (nearestStation) {
+            if (!prev?.isRecharging) {
+              dockedStationName = nearestStation.name;
+            }
+            return {
+              lat: data.lat,
+              lon: data.lon,
+              heading: data.heading ?? 0,
+              distMovedKm: prevDistKm + stepKm,
+              batteryPct: 100,
+              o2Pct: 100,
+              isRecharging: true,
+              dockedStation: nearestStation,
+            };
+          }
+
+          return {
+            lat: data.lat,
+            lon: data.lon,
+            heading: data.heading ?? 0,
+            distMovedKm: prevDistKm + stepKm,
+            batteryPct: Math.max(0, Number((prevBat - batDrain).toFixed(2))),
+            o2Pct: Math.max(0, Number((prevO2 - o2DrainPct).toFixed(2))),
+            isRecharging: false,
+            dockedStation: null,
+          };
+        });
+        if (dockedStationName) {
+          ctx.showToast?.(
+            `⚡ Docked at ${dockedStationName} — Battery & O2 recharged to 100%!`
+          );
+        }
+      } else if (command === 'SNAP_TO_ROUTE') {
+        setManualPosOverride(null);
       }
     });
   }, []);
@@ -849,6 +1009,43 @@ export default function App() {
           onSetOrigin={handleSetOrigin}
         />
       </div>
+
+      {/* 2B. OFF-ROUTE DEVIATION ALERT (When astronaut moves off A* corridor) */}
+      {liveNavState?.routeDeviation?.isOffRoute && (
+        <div className="absolute bottom-36 left-1/2 z-30 -translate-x-1/2 w-[92%] max-w-md pointer-events-auto">
+          <div
+            className={`flex items-center justify-between gap-3 rounded-2xl border-2 px-3.5 py-2.5 shadow-2xl backdrop-blur-xl ${
+              liveNavState.routeDeviation.severity === 'critical'
+                ? 'bg-red-950/95 border-red-400 text-red-100'
+                : 'bg-amber-950/95 border-amber-400 text-amber-100'
+            }`}
+          >
+            <div className="flex items-center gap-2.5 min-w-0">
+              <AlertTriangle
+                className={`h-5 w-5 shrink-0 ${
+                  liveNavState.routeDeviation.severity === 'critical'
+                    ? 'text-red-300 animate-pulse'
+                    : 'text-amber-300'
+                }`}
+              />
+              <div className="min-w-0">
+                <div className="text-xs font-extrabold uppercase tracking-wider">
+                  Off-Route Deviation: {liveNavState.routeDeviation.distMeters} m
+                </div>
+                <div className="text-[11px] opacity-90 truncate">
+                  Return bearing {liveNavState.routeDeviation.returnBearing}° back to A* corridor
+                </div>
+              </div>
+            </div>
+            <button
+              onClick={() => setManualPosOverride(null)}
+              className="shrink-0 rounded-xl bg-white/15 hover:bg-white/25 border border-white/25 px-2.5 py-1.5 text-[11px] font-bold uppercase cursor-pointer"
+            >
+              Snap to Route
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* 2. LIVE ANDROID HEADS-UP NOTIFICATION POPUP */}
       {activeToast && (
