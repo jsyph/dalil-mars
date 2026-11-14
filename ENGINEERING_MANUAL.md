@@ -3,7 +3,7 @@
 
 > **Document ID:** `NASA-SPACEAPPS-2026-DALIL-ENG-001`  
 > **Target Environment:** Jezero Crater, Mars ($18.38^\circ\text{ N} - 18.58^\circ\text{ N}, \; 77.20^\circ\text{ E} - 77.48^\circ\text{ E}$)  
-> **Source Files:** [`engine.py`](file:///home/joe/Development/nasa-space-apps-2026/dalil-mars/engine.py), [`api.py`](file:///home/joe/Development/nasa-space-apps-2026/dalil-mars/api.py)  
+> **Source File:** [`engine.py`](file:///home/joe/Development/nasa-space-apps-2026/dalil-mars/engine.py)  
 > **Status:** Production Release (`engine` branch)  
 
 ---
@@ -341,7 +341,7 @@ Hab Alpha Mast (40m)
 
 ## 6. Programmatic Integration Guide (Python SDK)
 
-All functions can be imported directly from `engine` (or `api` for backward compatibility).
+All functions are available directly from `engine.py`.
 
 ### Basic Route Planning
 ```python
