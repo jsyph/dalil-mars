@@ -198,6 +198,7 @@ export default function App() {
   const [autoChargingStop, setAutoChargingStop] = useState(true);
   const [showDirectComparison, setShowDirectComparison] = useState(false);
   const [manualPosOverride, setManualPosOverride] = useState(null);
+  const [visorViewHeading, setVisorViewHeading] = useState(null);
 
   // Martian Sol & LST Time Engine
   const [selectedMissionSol] = useState(Number(latestMeda.sol) || 1133);
@@ -715,10 +716,10 @@ export default function App() {
       }
 
       setNavStepIdx((prev) => {
-        const next = Math.min(totalPoints - 1, prev + navSpeed);
+        const next = Math.min(totalPoints - 1, prev + navSpeed * 0.1);
 
         if (pitIdx !== null && !hasCompletedPitStop && prev < pitIdx && next >= pitIdx) {
-          setRechargeTicksRemaining(12);
+          setRechargeTicksRemaining(45);
           showToast({
             id: 'docking',
             type: 'charge',
@@ -765,7 +766,7 @@ export default function App() {
 
         return next;
       });
-    }, 120);
+    }, 33);
 
     return () => clearInterval(timer);
   }, [
@@ -784,24 +785,34 @@ export default function App() {
     if (!coords.length) return null;
 
     const idx = Math.min(navStepIdx, coords.length - 1);
-    const currentLatLon = coords[idx];
+    const floorIdx = Math.floor(idx);
+    const ceilIdx = Math.min(coords.length - 1, floorIdx + 1);
+    const frac = idx - floorIdx;
+    const currentLatLon =
+      floorIdx === ceilIdx
+        ? coords[floorIdx]
+        : [
+            coords[floorIdx][0] + (coords[ceilIdx][0] - coords[floorIdx][0]) * frac,
+            coords[floorIdx][1] + (coords[ceilIdx][1] - coords[floorIdx][1]) * frac,
+          ];
     const isRecharging = rechargeTicksRemaining > 0;
     const pitIdx = routeResult.pitStopIndex;
 
     let heading = 0;
-    if (idx < coords.length - 1) {
+    if (floorIdx < coords.length - 1) {
+      const lookAheadIdx = Math.min(coords.length - 1, floorIdx + 2);
       heading = calculateBearingDegrees(
-        coords[idx][0],
-        coords[idx][1],
-        coords[idx + 1][0],
-        coords[idx + 1][1]
+        currentLatLon[0],
+        currentLatLon[1],
+        coords[lookAheadIdx][0],
+        coords[lookAheadIdx][1]
       );
-    } else if (idx > 0) {
+    } else if (floorIdx > 0) {
       heading = calculateBearingDegrees(
-        coords[idx - 1][0],
-        coords[idx - 1][1],
-        coords[idx][0],
-        coords[idx][1]
+        coords[floorIdx - 1][0],
+        coords[floorIdx - 1][1],
+        coords[floorIdx][0],
+        coords[floorIdx][1]
       );
     }
 
@@ -863,13 +874,30 @@ export default function App() {
 
     let closestRouteDistM = 0;
     let closestRoutePoint = effectiveLatLon;
-    if (coords.length) {
+    if (manualPosOverride && coords.length) {
       let bestD = Infinity;
-      for (const pt of coords) {
-        const d = marsDistanceMeters(effectiveLatLon[0], effectiveLatLon[1], pt[0], pt[1]);
-        if (d < bestD) {
-          bestD = d;
-          closestRoutePoint = pt;
+      const [pLat, pLon] = effectiveLatLon;
+      if (coords.length === 1) {
+        bestD = marsDistanceMeters(pLat, pLon, coords[0][0], coords[0][1]);
+        closestRoutePoint = coords[0];
+      } else {
+        for (let i = 0; i < coords.length - 1; i++) {
+          const [aLat, aLon] = coords[i];
+          const [bLat, bLon] = coords[i + 1];
+          const dLat = bLat - aLat;
+          const dLon = bLon - aLon;
+          const lenSq = dLat * dLat + dLon * dLon;
+          const t =
+            lenSq > 1e-12
+              ? Math.max(0, Math.min(1, ((pLat - aLat) * dLat + (pLon - aLon) * dLon) / lenSq))
+              : 0;
+          const projLat = aLat + dLat * t;
+          const projLon = aLon + dLon * t;
+          const d = marsDistanceMeters(pLat, pLon, projLat, projLon);
+          if (d < bestD) {
+            bestD = d;
+            closestRoutePoint = [projLat, projLon];
+          }
         }
       }
       closestRouteDistM = Math.round(bestD);
@@ -888,8 +916,15 @@ export default function App() {
         : effectiveHeading;
 
     const routeDeviation = {
-      isOffRoute: closestRouteDistM > 90,
-      severity: closestRouteDistM > 180 ? 'critical' : closestRouteDistM > 90 ? 'warning' : 'nominal',
+      isOffRoute: Boolean(manualPosOverride) && closestRouteDistM > 90,
+      severity:
+        !manualPosOverride
+          ? 'nominal'
+          : closestRouteDistM > 180
+          ? 'critical'
+          : closestRouteDistM > 90
+          ? 'warning'
+          : 'nominal',
       distMeters: closestRouteDistM,
       returnBearing,
       closestPoint: closestRoutePoint,
@@ -902,6 +937,8 @@ export default function App() {
       progressPct,
       currentLatLon: effectiveLatLon,
       heading: effectiveHeading,
+      viewHeading:
+        visorViewHeading !== null && !navPlaying ? Math.round(visorViewHeading) : effectiveHeading,
       currentBattery: clampedBat,
       currentO2: clampedO2,
       distCoveredKm: Number(effectiveDistCoveredKm.toFixed(2)),
@@ -927,6 +964,7 @@ export default function App() {
     weatherKey,
     loadout.speedKmh,
     manualPosOverride,
+    visorViewHeading,
   ]);
 
   // Martian Sol Daylight & Thermal Engine
@@ -1268,6 +1306,7 @@ export default function App() {
 
   // Broadcast live EVA state to standalone Visor HUD (?mode=visor)
   useEffect(() => {
+    const weatherCondition = WEATHER_CONDITIONS[weatherKey] || WEATHER_CONDITIONS.nominal;
     publishVisorState({
       navPlaying,
       navSpeed,
@@ -1290,7 +1329,6 @@ export default function App() {
     liveNavState,
     martianEnv,
     currentManeuver,
-    weather,
     dustFrontState,
     nearestShelter,
     endPOI,
@@ -1321,6 +1359,7 @@ export default function App() {
           if (next) {
             setNavMode('navigating');
             setManualPosOverride(null);
+            setVisorViewHeading(null);
           }
           return next;
         });
@@ -1328,10 +1367,15 @@ export default function App() {
         setNavSpeed(data.speed);
       } else if (command === 'SET_WEATHER' && data?.weatherKey) {
         setWeatherKey(data.weatherKey);
+      } else if (command === 'MANUAL_LOOK' && data?.viewHeading !== undefined) {
+        setVisorViewHeading(data.viewHeading);
       } else if (command === 'MANUAL_MOVE' && data?.lat !== undefined && data?.lon !== undefined) {
         setNavPlaying(false);
         setNavMode('navigating');
         setFollowAstronaut(true);
+        if (data?.viewHeading !== undefined) {
+          setVisorViewHeading(data.viewHeading);
+        }
         const ctx = visorCmdCtxRef.current;
         let dockedStationName = null;
         setManualPosOverride((prev) => {
@@ -1395,6 +1439,7 @@ export default function App() {
         }
       } else if (command === 'SNAP_TO_ROUTE') {
         setManualPosOverride(null);
+        setVisorViewHeading(null);
       }
     });
   }, []);
