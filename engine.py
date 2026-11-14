@@ -1860,7 +1860,6 @@ class DalilMarsEngine:
         heart_rate_bpm: float | None = None,
         speed_kmh: float | None = None,
         weather: str = "nominal",
-        include_abort_route: bool = False,
         **kwargs,
     ) -> dict:
         """Periodic real-time life support prediction and walkback monitor for astronaut portable field computers.
@@ -2062,23 +2061,27 @@ class DalilMarsEngine:
                 "destination_reachable": feasible,
             }
 
-        # Auto-compute emergency abort route if critical or specifically requested
-        emergency_route = None
-        if include_abort_route or alert_level in (
-            "CRITICAL_BREACH_POINT_OF_NO_RETURN",
-            "WARNING_APPROACHING_WALKBACK_LIMIT",
-        ):
-            try:
-                emergency_route = self.plan_emergency_abort(
-                    current_location=(lat, lon),
-                    mode=mode,
-                    lst_hours=lst_hours,
-                    initial_battery_pct=battery_pct,
-                    initial_o2_pct=curr_o2,
-                    weather=weather,
-                )
-            except Exception as e:
-                emergency_route = {"error": f"Abort route calculation failed: {str(e)}"}
+        # The complete emergency abort corridor to the nearest shelter is ALWAYS built-in
+        try:
+            emergency_abort = self.plan_emergency_abort(
+                current_location=(lat, lon),
+                mode=mode,
+                lst_hours=lst_hours,
+                initial_battery_pct=battery_pct,
+                initial_o2_pct=curr_o2,
+                weather=weather,
+            )
+            emergency_abort["status"] = (
+                "EMERGENCY_ABORT_MANDATED"
+                if alert_level in ("CRITICAL_BREACH_POINT_OF_NO_RETURN", "WARNING_APPROACHING_WALKBACK_LIMIT")
+                else "EMERGENCY_ABORT_STANDBY"
+            )
+        except Exception as e:
+            emergency_abort = {
+                "status": "ABORT_PLANNING_ERROR",
+                "error": f"Abort route calculation failed: {str(e)}",
+                "abort_target_shelter": best_shelter,
+            }
 
         h_int = int(lst_hours)
         m_int = int((lst_hours - h_int) * 60.0)
@@ -2128,7 +2131,8 @@ class DalilMarsEngine:
                 "safe_horizon_maintained": bool(min_margin >= 0.0),
             },
             "destination_projection": dest_projection,
-            "emergency_abort_route": emergency_route,
+            "emergency_abort": emergency_abort,
+            "emergency_abort_route": emergency_abort,
         }
 
 
@@ -2339,13 +2343,13 @@ def predict(
     heart_rate_bpm: float | None = None,
     speed_kmh: float | None = None,
     weather: str = "nominal",
-    include_abort_route: bool = False,
     **kwargs,
 ) -> dict:
-    """Periodic real-time state prediction and walkback monitor for astronaut portable field computers.
+    """Comprehensive real-time state, environmental, life-support, and emergency abort prediction for portable field computers.
 
     Evaluates measured telemetry from suit/rover hardware sensors. Dynamically predicts consumption rates,
-    terrain hazards underfoot, solar insolation/shadows, RF comms link, and Apollo/Artemis Rule #1 walkback margins.
+    terrain hazards underfoot, solar insolation/shadows, RF comms link, Apollo/Artemis Rule #1 walkback margins,
+    and ALWAYS pre-computes the complete emergency escape route to the nearest habitat or storm shelter.
     """
     batt_in = kwargs.pop("initial_battery_pct", None)
     if batt_in is None:
@@ -2374,7 +2378,6 @@ def predict(
         heart_rate_bpm=heart_rate_bpm,
         speed_kmh=speed_kmh,
         weather=weather,
-        include_abort_route=include_abort_route,
         **kwargs,
     )
 

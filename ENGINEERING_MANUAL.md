@@ -482,9 +482,10 @@ wb = telemetry_step["walkback_horizon"]
 print(f"Rule #1 Shelter: {wb['nearest_shelter']} ({wb['shelter_distance_km']} km away, ETA {wb['shelter_eta_min']}m)")
 print(f"Safe Abort Margin: O2={wb['walkback_o2_margin_pct']}% | Batt={wb['walkback_battery_margin_pct']}%")
 
-# If an abort threshold is breached, an emergency escape vector is automatically generated
-if telemetry_step["emergency_abort_route"]:
-    print("Emergency escape corridor ready!")
+# The complete emergency escape corridor is ALWAYS pre-computed and immediately ready:
+escape = telemetry_step["emergency_abort"]
+print(f"Built-In Escape Target: {escape['abort_target_shelter']['name']} ({escape['summary']['total_distance_km']} km)")
+print(f"Initial Departure Vector: {escape['navigation_steps'][0]['instruction']}")
 ```
 
 ---
@@ -793,7 +794,7 @@ def evaluate_rf_comms(location: tuple[float, float] | str, mode: str = "rover") 
 * **Returns:** `dict` containing `"status"` (`"CONNECTED"` / `"BLACKOUT"`), `"direct_hab_los"` (`bool`), `"active_link"`, `"path_loss_db"`, `"masts_in_view"`, and `"all_links"`.
 
 #### `predict(...)`
-High-frequency periodic telemetry evaluation designed for an astronaut's portable field computer or chest unit. Dynamically predicts consumption rates, local terrain hazards, solar insolation, and instantaneous Apollo/Artemis Rule #1 walkback margins without assuming arbitrary baseline reserves.
+Comprehensive real-time telemetry, environmental, life-support, and emergency abort prediction for an astronaut's portable field computer. **Predicts everything in a single call**: dynamic consumption rates, terrain hazards underfoot, solar/shadow status, forward target projection, Apollo/Artemis Rule #1 walkback margins, and **always pre-computes the complete emergency retreat route** to the nearest safe shelter.
 ```python
 def predict(
     current_location: tuple[float, float] | list[float] | dict | str,
@@ -808,7 +809,6 @@ def predict(
     heart_rate_bpm: float | None = None,
     speed_kmh: float | None = None,
     weather: str = "nominal",
-    include_abort_route: bool = False,
     **kwargs,
 ) -> dict
 ```
@@ -822,16 +822,15 @@ def predict(
   * `heart_rate_bpm`: Real-time biometric heart rate (scales metabolic work rate dynamically).
   * `metabolic_rate_watts`: Direct biometric metabolic power (defaults to nominal 300W scaled by terrain slope).
   * `speed_kmh`: Current ground speed (defaults to nominal $3.6\text{ km/h}$).
-  * `include_abort_route`: If `True`, forces inclusion of the emergency retreat GeoJSON route (automatically populated on `WARNING` or `CRITICAL` alert).
 * **Returns:** `dict` containing:
-  * `"status"`: `"NOMINAL"`, `"CAUTION"`, `"WARNING_LOW_MARGIN"`, or `"CRITICAL_ABORT_REQUIRED"`.
+  * `"status"`: Overall health status (`"NOMINAL"`, `"CAUTION"`, `"WARNING_LOW_MARGIN"`, or `"CRITICAL_ABORT_REQUIRED"`).
   * `"alert_level"`: Rule #1 alert rating.
   * `"action"`: Operational guidance (`"PROCEED"`, `"MONITOR_CLOSELY"`, `"TURN_BACK_NOW"`, or `"ABORT_IMMEDIATELY"`).
   * `"current_telemetry"`: Instantaneous elevation, slope angle, slope safety rating, sunlit status, solar flux, and RF comms link.
   * `"dynamic_consumption_rates"`: Real-time $O_2$ consumption rate ($L/min$), electrical discharge rate ($W$), and time-to-empty ($TTE_{O2}$, $TTE_{\text{battery}}$ in minutes).
   * `"walkback_horizon"`: Apollo/Artemis Rule #1 margins, nearest shelter, retreat distance and ETA, and net abort buffer.
   * `"destination_projection"`: ETA, distance remaining, and predicted arrival battery and $O_2$ reserves (if `destination` provided).
-  * `"emergency_abort_route"`: Full emergency escape route if warranted.
+  * `"emergency_abort"` / `"emergency_abort_route"`: **Always pre-computed and included.** Contains target shelter, escape distance, ETA, projected reserves upon ingress, turn-by-turn navigation steps, and complete GeoJSON route.
 
 #### Environmental & Catalog Telemetry Functions
 * `get_waypoints() -> list[dict]`: Returns cataloged POIs, science sites, and habitats.
