@@ -156,6 +156,7 @@ MOBILITY_PROFILES = {
         "basePowerWatts": 120.0,
         "heaterPowerWatts": 250.0,
         "batteryDrainPerKm": 8.5,
+        "climbPenalty": 3.0,
         "suitMassKg": 145.0,
         "isSolarPowered": False,
         "description": "Standard pressurized spacesuit with PLSS backpack. High agility, human metabolic O2 limit.",
@@ -169,6 +170,7 @@ MOBILITY_PROFILES = {
         "basePowerWatts": 280.0,
         "heaterPowerWatts": 60.0,
         "batteryDrainPerKm": 1.8,
+        "climbPenalty": 2.2,
         "suitMassKg": 950.0,
         "isSolarPowered": True,
         "solarPanelAreaM2": 2.8,
@@ -311,6 +313,7 @@ class MartianTacticalEngine:
         sun_elev_deg: float,
         sun_az_deg: float,
         tau: float,
+        uphill_penalty: float | None = None,
     ) -> dict:
         r1, c1 = start_rc
         r2, c2 = goal_rc
@@ -365,6 +368,14 @@ class MartianTacticalEngine:
 
         sub_grid = self.master_grid[min_r:max_r, min_c:max_c].copy()
         sub_H, sub_W = sub_grid.shape
+
+        if self.elev_matrix is not None:
+            sub_elev = self.elev_matrix[min_r:max_r, min_c:max_c]
+            sub_elev_1d = sub_elev.ravel()
+        else:
+            sub_elev_1d = None
+
+        climb_k = uphill_penalty if uphill_penalty is not None else mode_profile.get("climbPenalty", 2.5)
 
         start_local = (r1 - min_r, c1 - min_c)
         goal_local = (r2 - min_r, c2 - min_c)
@@ -428,6 +439,7 @@ class MartianTacticalEngine:
             ur = u // sub_W
             uc = u % sub_W
             wu = sub_grid_1d[u]
+            zu = sub_elev_1d[u] if sub_elev_1d is not None else 0.0
 
             for dr, dc, s in moves_fine:
                 vr = ur + dr
@@ -439,6 +451,12 @@ class MartianTacticalEngine:
                         edge_cost = s * 0.5 * (wu + wv)
                         if cost_mult is not None:
                             edge_cost *= cost_mult[v]
+
+                        # Asymmetric elevation cost: climbing up from lower node costs more!
+                        if sub_elev_1d is not None:
+                            dz = sub_elev_1d[v] - zu
+                            if dz > 0.0:
+                                edge_cost *= (1.0 + climb_k * (dz / s))
 
                         ng = g + edge_cost
                         if ng < dist_map[v]:
@@ -462,8 +480,15 @@ class MartianTacticalEngine:
 
         path_coords = []
         shadow_flags = []
+        telemetry_samples = []
         total_dist_m = 0.0
-        max_slope_deg = 3.5
+        max_slope_deg = 0.0
+        elevation_gain_m = 0.0
+        elevation_loss_m = 0.0
+        uphill_dist_m = 0.0
+        downhill_dist_m = 0.0
+        flat_dist_m = 0.0
+        slopes_list = []
 
         # Downsample fine telemetry ray-marching to max 150 points along path
         step_stride = max(1, len(path_pixels) // 150)
@@ -482,31 +507,66 @@ class MartianTacticalEngine:
 
             path_coords.append([round(lon, 6), round(lat, 6), round(z, 1)])
 
+            seg_slope = 0.0
+            is_climbing = False
             if i > 0:
                 prev_r, prev_c = sampled_pixels[i - 1]
                 ds = np.hypot(pr - prev_r, pc - prev_c) * self.pixel_res
                 total_dist_m += ds
                 if self.elev_matrix is not None:
-                    dz = abs(z - self.elev_matrix[prev_r, prev_c])
-                    slope = np.degrees(np.arctan2(dz, ds + 1e-6))
-                    max_slope_deg = max(max_slope_deg, slope)
+                    prev_z = float(self.elev_matrix[prev_r, prev_c])
+                    dz = z - prev_z
+                    seg_slope = float(np.degrees(np.arctan2(abs(dz), ds + 1e-6)))
+                    max_slope_deg = max(max_slope_deg, seg_slope)
+                    slopes_list.append(seg_slope)
+
+                    if dz > 0.15:
+                        elevation_gain_m += dz
+                        uphill_dist_m += ds
+                        is_climbing = True
+                    elif dz < -0.15:
+                        elevation_loss_m += abs(dz)
+                        downhill_dist_m += ds
+                    else:
+                        flat_dist_m += ds
+
+            telemetry_samples.append({
+                "dist_km": round(total_dist_m / 1000.0, 3),
+                "lat": round(lat, 6),
+                "lon": round(lon, 6),
+                "elevation_m": round(z, 1),
+                "slope_deg": round(seg_slope, 1),
+                "is_climbing": is_climbing,
+                "is_shadowed": is_shd,
+            })
 
         dist_km = total_dist_m / 1000.0
         direct_km = (np.hypot(r1 - r2, c1 - c2) * self.pixel_res) / 1000.0
+        avg_slope_deg = float(np.mean(slopes_list)) if slopes_list else 0.0
 
-        effective_speed = mode_profile["speedKmh"] * weather_profile["speedMultiplier"]
+        # Climbing uphill slows down advance speed:
+        uphill_grade = (elevation_gain_m / max(1.0, uphill_dist_m))
+        climb_speed_penalty = 1.0 + (1.2 * uphill_grade * (uphill_dist_m / max(1.0, total_dist_m)))
+        effective_speed = (mode_profile["speedKmh"] * weather_profile["speedMultiplier"]) / climb_speed_penalty
         duration_hours = dist_km / max(0.1, effective_speed)
         duration_min = round(duration_hours * 60.0)
 
-        slope_factor = 1.0 + (max_slope_deg / 30.0)
-        o2_liters_used = round(duration_min * mode_profile["o2RateLpm"] * slope_factor * weather_profile["tempMultiplier"])
+        # Life support: Oxygen consumption (Base + mechanical climb work against Mars gravity)
+        slope_factor = 1.0 + (avg_slope_deg / 20.0)
+        base_o2 = duration_min * mode_profile["o2RateLpm"] * slope_factor * weather_profile["tempMultiplier"]
+        climb_o2_liters = (265.0 * MARS_GRAVITY * elevation_gain_m) / (0.22 * 20100.0) if mode_profile["id"] == "on_foot" else 0.0
+        o2_liters_used = round(base_o2 + climb_o2_liters, 1)
         o2_used_pct = round((o2_liters_used / SUIT_O2_CAPACITY_L) * 100.0, 1)
 
         shadow_pct = round((sum(shadow_flags) / len(shadow_flags) * 100.0), 1) if shadow_flags else 0.0
         sunlit_pct = round(100.0 - shadow_pct, 1)
 
         if mode_profile["isSolarPowered"]:
-            traction_energy_kwh = (mode_profile["basePowerWatts"] * slope_factor * duration_hours) / 1000.0
+            # Rover electric motor work against Mars gravity: 950kg * 3.72 * h / (3.6e6 * 0.72)
+            climb_work_kwh = (950.0 * MARS_GRAVITY * elevation_gain_m) / (3.6e6 * 0.72)
+            traction_base_kwh = (mode_profile["basePowerWatts"] * slope_factor * duration_hours) / 1000.0
+            traction_energy_kwh = traction_base_kwh + climb_work_kwh
+
             solar_flux = SolarPhysics.calculate_solar_flux(sun_elev_deg, tau, is_shadowed=False)
             solar_gen_kwh = (
                 solar_flux
@@ -520,20 +580,26 @@ class MartianTacticalEngine:
             battery_used_pct = round((net_battery_kwh / 15.0) * 100.0, 1)
         else:
             thermal_load = 1.0 + (0.35 if shadow_pct > 50.0 else 0.0)
-            battery_used_pct = round(
-                dist_km * mode_profile["batteryDrainPerKm"] * slope_factor * weather_profile["tempMultiplier"] * thermal_load,
-                1,
-            )
+            exertion_power = mode_profile["basePowerWatts"] * (1.0 + 0.5 * (elevation_gain_m / 100.0))
+            suit_kwh = ((exertion_power + mode_profile["heaterPowerWatts"] * thermal_load) * duration_hours) / 1000.0
+            battery_used_pct = round((suit_kwh / 1.2) * 100.0, 1)
 
         radiation_dose_mgy = round(duration_hours * weather_profile["radRateMgyHr"], 3)
 
         return {
             "found": found,
             "path_coords": path_coords,
+            "telemetry_samples": telemetry_samples,
             "dist_km": round(dist_km, 2),
             "direct_km": round(direct_km, 2),
             "duration_min": duration_min,
+            "elevation_gain_m": round(elevation_gain_m, 1),
+            "elevation_loss_m": round(elevation_loss_m, 1),
+            "uphill_dist_km": round(uphill_dist_m / 1000.0, 2),
+            "downhill_dist_km": round(downhill_dist_m / 1000.0, 2),
+            "flat_dist_km": round(flat_dist_m / 1000.0, 2),
             "max_slope_deg": round(max_slope_deg, 1),
+            "avg_slope_deg": round(avg_slope_deg, 1),
             "shadow_pct": shadow_pct,
             "sunlit_pct": sunlit_pct,
             "o2_liters_used": o2_liters_used,
@@ -555,6 +621,7 @@ class MartianTacticalEngine:
         initial_battery_pct: float = 100.0,
         initial_o2_pct: float = 100.0,
         allow_charging_pitstop: bool = True,
+        uphill_penalty: float | None = None,
     ) -> dict:
         """Computes safe, terrain-aware Martian route from start to destination.
 
@@ -576,7 +643,7 @@ class MartianTacticalEngine:
 
         # 1. Compute direct route leg
         leg1 = self._search_single_leg(
-            (r1, c1), (r2, c2), mode_prof, weather_prof, sun_elev_deg, sun_az_deg, opt_tau
+            (r1, c1), (r2, c2), mode_prof, weather_prof, sun_elev_deg, sun_az_deg, opt_tau, uphill_penalty=uphill_penalty
         )
 
         batt_remain_direct = initial_battery_pct - leg1["battery_used_pct"]
@@ -627,8 +694,12 @@ class MartianTacticalEngine:
 
             if best_station:
                 st_r, st_c = self.latlon_to_grid(best_station["lat"], best_station["lon"])
-                leg_a = self._search_single_leg((r1, c1), (st_r, st_c), mode_prof, weather_prof, sun_elev_deg, sun_az_deg, opt_tau)
-                leg_b = self._search_single_leg((st_r, st_c), (r2, c2), mode_prof, weather_prof, sun_elev_deg, sun_az_deg, opt_tau)
+                leg_a = self._search_single_leg(
+                    (r1, c1), (st_r, st_c), mode_prof, weather_prof, sun_elev_deg, sun_az_deg, opt_tau, uphill_penalty=uphill_penalty
+                )
+                leg_b = self._search_single_leg(
+                    (st_r, st_c), (r2, c2), mode_prof, weather_prof, sun_elev_deg, sun_az_deg, opt_tau, uphill_penalty=uphill_penalty
+                )
                 charging_station = best_station
                 final_legs = [leg_a, leg_b]
             else:
@@ -640,6 +711,14 @@ class MartianTacticalEngine:
         total_duration_min = sum(l["duration_min"] for l in final_legs) + (15 if charging_station else 0)
         total_radiation = sum(l["radiation_dose_mgy"] for l in final_legs)
         max_slope = max(l["max_slope_deg"] for l in final_legs)
+        total_elev_gain = sum(l["elevation_gain_m"] for l in final_legs)
+        total_elev_loss = sum(l["elevation_loss_m"] for l in final_legs)
+        total_uphill_km = sum(l["uphill_dist_km"] for l in final_legs)
+        total_downhill_km = sum(l["downhill_dist_km"] for l in final_legs)
+        total_flat_km = sum(l["flat_dist_km"] for l in final_legs)
+        avg_slope = round(sum(l["avg_slope_deg"] * l["dist_km"] for l in final_legs) / max(0.01, total_dist_km), 1)
+        avg_sunlit = round(sum(l["sunlit_pct"] * l["dist_km"] for l in final_legs) / max(0.01, total_dist_km), 1)
+        avg_shadow = round(100.0 - avg_sunlit, 1)
 
         if charging_station:
             batt_remain_station = round(initial_battery_pct - final_legs[0]["battery_used_pct"], 1)
@@ -656,8 +735,107 @@ class MartianTacticalEngine:
             status = "SAFE" if (final_battery_pct >= SAFE_RESERVE_PCT and final_o2_pct >= SAFE_RESERVE_PCT) else "OUT_OF_RANGE"
 
         full_coords = []
+        full_telemetry = []
+        dist_offset = 0.0
         for l in final_legs:
             full_coords.extend(l["path_coords"])
+            for s in l["telemetry_samples"]:
+                item = dict(s)
+                item["dist_km"] = round(item["dist_km"] + dist_offset, 3)
+                full_telemetry.append(item)
+            dist_offset += l["dist_km"]
+
+        # Construct GeoJSON FeatureCollection
+        features = [
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "LineString",
+                    "coordinates": full_coords,
+                },
+                "properties": {
+                    "name": f"ARES-EVA Tactical Path ({mode})",
+                    "status": status,
+                    "mode": mode,
+                    "distance_km": round(total_dist_km, 2),
+                    "duration_min": total_duration_min,
+                    "elevation_gain_m": round(total_elev_gain, 1),
+                    "elevation_loss_m": round(total_elev_loss, 1),
+                    "max_slope_deg": round(max_slope, 1),
+                    "battery_remaining_pct": final_battery_pct,
+                },
+            },
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [round(start_lon, 6), round(start_lat, 6)],
+                },
+                "properties": {
+                    "name": "Mission Departure",
+                    "type": "start",
+                },
+            },
+            {
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [round(goal_lon, 6), round(goal_lat, 6)],
+                },
+                "properties": {
+                    "name": "Mission Destination",
+                    "type": "destination",
+                },
+            },
+        ]
+        if charging_station:
+            features.append({
+                "type": "Feature",
+                "geometry": {
+                    "type": "Point",
+                    "coordinates": [round(charging_station["lon"], 6), round(charging_station["lat"], 6)],
+                },
+                "properties": {
+                    "name": charging_station["name"],
+                    "type": "charging_station",
+                    "powerOutputKw": charging_station.get("powerOutputKw", 25),
+                },
+            })
+
+        geojson = {
+            "type": "FeatureCollection",
+            "features": features,
+        }
+
+        hours_val = int(total_duration_min // 60)
+        mins_val = int(total_duration_min % 60)
+        dur_formatted = f"{hours_val}h {mins_val}m" if hours_val > 0 else f"{mins_val} min"
+
+        summary = {
+            "status": status,
+            "mode": mode,
+            "total_distance_km": round(total_dist_km, 2),
+            "direct_distance_km": round(leg1["direct_km"], 2),
+            "duration_min": total_duration_min,
+            "duration_formatted": dur_formatted,
+            "elevation_gain_m": round(total_elev_gain, 1),
+            "elevation_loss_m": round(total_elev_loss, 1),
+            "uphill_distance_km": round(total_uphill_km, 2),
+            "downhill_distance_km": round(total_downhill_km, 2),
+            "flat_distance_km": round(total_flat_km, 2),
+            "max_slope_deg": round(max_slope, 1),
+            "avg_slope_deg": round(avg_slope, 1),
+            "battery_used_pct": total_batt_used,
+            "battery_remaining_pct": final_battery_pct,
+            "o2_used_liters": round(sum(l.get("o2_liters_used", 0) for l in final_legs), 1),
+            "o2_used_pct": total_o2_used,
+            "o2_remaining_pct": final_o2_pct,
+            "radiation_dose_mgy": round(total_radiation, 3),
+            "sunlit_pct": round(avg_sunlit, 1),
+            "shadow_pct": round(avg_shadow, 1),
+            "pitstop_occurred": charging_station is not None,
+            "charging_station_name": charging_station["name"] if charging_station else None,
+        }
 
         nav_steps = self._generate_navigation_steps(
             start_lat, start_lon, goal_lat, goal_lon, final_legs, charging_station
@@ -668,26 +846,43 @@ class MartianTacticalEngine:
             "mode": mode,
             "start": {"lat": round(start_lat, 5), "lon": round(start_lon, 5)},
             "destination": {"lat": round(goal_lat, 5), "lon": round(goal_lon, 5)},
+            "summary": summary,
+            "geojson": geojson,
+            "solar_context": {
+                "lst_hours": lst_hours,
+                "lst_formatted": f"{int(lst_hours):02d}:{int((lst_hours % 1) * 60):02d} Mars LST",
+                "sun_elevation_deg": round(sun_elev_deg, 1),
+                "sun_azimuth_deg": round(sun_az_deg, 1),
+                "optical_depth_tau": opt_tau,
+                "weather": weather_key,
+                "sunlit_pct": round(avg_sunlit, 1),
+                "shadow_pct": round(avg_shadow, 1),
+            },
+            "solar_ephemeris": {
+                "lst_hours": lst_hours,
+                "sun_elevation_deg": round(sun_elev_deg, 1),
+                "sun_azimuth_deg": round(sun_az_deg, 1),
+                "sunlit_pct": round(avg_sunlit, 1),
+                "shadow_pct": round(avg_shadow, 1),
+            },
+            "telemetry_profile": full_telemetry,
+            "navigation_steps": nav_steps,
+            "charging_station": charging_station,
+            "alert": weather_prof.get("alert"),
+            "path_coords": full_coords,
+            "legs": final_legs,
+            # Direct scalar properties for backwards-compatibility:
             "direct_km": round(leg1["direct_km"], 2),
             "total_dist_km": round(total_dist_km, 2),
             "duration_min": total_duration_min,
+            "elevation_gain_m": round(total_elev_gain, 1),
+            "elevation_loss_m": round(total_elev_loss, 1),
             "battery_used_pct": total_batt_used,
             "battery_remaining_pct": final_battery_pct,
             "o2_used_pct": total_o2_used,
             "o2_remaining_pct": final_o2_pct,
             "radiation_dose_mgy": round(total_radiation, 3),
             "max_slope_deg": round(max_slope, 1),
-            "solar_ephemeris": {
-                "lst_hours": lst_hours,
-                "sun_elevation_deg": round(sun_elev_deg, 1),
-                "sun_azimuth_deg": round(sun_az_deg, 1),
-                "sunlit_pct": final_legs[0]["sunlit_pct"],
-                "shadow_pct": final_legs[0]["shadow_pct"],
-            },
-            "charging_station": charging_station,
-            "alert": weather_prof.get("alert"),
-            "path_coords": full_coords,
-            "navigation_steps": nav_steps,
         }
 
     def _generate_navigation_steps(self, lat1, lon1, lat2, lon2, legs, charging_station):
@@ -744,6 +939,22 @@ class MartianTacticalEngine:
         brng = (np.degrees(np.arctan2(y, x)) + 360.0) % 360.0
         dirs = ["North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest"]
         return dirs[int(round(brng / 45.0)) % 8]
+
+
+_DEFAULT_ENGINE = None
+
+
+def get_engine() -> MartianTacticalEngine:
+    """Returns the cached singleton instance of MartianTacticalEngine."""
+    global _DEFAULT_ENGINE
+    if _DEFAULT_ENGINE is None:
+        _DEFAULT_ENGINE = MartianTacticalEngine()
+    return _DEFAULT_ENGINE
+
+
+def plan_mission_route(*args, **kwargs) -> dict:
+    """High-level function API to plan an optimal, physics-grounded Martian route."""
+    return get_engine().plan_route(*args, **kwargs)
 
 
 # =============================================================================
