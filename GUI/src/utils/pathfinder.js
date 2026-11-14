@@ -104,8 +104,84 @@ export function marsDistanceMeters(lat1, lon1, lat2, lon2) {
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-// HRSC/MOLA regional elevation estimator (meters)
+// Consolidated 20m DTM cache (loaded from /terrain/jezero_dem.json)
+let _loadedDem = null;
+let _demFetchPromise = null;
+
+export function setLoadedDemData(dem) {
+  if (dem && Array.isArray(dem.elevations) && dem.ncols && dem.nrows) {
+    _loadedDem = dem;
+  }
+}
+
+export function getLoadedDemData() {
+  return _loadedDem;
+}
+
+export function ensureDemLoaded() {
+  if (_loadedDem) return Promise.resolve(_loadedDem);
+  if (!_demFetchPromise && typeof window !== 'undefined' && typeof fetch === 'function') {
+    _demFetchPromise = fetch('/terrain/jezero_dem.json')
+      .then((res) => (res.ok ? res.json() : null))
+      .then((dem) => {
+        if (dem) setLoadedDemData(dem);
+        return _loadedDem;
+      })
+      .catch(() => null);
+  }
+  return _demFetchPromise || Promise.resolve(null);
+}
+
+if (typeof window !== 'undefined') {
+  ensureDemLoaded();
+}
+
+function sampleDemGrid(dem, lat, lon) {
+  const latMin = dem.latMin ?? 17.699211;
+  const latMax = dem.latMax ?? 18.694733;
+  const lonMin = dem.lonMin ?? 76.800003;
+  const lonMax = dem.lonMax ?? 77.795108;
+
+  const u = Math.max(0, Math.min(1, (lon - lonMin) / (lonMax - lonMin)));
+  const v = Math.max(0, Math.min(1, (latMax - lat) / (latMax - latMin))); // row 0 is north (latMax)
+
+  const fx = u * (dem.ncols - 1);
+  const fy = v * (dem.nrows - 1);
+  const c0 = Math.floor(fx);
+  const r0 = Math.floor(fy);
+  const c1 = Math.min(dem.ncols - 1, c0 + 1);
+  const r1 = Math.min(dem.nrows - 1, r0 + 1);
+  const tx = fx - c0;
+  const ty = fy - r0;
+
+  const idx00 = r0 * dem.ncols + c0;
+  const idx10 = r0 * dem.ncols + c1;
+  const idx01 = r1 * dem.ncols + c0;
+  const idx11 = r1 * dem.ncols + c1;
+
+  const bilerp = (arr) => {
+    const a = arr[idx00] * (1 - tx) + arr[idx10] * tx;
+    const b = arr[idx01] * (1 - tx) + arr[idx11] * tx;
+    return a * (1 - ty) + b * ty;
+  };
+
+  const elev = bilerp(dem.elevations);
+  const slope = Array.isArray(dem.slopes) ? bilerp(dem.slopes) : 0;
+  const nr = Math.round(fy);
+  const nc = Math.round(fx);
+  const hazardStatus = Array.isArray(dem.hazardStatus)
+    ? dem.hazardStatus[nr * dem.ncols + nc]
+    : 0;
+
+  return { elev, slope, hazardStatus };
+}
+
+// Consolidated 20.2m DTM elevation estimator (meters)
 export function estimateElev(lat, lon) {
+  if (_loadedDem) {
+    const { elev } = sampleDemGrid(_loadedDem, lat, lon);
+    return Math.round(elev * 10) / 10;
+  }
   const dLat = (lat - 18.44) * 111320;
   const dLon = (lon - 77.45) * 111320 * Math.cos((18.44 * Math.PI) / 180);
   const dist = Math.sqrt(dLat * dLat + dLon * dLon);
@@ -120,10 +196,15 @@ export function estimateElev(lat, lon) {
     const t = dist / 20800;
     e = -2600 + 330 * t * t;
   }
-  const dfD = Math.hypot((lat - 18.56) * 111320, (lon - 77.37) * 111320 * 0.948);
-  if (dfD < 8000) e += 210 * (1 - dfD / 8000);
-  e += 25 * Math.sin(lat * 123.4) * Math.cos(lon * 98.7);
   return Math.round(e * 10) / 10;
+}
+
+export function estimateSlope(lat, lon) {
+  if (_loadedDem && Array.isArray(_loadedDem.slopes)) {
+    const { slope } = sampleDemGrid(_loadedDem, lat, lon);
+    return Math.round(slope * 10) / 10;
+  }
+  return 0;
 }
 
 export function checkCursorHazards(lat, lon, hazardZones = [], customExclusionZones = []) {
@@ -141,10 +222,14 @@ export function checkCursorHazards(lat, lon, hazardZones = [], customExclusionZo
       return { label: `EXCLUSION: ${zone.type.toUpperCase()}`, isFault: true };
     }
   }
-  const d1 = Math.hypot(lat - 18.56, lon - 77.37);
-  const d2 = Math.hypot(lat - 18.85, lon - 77.50);
-  if (d1 < 0.04 || d2 < 0.04) {
-    return { label: 'ELEVATED RISK', isFault: true };
+  if (_loadedDem) {
+    const { slope, hazardStatus } = sampleDemGrid(_loadedDem, lat, lon);
+    if (hazardStatus >= 2 || slope >= 22) {
+      return { label: `CLIFF / BARRIER (${slope.toFixed(1)}°)`, isFault: true };
+    }
+    if (hazardStatus === 1 || slope >= 12) {
+      return { label: `STEEP GRADE (${slope.toFixed(1)}°)`, isFault: true };
+    }
   }
   return { label: 'CLEAR / PASSABLE', isFault: false };
 }
@@ -218,7 +303,17 @@ function getCellHazardPenalty(
   customExclusionZones = []
 ) {
   let penalty = 1.0;
-  let localSlope = 3.5;
+  let localSlope = _loadedDem ? estimateSlope(lat, lon) : 3.5;
+
+  if (_loadedDem) {
+    const { hazardStatus } = sampleDemGrid(_loadedDem, lat, lon);
+    if (hazardStatus >= 2 || localSlope > loadout.maxSlopeDeg) {
+      return { cost: 9999, slope: Math.max(localSlope, 22), blocked: true };
+    }
+    if (hazardStatus === 1 || localSlope >= 12) {
+      penalty += 2.2;
+    }
+  }
 
   for (let i = 0; i < waypoints.length; i += 4) {
     const wp = waypoints[i];

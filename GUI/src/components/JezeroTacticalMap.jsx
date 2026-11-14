@@ -1,9 +1,26 @@
-import React, { useEffect, useRef } from 'react';
-import L from 'leaflet';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
+import * as THREE from 'three';
+import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import APP_THEME from '../theme';
-import { estimateElev, checkCursorHazards } from '../utils/pathfinder';
+import {
+  estimateElev,
+  estimateSlope,
+  checkCursorHazards,
+  setLoadedDemData,
+} from '../utils/pathfinder';
 
 const REGIONAL_BOUNDS = APP_THEME.regionalBounds;
+const TERRAIN_W = 100;
+const TERRAIN_D = 105;
+const BASE_RELIEF_H = 8.5;
+
+const BASEMAP_TEXTURES = {
+  satellite: '/terrain/jezero_ctx_ortho.png',
+  terrain: '/data/hrsc_hillshade.png',
+  elevation: '/data/consolidated_depth_map.png',
+  themis: '/data/themis_night_ir.png',
+  default: '/data/hrsc_elevation_color.png',
+};
 
 const GROUND_CONTROL_SCIENCE_HAZARDS = [
   {
@@ -13,7 +30,6 @@ const GROUND_CONTROL_SCIENCE_HAZARDS = [
     lon: 77.382,
     radius: 950,
     color: APP_THEME.hazards.heat.color,
-    fillColor: APP_THEME.hazards.heat.fill,
     severity: 'CRITICAL',
   },
   {
@@ -23,7 +39,6 @@ const GROUND_CONTROL_SCIENCE_HAZARDS = [
     lon: 77.442,
     radius: 800,
     color: APP_THEME.hazards.rough.color,
-    fillColor: APP_THEME.hazards.rough.fill,
     severity: 'HIGH',
   },
   {
@@ -33,7 +48,6 @@ const GROUND_CONTROL_SCIENCE_HAZARDS = [
     lon: 77.455,
     radius: 1200,
     color: APP_THEME.hazards.heat.color,
-    fillColor: APP_THEME.hazards.heat.fill,
     severity: 'MODERATE',
   },
   {
@@ -43,7 +57,6 @@ const GROUND_CONTROL_SCIENCE_HAZARDS = [
     lon: 77.492,
     radius: 900,
     color: APP_THEME.hazards.chemical.color,
-    fillColor: APP_THEME.hazards.chemical.fill,
     severity: 'HAZARDOUS',
   },
   {
@@ -53,10 +66,120 @@ const GROUND_CONTROL_SCIENCE_HAZARDS = [
     lon: 77.31,
     radius: 1100,
     color: APP_THEME.hazards.radiation.color,
-    fillColor: APP_THEME.hazards.radiation.fill,
     severity: 'CAUTION',
   },
 ];
+
+function getDemBounds(dem) {
+  return {
+    latMin: dem?.latMin ?? REGIONAL_BOUNDS[0][0],
+    latMax: dem?.latMax ?? REGIONAL_BOUNDS[1][0],
+    lonMin: dem?.lonMin ?? REGIONAL_BOUNDS[0][1],
+    lonMax: dem?.lonMax ?? REGIONAL_BOUNDS[1][1],
+  };
+}
+
+function latLonToSceneXZ(lat, lon, dem) {
+  const b = getDemBounds(dem);
+  const u = (lon - b.lonMin) / (b.lonMax - b.lonMin);
+  const v = (b.latMax - lat) / (b.latMax - b.latMin);
+  return {
+    x: (u - 0.5) * TERRAIN_W,
+    z: (v - 0.5) * TERRAIN_D,
+  };
+}
+
+function sceneXZToLatLon(x, z, dem) {
+  const b = getDemBounds(dem);
+  const u = x / TERRAIN_W + 0.5;
+  const v = z / TERRAIN_D + 0.5;
+  const lon = b.lonMin + Math.max(0, Math.min(1, u)) * (b.lonMax - b.lonMin);
+  const lat = b.latMax - Math.max(0, Math.min(1, v)) * (b.latMax - b.latMin);
+  return { lat, lon };
+}
+
+function sampleDemBilinear(dem, lat, lon) {
+  if (!dem || !Array.isArray(dem.elevations)) {
+    return { elev: estimateElev(lat, lon), slope: estimateSlope(lat, lon), hazardStatus: 0 };
+  }
+  const b = getDemBounds(dem);
+  const u = Math.max(0, Math.min(1, (lon - b.lonMin) / (b.lonMax - b.lonMin)));
+  const v = Math.max(0, Math.min(1, (b.latMax - lat) / (b.latMax - b.latMin)));
+  const fx = u * (dem.ncols - 1);
+  const fy = v * (dem.nrows - 1);
+  const c0 = Math.floor(fx);
+  const r0 = Math.floor(fy);
+  const c1 = Math.min(dem.ncols - 1, c0 + 1);
+  const r1 = Math.min(dem.nrows - 1, r0 + 1);
+  const tx = fx - c0;
+  const ty = fy - r0;
+  const i00 = r0 * dem.ncols + c0;
+  const i10 = r0 * dem.ncols + c1;
+  const i01 = r1 * dem.ncols + c0;
+  const i11 = r1 * dem.ncols + c1;
+  const lerp = (arr) => {
+    const a = arr[i00] * (1 - tx) + arr[i10] * tx;
+    const bVal = arr[i01] * (1 - tx) + arr[i11] * tx;
+    return a * (1 - ty) + bVal * ty;
+  };
+  const elev = lerp(dem.elevations);
+  const slope = Array.isArray(dem.slopes) ? lerp(dem.slopes) : 0;
+  const nr = Math.round(fy);
+  const nc = Math.round(fx);
+  const hazardStatus = Array.isArray(dem.hazardStatus) ? dem.hazardStatus[nr * dem.ncols + nc] : 0;
+  return { elev, slope, hazardStatus };
+}
+
+function elevToSceneY(elev, dem, depthExaggeration) {
+  const minE = dem?.minElev ?? -3070;
+  const maxE = dem?.maxElev ?? -1376;
+  const t = Math.max(0, Math.min(1, (elev - minE) / Math.max(1, maxE - minE)));
+  return t * BASE_RELIEF_H * depthExaggeration;
+}
+
+function latLonToVec3(lat, lon, dem, depthExaggeration, yOffset = 0.25) {
+  const { x, z } = latLonToSceneXZ(lat, lon, dem);
+  const { elev } = sampleDemBilinear(dem, lat, lon);
+  const y = elevToSceneY(elev, dem, depthExaggeration) + yOffset;
+  return new THREE.Vector3(x, y, z);
+}
+
+/**
+ * Depth luminance color ramp:
+ * Deeper parts (t near 0) are dark (#0b0f17 -> #262e3d),
+ * Mid elevation (t ~ 0.5) are slate-stone (#687385),
+ * Upper parts (t near 1) are light (#dfe6f0 -> #f1f5f9).
+ */
+function depthLuminanceRGB(t, hazardStatus = 0, showSlopeTint = false) {
+  const lum = Math.pow(Math.max(0, Math.min(1, t)), 0.88);
+  let r = 0.045 + 0.86 * lum;
+  let g = 0.058 + 0.87 * lum;
+  let b = 0.085 + 0.86 * lum;
+
+  // Subtle mineral warmth in mid-highlands without breaking dark-deep / light-upper contrast
+  const midBell = Math.sin(lum * Math.PI);
+  r += 0.035 * midBell;
+  b -= 0.025 * midBell;
+
+  if (showSlopeTint && hazardStatus >= 2) {
+    r = r * 0.55 + 0.92 * 0.45;
+    g = g * 0.45 + 0.22 * 0.55;
+    b = b * 0.45 + 0.22 * 0.55;
+  }
+  return [Math.max(0, Math.min(1, r)), Math.max(0, Math.min(1, g)), Math.max(0, Math.min(1, b))];
+}
+
+function disposeGroup(group) {
+  while (group.children.length > 0) {
+    const child = group.children[0];
+    group.remove(child);
+    if (child.geometry) child.geometry.dispose();
+    if (child.material) {
+      if (Array.isArray(child.material)) child.material.forEach((m) => m.dispose());
+      else child.material.dispose();
+    }
+  }
+}
 
 export default function JezeroTacticalMap({
   waypoints = [],
@@ -76,7 +199,7 @@ export default function JezeroTacticalMap({
   solarPhase = 'day',
   astronautLocId = 'hab-alpha',
   basemap = 'satellite',
-  reliefBlend = 0.3,
+  reliefBlend = 0.35,
   landmarks = [],
   activeDrawMode = null,
   drawVertices = [],
@@ -93,22 +216,34 @@ export default function JezeroTacticalMap({
   onDeleteZone,
   onCursorMove,
 }) {
-  const mapContainerRef = useRef(null);
-  const mapInstanceRef = useRef(null);
-  const layerGroupsRef = useRef({});
-  const staticOverlaysRef = useRef({});
-  const liveMarkerRef = useRef(null);
-  const basemapOverlayRef = useRef(null);
-  const reliefOverlayRef = useRef(null);
-  const opmTileRef = useRef(null);
+  const containerRef = useRef(null);
+  const sceneRef = useRef(null);
+  const cameraRef = useRef(null);
+  const rendererRef = useRef(null);
+  const controlsRef = useRef(null);
+  const terrainMeshRef = useRef(null);
+  const skirtMeshRef = useRef(null);
+  const overlayGroupsRef = useRef({});
+  const textureCacheRef = useRef({});
+  const demRef = useRef(null);
+  const markerDomRefs = useRef(new Map());
+  const projectedItemsRef = useRef([]);
+  const flyAnimRef = useRef(null);
+  const pulseStateRef = useRef({ active: false, t: 0, lat: 18.4446, lon: 77.4509 });
 
-  // Refs for stable event listeners inside map init
+  const [demLoaded, setDemLoaded] = useState(false);
+  const [depthExaggeration, setDepthExaggeration] = useState(2.8);
+  const [cameraPreset, setCameraPreset] = useState('3d_plan');
+  const [selectedPopup, setSelectedPopup] = useState(null);
+  const [projectedMarkers, setProjectedMarkers] = useState([]);
+
+  // Stable refs for event listeners
   const activeDrawModeRef = useRef(activeDrawMode);
   const onAddDrawVertexRef = useRef(onAddDrawVertex);
   const onCursorMoveRef = useRef(onCursorMove);
   const hazardZonesRef = useRef(hazardZones);
   const drawnZonesRef = useRef(drawnZones);
-  const landmarksRef = useRef(landmarks);
+  const depthExaggerationRef = useRef(depthExaggeration);
 
   useEffect(() => {
     activeDrawModeRef.current = activeDrawMode;
@@ -116,1106 +251,990 @@ export default function JezeroTacticalMap({
     onCursorMoveRef.current = onCursorMove;
     hazardZonesRef.current = hazardZones;
     drawnZonesRef.current = drawnZones;
-    landmarksRef.current = landmarks;
+    depthExaggerationRef.current = depthExaggeration;
   });
 
-  // Dispatch bridge for Leaflet HTML popup buttons
+  // Load consolidated 20m DEM JSON
   useEffect(() => {
-    window.dispatchMarsPano = (sol) => {
-      onOpenPanorama?.(sol);
-    };
-    window.dispatchNavigateTo = (targetId) => {
-      mapInstanceRef.current?.closePopup();
-      onNavigateToPOI?.(targetId);
-    };
-    window.dispatchSetOrigin = (originId) => {
-      mapInstanceRef.current?.closePopup();
-      onSetOrigin?.(originId);
-    };
-    window.dispatchOpenLandmark = (landmarkId) => {
-      mapInstanceRef.current?.closePopup();
-      const match = landmarksRef.current.find(
-        (l) => l.id === landmarkId || l.id.replace(/_/g, '-') === landmarkId.replace(/_/g, '-')
-      );
-      onSelectLandmark?.(match || landmarkId);
-    };
-    window.dispatchOpenLandmarkVista = (landmarkId) => {
-      mapInstanceRef.current?.closePopup();
-      onOpenLandmarkVista?.(landmarkId);
-    };
-    window.dispatchDeleteZone = (zoneId) => {
-      mapInstanceRef.current?.closePopup();
-      onDeleteZone?.(zoneId);
-    };
-
-    return () => {
-      delete window.dispatchMarsPano;
-      delete window.dispatchNavigateTo;
-      delete window.dispatchSetOrigin;
-      delete window.dispatchOpenLandmark;
-      delete window.dispatchOpenLandmarkVista;
-      delete window.dispatchDeleteZone;
-    };
-  }, [
-    onOpenPanorama,
-    onNavigateToPOI,
-    onSetOrigin,
-    onSelectLandmark,
-    onOpenLandmarkVista,
-    onDeleteZone,
-  ]);
-
-  // Initialize Leaflet Map once
-  useEffect(() => {
-    if (!mapContainerRef.current || mapInstanceRef.current) return undefined;
-
-    const map = L.map(mapContainerRef.current, {
-      center: [18.455, 77.41],
-      zoom: 12,
-      minZoom: 10,
-      maxZoom: 18,
-      maxBounds: [
-        [17.6, 76.68],
-        [18.82, 77.92],
-      ],
-      maxBoundsViscosity: 0.75,
-      preferCanvas: true,
-      zoomControl: false,
-      attributionControl: false,
-    });
-
-    L.control.zoom({ position: 'bottomright' }).addTo(map);
-
-    // Base planetary tile layer (visible under regional overlays or when basemap === 'default')
-    const opmBasemap = L.tileLayer(
-      'https://cartocdn-gusc.global.ssl.fastly.net/opmbuilder/api/v1/map/named/opm-mars-basemap-v0-2/all/{z}/{x}/{y}.png',
-      {
-        maxZoom: 18,
-        maxNativeZoom: 14,
-        opacity: 0.9,
-        zIndex: 0,
-      }
-    ).addTo(map);
-    opmTileRef.current = opmBasemap;
-
-    const basemapUrls = {
-      satellite: '/data/ctx_mosaic_regional.png',
-      terrain: '/data/hrsc_hillshade.png',
-      elevation: '/data/hrsc_elevation_color.png',
-      themis: '/data/themis_night_ir.png',
-    };
-
-    if (basemapUrls[basemap]) {
-      basemapOverlayRef.current = L.imageOverlay(basemapUrls[basemap], REGIONAL_BOUNDS, {
-        opacity: 1.0,
-        zIndex: 1,
-        interactive: false,
-      }).addTo(map);
-    }
-
-    reliefOverlayRef.current = L.imageOverlay('/data/hrsc_hillshade.png', REGIONAL_BOUNDS, {
-      opacity: basemap !== 'terrain' && basemap !== 'default' ? reliefBlend : 0.0,
-      zIndex: 2,
-      interactive: false,
-    }).addTo(map);
-
-    // NASA HiRISE 25cm Ultra-High Resolution TMS Overlay (Optional MMGIS Layer)
-    const hiriseLayer = L.tileLayer(
-      'https://mars.nasa.gov/mmgis-maps/M20/Layers/M20_HiRISE_RGB_mosaic_25cm_v4p2/{z}/{x}/{-y}.png',
-      {
-        tms: true,
-        maxZoom: 18,
-        opacity: 0.92,
-        keepBuffer: 2,
-        updateWhenIdle: true,
-        updateInterval: 200,
-        zIndex: 5,
-        // Suppress broken tile red-X / console spam if remote NASA MMGIS server blocks requests
-        errorTileUrl: 'data:image/gif;base64,R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7',
-      }
-    );
-
-    // USGS SIM 3464 Vector GeoJSON Overlays
-    const ellipseLayer = L.geoJSON(null, {
-      style: {
-        color: APP_THEME.layers.ellipseBorder,
-        weight: 1.5,
-        dashArray: '4, 4',
-        fillOpacity: 0.05,
-        fillColor: APP_THEME.layers.ellipseFill,
-      },
-      interactive: false,
-    });
-
-    const linearLayer = L.geoJSON(null, {
-      style: {
-        color: APP_THEME.layers.linearFeature,
-        weight: 1.2,
-        opacity: 0.85,
-      },
-      interactive: false,
-    });
-
-    const surfaceLayer = L.geoJSON(null, {
-      style: {
-        color: APP_THEME.layers.surfaceFeature,
-        weight: 1,
-        fillOpacity: 0.14,
-        fillColor: APP_THEME.layers.surfaceFeature,
-      },
-      interactive: false,
-    });
-
-    const nomenclatureLayer = L.geoJSON(null, {
-      pointToLayer: (feature, latlng) => {
-        const name = feature.properties ? feature.properties.TextString || feature.properties.Name || '' : '';
-        return L.marker(latlng, {
-          icon: L.divIcon({
-            className: 'nomen-label',
-            html: `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;font-weight:600;letter-spacing:0.06em;color:#9da5b4;text-shadow:0 1px 2px #0b0d11;white-space:nowrap;text-align:center;">${name}</div>`,
-            iconSize: [140, 16],
-            iconAnchor: [70, 8],
-          }),
-          interactive: false,
-        });
-      },
-    });
-
-    const m20TraverseRemote = L.geoJSON(null, {
-      style: {
-        color: APP_THEME.layers.traverseLine,
-        weight: 1.8,
-        dashArray: '3, 4',
-        opacity: 0.75,
-      },
-      interactive: false,
-    });
-
-    staticOverlaysRef.current = {
-      hirise: hiriseLayer,
-      ellipse: ellipseLayer,
-      linear: linearLayer,
-      surface: surfaceLayer,
-      nomenclature: nomenclatureLayer,
-      m20TraverseRemote,
-    };
-
-    // Fetch local GeoJSON datasets quietly
-    fetch('/data/LandingEllipse.geojson')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && ellipseLayer.addData(d))
-      .catch(() => {});
-
-    fetch('/data/LinearFeatures.geojson')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && linearLayer.addData(d))
-      .catch(() => {});
-
-    fetch('/data/SurfaceFeatures.geojson')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && surfaceLayer.addData(d))
-      .catch(() => {});
-
-    fetch('/data/Nomenclature.geojson')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => {
-        if (!d || !Array.isArray(d.features)) return;
-        d.features.forEach((f) => {
-          if (f.geometry?.type === 'MultiPolygon' && f.geometry.coordinates?.[0]?.[0]) {
-            const coords = f.geometry.coordinates[0][0];
-            let avgLat = 0;
-            let avgLon = 0;
-            coords.forEach((c) => {
-              avgLon += c[0];
-              avgLat += c[1];
-            });
-            avgLon /= coords.length;
-            avgLat /= coords.length;
-            nomenclatureLayer.addData({
-              type: 'Feature',
-              properties: f.properties,
-              geometry: { type: 'Point', coordinates: [avgLon, avgLat] },
-            });
-          } else if (f.geometry?.type === 'Point') {
-            nomenclatureLayer.addData(f);
-          }
-        });
+    let cancelled = false;
+    fetch('/terrain/jezero_dem.json')
+      .then((res) => res.json())
+      .then((dem) => {
+        if (cancelled) return;
+        demRef.current = dem;
+        setLoadedDemData(dem);
+        setDemLoaded(true);
       })
-      .catch(() => {});
-
-    fetch('https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_traverse.json')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d) => d && m20TraverseRemote.addData(d))
-      .catch(() => {});
-
-    layerGroupsRef.current = {
-      traverse: L.layerGroup().addTo(map),
-      slope: L.layerGroup().addTo(map),
-      hazards: L.layerGroup().addTo(map),
-      drawnZones: L.layerGroup().addTo(map),
-      drawPreview: L.layerGroup().addTo(map),
-      science: L.layerGroup().addTo(map),
-      route: L.layerGroup().addTo(map),
-      dustFront: L.layerGroup().addTo(map),
-      landmarks: L.layerGroup().addTo(map),
-    };
-
-    // Map click handler for Exclusion Polygon drawing
-    const handleMapClick = (e) => {
-      if (activeDrawModeRef.current) {
-        onAddDrawVertexRef.current?.([
-          Number(e.latlng.lat.toFixed(6)),
-          Number(e.latlng.lng.toFixed(6)),
-        ]);
-      }
-    };
-    map.on('click', handleMapClick);
-
-    // RequestAnimationFrame throttled cursor telemetry probe
-    let rafPending = false;
-    let lastMouseLatLng = null;
-    const handleMouseMove = (e) => {
-      lastMouseLatLng = e.latlng;
-      if (rafPending) return;
-      rafPending = true;
-      requestAnimationFrame(() => {
-        rafPending = false;
-        if (!lastMouseLatLng || !onCursorMoveRef.current) return;
-        const { lat, lng } = lastMouseLatLng;
-        const elevM = estimateElev(lat, lng);
-        const haz = checkCursorHazards(lat, lng, hazardZonesRef.current, drawnZonesRef.current);
-        onCursorMoveRef.current({
-          lat,
-          lon: lng,
-          elevM,
-          hazardLabel: haz.label,
-          isFault: haz.isFault,
-        });
-      });
-    };
-    map.on('mousemove', handleMouseMove);
-
-    const resizeObserver =
-      typeof ResizeObserver !== 'undefined'
-        ? new ResizeObserver(() => {
-            map.invalidateSize({ animate: false });
-          })
-        : null;
-    if (resizeObserver && mapContainerRef.current) {
-      resizeObserver.observe(mapContainerRef.current);
-    }
-
-    mapInstanceRef.current = map;
-
+      .catch((err) => console.error('Failed to load consolidated jezero_dem.json:', err));
     return () => {
-      if (resizeObserver) resizeObserver.disconnect();
-      map.off('click', handleMapClick);
-      map.off('mousemove', handleMouseMove);
-      if (liveMarkerRef.current) {
-        liveMarkerRef.current.remove();
-        liveMarkerRef.current = null;
-      }
-      if (basemapOverlayRef.current) {
-        basemapOverlayRef.current.remove();
-        basemapOverlayRef.current = null;
-      }
-      if (reliefOverlayRef.current) {
-        reliefOverlayRef.current.remove();
-        reliefOverlayRef.current = null;
-      }
-      map.remove();
-      mapInstanceRef.current = null;
+      cancelled = true;
     };
   }, []);
 
-  // Update draw cursor & disable doubleClickZoom while actively placing polygon vertices
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    const container = mapContainerRef.current;
-    if (!map || !container) return;
+  // Build / update 3D terrain mesh + 3D depth skirt
+  const rebuildTerrainGeometry = useCallback((dem, exag, showSlopeTint) => {
+    const mesh = terrainMeshRef.current;
+    const skirt = skirtMeshRef.current;
+    if (!mesh || !dem) return;
 
-    if (activeDrawMode) {
-      container.style.cursor = 'crosshair';
-      map.doubleClickZoom.disable();
-    } else {
-      container.style.cursor = '';
-      map.doubleClickZoom.enable();
+    const { ncols, nrows, elevations, hazardStatus = [] } = dem;
+    const geo = new THREE.PlaneGeometry(TERRAIN_W, TERRAIN_D, ncols - 1, nrows - 1);
+    geo.rotateX(-Math.PI / 2);
+
+    const pos = geo.attributes.position;
+    const colors = new Float32Array(pos.count * 3);
+    const minE = dem.minElev ?? -3070;
+    const maxE = dem.maxElev ?? -1376;
+    const span = Math.max(1, maxE - minE);
+
+    for (let i = 0; i < pos.count; i++) {
+      const r = Math.floor(i / ncols);
+      const c = i % ncols;
+      const idx = r * ncols + c;
+      const e = elevations[idx] ?? minE;
+      const t = Math.max(0, Math.min(1, (e - minE) / span));
+      pos.setY(i, t * BASE_RELIEF_H * exag);
+
+      const [cr, cg, cb] = depthLuminanceRGB(t, hazardStatus[idx] || 0, showSlopeTint);
+      colors[i * 3] = cr;
+      colors[i * 3 + 1] = cg;
+      colors[i * 3 + 2] = cb;
     }
-  }, [activeDrawMode]);
 
-  // Toggle static overlays (HiRISE 25cm, Ellipse, Linear, Surface, Nomenclature, Remote Traverse)
+    geo.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+    geo.computeVertexNormals();
+
+    if (mesh.geometry) mesh.geometry.dispose();
+    mesh.geometry = geo;
+
+    // Build 3D geological slab skirt around all 4 borders so depth is unmistakable
+    if (skirt) {
+      const baseBottom = -5.5;
+      const verts = [];
+      const skirtColors = [];
+
+      const pushQuad = (x1, y1, z1, x2, y2, z2) => {
+        verts.push(
+          x1, y1, z1, x1, baseBottom, z1, x2, y2, z2,
+          x2, y2, z2, x1, baseBottom, z1, x2, baseBottom, z2
+        );
+        for (let k = 0; k < 6; k++) {
+          const isTop = k === 0 || k === 2 || k === 3;
+          skirtColors.push(isTop ? 0.14 : 0.04, isTop ? 0.17 : 0.05, isTop ? 0.22 : 0.07);
+        }
+      };
+
+      const getTopXYZ = (r, c) => {
+        const i = r * ncols + c;
+        return [pos.getX(i), pos.getY(i), pos.getZ(i)];
+      };
+
+      // North & South edges
+      for (let c = 0; c < ncols - 1; c++) {
+        const [nx1, ny1, nz1] = getTopXYZ(0, c);
+        const [nx2, ny2, nz2] = getTopXYZ(0, c + 1);
+        pushQuad(nx2, ny2, nz2, nx1, ny1, nz1);
+
+        const [sx1, sy1, sz1] = getTopXYZ(nrows - 1, c);
+        const [sx2, sy2, sz2] = getTopXYZ(nrows - 1, c + 1);
+        pushQuad(sx1, sy1, sz1, sx2, sy2, sz2);
+      }
+      // West & East edges
+      for (let r = 0; r < nrows - 1; r++) {
+        const [wx1, wy1, wz1] = getTopXYZ(r, 0);
+        const [wx2, wy2, wz2] = getTopXYZ(r + 1, 0);
+        pushQuad(wx1, wy1, wz1, wx2, wy2, wz2);
+
+        const [ex1, ey1, ez1] = getTopXYZ(r, ncols - 1);
+        const [ex2, ey2, ez2] = getTopXYZ(r + 1, ncols - 1);
+        pushQuad(ex2, ey2, ez2, ex1, ey1, ez1);
+      }
+
+      const skirtGeo = new THREE.BufferGeometry();
+      skirtGeo.setAttribute('position', new THREE.Float32BufferAttribute(verts, 3));
+      skirtGeo.setAttribute('color', new THREE.Float32BufferAttribute(skirtColors, 3));
+      skirtGeo.computeVertexNormals();
+      if (skirt.geometry) skirt.geometry.dispose();
+      skirt.geometry = skirtGeo;
+    }
+  }, []);
+
+  // Initialize Three.js scene once
   useEffect(() => {
-    const map = mapInstanceRef.current;
-    const staticMap = staticOverlaysRef.current;
-    if (!map || !staticMap) return;
+    const container = containerRef.current;
+    if (!container) return;
 
-    const syncLayer = (key, enabled) => {
-      const lyr = staticMap[key];
-      if (!lyr) return;
-      if (enabled && !map.hasLayer(lyr)) {
-        lyr.addTo(map);
-      } else if (!enabled && map.hasLayer(lyr)) {
-        map.removeLayer(lyr);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color('#090b0f');
+    scene.fog = new THREE.FogExp2('#090b0f', 0.0032);
+    sceneRef.current = scene;
+
+    const width = container.clientWidth || 800;
+    const height = container.clientHeight || 540;
+    const camera = new THREE.PerspectiveCamera(42, width / height, 0.2, 600);
+    // Default 3D Tactical Plan View centered on Jezero landing/delta sector
+    camera.position.set(-4, 34, 42);
+    cameraRef.current = camera;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setSize(width, height);
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.08;
+    container.appendChild(renderer.domElement);
+    rendererRef.current = renderer;
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.08;
+    controls.maxPolarAngle = Math.PI / 2 - 0.06;
+    controls.minDistance = 8;
+    controls.maxDistance = 145;
+    controls.target.set(-5, 2.0, -5);
+    controls.update();
+    controlsRef.current = controls;
+
+    // Lighting: subtle cool ambient + crisp directional sun light for 3D depth relief
+    const hemi = new THREE.HemisphereLight('#dce6f5', '#0a0d12', 0.95);
+    scene.add(hemi);
+
+    const sun = new THREE.DirectionalLight('#fff4e6', 1.45);
+    sun.position.set(-55, 75, -35);
+    scene.add(sun);
+
+    const rimLight = new THREE.DirectionalLight('#64748b', 0.45);
+    rimLight.position.set(60, 28, 55);
+    scene.add(rimLight);
+
+    // Subtle spatial reference grid under the 3D slab
+    const grid = new THREE.GridHelper(130, 26, '#1f2633', '#141922');
+    grid.position.y = -5.6;
+    scene.add(grid);
+
+    // Terrain mesh & 3D slab skirt
+    const terrainMat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.88,
+      metalness: 0.04,
+      side: THREE.DoubleSide,
+    });
+    const terrainMesh = new THREE.Mesh(new THREE.BufferGeometry(), terrainMat);
+    scene.add(terrainMesh);
+    terrainMeshRef.current = terrainMesh;
+
+    const skirtMat = new THREE.MeshStandardMaterial({
+      vertexColors: true,
+      roughness: 0.95,
+      metalness: 0.05,
+      side: THREE.DoubleSide,
+    });
+    const skirtMesh = new THREE.Mesh(new THREE.BufferGeometry(), skirtMat);
+    scene.add(skirtMesh);
+    skirtMeshRef.current = skirtMesh;
+
+    // Overlay groups
+    const groups = {
+      traverse: new THREE.Group(),
+      slope: new THREE.Group(),
+      hazards: new THREE.Group(),
+      drawn: new THREE.Group(),
+      route: new THREE.Group(),
+      markers3d: new THREE.Group(),
+      live: new THREE.Group(),
+      dust: new THREE.Group(),
+    };
+    Object.values(groups).forEach((g) => scene.add(g));
+    overlayGroupsRef.current = groups;
+
+    // Raycaster for hover telemetry & draw clicks
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+    let pointerDownPos = null;
+
+    const getTerrainHit = (clientX, clientY) => {
+      if (!terrainMeshRef.current || !demRef.current) return null;
+      const rect = renderer.domElement.getBoundingClientRect();
+      pointer.x = ((clientX - rect.left) / rect.width) * 2 - 1;
+      pointer.y = -((clientY - rect.top) / rect.height) * 2 + 1;
+      raycaster.setFromCamera(pointer, camera);
+      const hits = raycaster.intersectObject(terrainMeshRef.current, false);
+      if (hits.length === 0) return null;
+      return hits[0].point;
+    };
+
+    const handlePointerMove = (e) => {
+      const pt = getTerrainHit(e.clientX, e.clientY);
+      if (!pt || !onCursorMoveRef.current) return;
+      const { lat, lon } = sceneXZToLatLon(pt.x, pt.z, demRef.current);
+      const { elev } = sampleDemBilinear(demRef.current, lat, lon);
+      const haz = checkCursorHazards(lat, lon, hazardZonesRef.current, drawnZonesRef.current);
+      onCursorMoveRef.current({
+        lat,
+        lon,
+        elevM: Math.round(elev * 10) / 10,
+        hazardLabel: haz.label,
+        isFault: haz.isFault,
+      });
+    };
+
+    const handlePointerDown = (e) => {
+      pointerDownPos = { x: e.clientX, y: e.clientY };
+    };
+
+    const handlePointerUp = (e) => {
+      if (!pointerDownPos) return;
+      const moved = Math.hypot(e.clientX - pointerDownPos.x, e.clientY - pointerDownPos.y);
+      pointerDownPos = null;
+      if (moved > 5) return; // Ignore orbit/pan drags
+
+      if (activeDrawModeRef.current && onAddDrawVertexRef.current) {
+        const pt = getTerrainHit(e.clientX, e.clientY);
+        if (pt) {
+          const { lat, lon } = sceneXZToLatLon(pt.x, pt.z, demRef.current);
+          onAddDrawVertexRef.current(Number(lat.toFixed(6)), Number(lon.toFixed(6)));
+        }
+      } else if (e.target === renderer.domElement) {
+        setSelectedPopup(null);
       }
     };
 
-    syncLayer('hirise', Boolean(layers.hirise));
-    syncLayer('ellipse', Boolean(layers.ellipse));
-    syncLayer('linear', Boolean(layers.linear));
-    syncLayer('surface', Boolean(layers.surface));
-    syncLayer('nomenclature', Boolean(layers.nomenclature) && !cleanTabletMode);
-    syncLayer('m20TraverseRemote', Boolean(layers.traverse));
-  }, [
-    layers.hirise,
-    layers.ellipse,
-    layers.linear,
-    layers.surface,
-    layers.nomenclature,
-    layers.traverse,
-    cleanTabletMode,
-  ]);
+    renderer.domElement.addEventListener('pointermove', handlePointerMove);
+    renderer.domElement.addEventListener('pointerdown', handlePointerDown);
+    renderer.domElement.addEventListener('pointerup', handlePointerUp);
 
-  // Update Basemap & Relief Hillshade Blend dynamically
+    const ro = new ResizeObserver(() => {
+      if (!container) return;
+      const w = container.clientWidth || 800;
+      const h = container.clientHeight || 540;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    });
+    ro.observe(container);
+
+    let animId = 0;
+    const projVec = new THREE.Vector3();
+
+    const animate = () => {
+      animId = requestAnimationFrame(animate);
+
+      // Smooth camera flight
+      if (flyAnimRef.current) {
+        const anim = flyAnimRef.current;
+        anim.progress = Math.min(1, anim.progress + 0.05);
+        const ease = 1 - Math.pow(1 - anim.progress, 3);
+        controls.target.lerpVectors(anim.startTarget, anim.endTarget, ease);
+        camera.position.lerpVectors(anim.startCam, anim.endCam, ease);
+        if (anim.progress >= 1) flyAnimRef.current = null;
+      }
+
+      // Animate locate radar pulse
+      if (pulseStateRef.current.active && groups.live) {
+        pulseStateRef.current.t += 0.025;
+        const ring = groups.live.getObjectByName('locate-pulse-ring');
+        if (ring) {
+          const s = 1 + (pulseStateRef.current.t % 1) * 5.5;
+          ring.scale.set(s, s, 1);
+          ring.material.opacity = Math.max(0, 0.85 * (1 - (pulseStateRef.current.t % 1)));
+        }
+        if (pulseStateRef.current.t > 3.0) {
+          pulseStateRef.current.active = false;
+          if (ring) ring.visible = false;
+        }
+      }
+
+      controls.update();
+      renderer.render(scene, camera);
+
+      // Project 3D marker anchors into 2D screen coordinates via direct DOM transforms
+      const w = renderer.domElement.clientWidth;
+      const h = renderer.domElement.clientHeight;
+      for (const item of projectedItemsRef.current) {
+        const el = markerDomRefs.current.get(item.key);
+        if (!el) continue;
+        projVec.copy(item.pos).project(camera);
+        if (projVec.z > 1 || projVec.z < -1) {
+          el.style.opacity = '0';
+          el.style.pointerEvents = 'none';
+          continue;
+        }
+        const sx = (projVec.x * 0.5 + 0.5) * w;
+        const sy = (-projVec.y * 0.5 + 0.5) * h;
+        if (sx < -40 || sx > w + 40 || sy < -40 || sy > h + 40) {
+          el.style.opacity = '0';
+          el.style.pointerEvents = 'none';
+        } else {
+          el.style.opacity = '1';
+          el.style.pointerEvents = 'auto';
+          el.style.transform = `translate3d(${sx.toFixed(1)}px, ${sy.toFixed(1)}px, 0) translate(-50%, -100%)`;
+        }
+      }
+    };
+    animate();
+
+    return () => {
+      cancelAnimationFrame(animId);
+      ro.disconnect();
+      renderer.domElement.removeEventListener('pointermove', handlePointerMove);
+      renderer.domElement.removeEventListener('pointerdown', handlePointerDown);
+      renderer.domElement.removeEventListener('pointerup', handlePointerUp);
+      controls.dispose();
+      renderer.dispose();
+      if (renderer.domElement.parentNode === container) {
+        container.removeChild(renderer.domElement);
+      }
+    };
+  }, []);
+
+  // Rebuild 3D geometry whenever DEM, depthExaggeration, or slope layer changes
   useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
+    if (!demLoaded || !demRef.current) return;
+    rebuildTerrainGeometry(demRef.current, depthExaggeration, Boolean(layers.slope));
+  }, [demLoaded, depthExaggeration, layers.slope, rebuildTerrainGeometry]);
 
-    const basemapUrls = {
-      satellite: '/data/ctx_mosaic_regional.png',
-      terrain: '/data/hrsc_hillshade.png',
-      elevation: '/data/hrsc_elevation_color.png',
-      themis: '/data/themis_night_ir.png',
+  // Update basemap texture & depth-luminance blending
+  useEffect(() => {
+    const mesh = terrainMeshRef.current;
+    if (!mesh) return;
+    const mat = mesh.material;
+    const texUrl = BASEMAP_TEXTURES[basemap] || BASEMAP_TEXTURES.satellite;
+
+    const applyTexture = (tex) => {
+      if (!terrainMeshRef.current) return;
+      tex.colorSpace = THREE.SRGBColorSpace;
+      tex.anisotropy = 4;
+      // When basemap is 'elevation', keep pure depth luminance strong; otherwise blend with reliefBlend
+      if (basemap === 'elevation') {
+        mat.map = tex;
+        mat.color.set('#ffffff');
+      } else {
+        mat.map = tex;
+        // Higher reliefBlend => slightly brighter texture, while vertexColors always keep deep=dark, upper=light
+        const boost = 0.82 + reliefBlend * 0.35;
+        mat.color.setRGB(boost, boost, boost);
+      }
+      mat.needsUpdate = true;
     };
 
-    if (basemapOverlayRef.current) {
-      basemapOverlayRef.current.remove();
-      basemapOverlayRef.current = null;
-    }
-
-    const targetUrl = basemapUrls[basemap];
-    if (targetUrl) {
-      basemapOverlayRef.current = L.imageOverlay(targetUrl, REGIONAL_BOUNDS, {
-        opacity: 1.0,
-        zIndex: 1,
-        interactive: false,
-      }).addTo(map);
-    }
-
-    if (reliefOverlayRef.current) {
-      const showRelief = basemap !== 'terrain' && basemap !== 'default';
-      reliefOverlayRef.current.setOpacity(showRelief ? reliefBlend : 0.0);
+    if (textureCacheRef.current[texUrl]) {
+      applyTexture(textureCacheRef.current[texUrl]);
+    } else {
+      const loader = new THREE.TextureLoader();
+      loader.load(texUrl, (tex) => {
+        textureCacheRef.current[texUrl] = tex;
+        applyTexture(tex);
+      });
     }
   }, [basemap, reliefBlend]);
 
-  // Fly-to when Quick Landmark, Target, or Origin changes
+  // Update lighting for Martian solarPhase / weather
   useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map || !flyToTarget?.timestamp || !flyToTarget.latLon) return;
+    const scene = sceneRef.current;
+    if (!scene) return;
+    const exposureMap = {
+      dawn: 0.85,
+      day: 1.08,
+      dusk: 0.82,
+      night: 0.58,
+    };
+    if (rendererRef.current) {
+      let exp = exposureMap[solarPhase] || 1.08;
+      if (weatherCondition === 'dust_storm') exp *= 0.85;
+      rendererRef.current.toneMappingExposure = exp;
+    }
+  }, [solarPhase, weatherCondition]);
 
-    map.flyTo(flyToTarget.latLon, flyToTarget.zoom || 14, {
-      animate: true,
-      duration: 0.9,
-      easeLinearity: 0.25,
-    });
-  }, [flyToTarget]);
-
-  // Smooth Animated Fly-To Zoom when Locate EVA / North Pin is pressed
+  // Rebuild 3D Traverse & Slope Waypoints
   useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map || !locatePulse?.timestamp || !liveNavState?.currentLatLon) return;
+    const travGroup = overlayGroupsRef.current.traverse;
+    const slopeGroup = overlayGroupsRef.current.slope;
+    if (!travGroup || !slopeGroup || !demRef.current) return;
+    disposeGroup(travGroup);
+    disposeGroup(slopeGroup);
+    const dem = demRef.current;
 
-    map.flyTo(liveNavState.currentLatLon, locatePulse.zoom || 14.5, {
-      animate: true,
-      duration: 1.0,
-      easeLinearity: 0.25,
-    });
-  }, [locatePulse, liveNavState?.currentLatLon]);
-
-  // Render Traverse Waypoints & Slope Telemetry
-  useEffect(() => {
-    const { traverse, slope } = layerGroupsRef.current;
-    if (!traverse || !slope) return;
-    traverse.clearLayers();
-    slope.clearLayers();
-
-    if (layers.traverse && waypoints.length > 0) {
-      const latlngs = waypoints.map((w) => [w.lat, w.lon]);
-      L.polyline(latlngs, {
-        color: APP_THEME.layers.traverseLine,
-        weight: 2,
-        opacity: 0.85,
-        dashArray: '4, 5',
-      }).addTo(traverse);
+    if (layers.traverse !== false && waypoints.length > 1) {
+      const pts = waypoints.map((wp) => latLonToVec3(wp.lat, wp.lon, dem, depthExaggeration, 0.22));
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      const mat = new THREE.LineBasicMaterial({ color: APP_THEME.layers.traverseLine, transparent: true, opacity: 0.72 });
+      travGroup.add(new THREE.Line(geo, mat));
     }
 
     if (layers.slope && waypoints.length > 0) {
+      const dotGeo = new THREE.SphereGeometry(0.18, 8, 8);
       for (let i = 0; i < waypoints.length; i += 2) {
-        const w = waypoints[i];
-        const tilt = w.tilt || 0;
-        let color = APP_THEME.colors.ok; // < 7 deg nominal
-        if (tilt >= 14) color = APP_THEME.colors.fault; // >= 14 deg fault
-        else if (tilt >= 7) color = APP_THEME.colors.textSecondary; // 7-13.9 deg moderate
+        const wp = waypoints[i];
+        const tilt = wp.tilt || 0;
+        const col = tilt > 15 ? APP_THEME.colors.fault : tilt > 8 ? '#edf0f5' : APP_THEME.colors.ok;
+        const m = new THREE.Mesh(
+          dotGeo.clone(),
+          new THREE.MeshBasicMaterial({ color: col })
+        );
+        m.position.copy(latLonToVec3(wp.lat, wp.lon, dem, depthExaggeration, 0.3));
+        slopeGroup.add(m);
+      }
+      dotGeo.dispose();
+    }
+  }, [demLoaded, waypoints, layers.traverse, layers.slope, depthExaggeration]);
 
-        const circle = L.circleMarker([w.lat, w.lon], {
-          radius: tilt >= 14 ? 5 : 3.5,
-          color,
-          fillColor: color,
-          fillOpacity: 0.8,
-          weight: 1,
+  // Rebuild 3D Hazard Rings & Drawn Polygons
+  useEffect(() => {
+    const hazGroup = overlayGroupsRef.current.hazards;
+    const drawnGroup = overlayGroupsRef.current.drawn;
+    if (!hazGroup || !drawnGroup || !demRef.current) return;
+    disposeGroup(hazGroup);
+    disposeGroup(drawnGroup);
+    const dem = demRef.current;
+
+    const metersToScene = TERRAIN_W / 56100; // ~56.1 km across terrain width
+
+    if (layers.hazards !== false) {
+      const allHaz = [
+        ...GROUND_CONTROL_SCIENCE_HAZARDS.map((h) => ({ ...h, radiusMeters: h.radius })),
+        ...hazardZones,
+      ];
+      for (const hz of allHaz) {
+        const rScene = Math.max(0.6, (hz.radiusMeters || hz.radius || 800) * metersToScene);
+        const center = latLonToVec3(hz.lat, hz.lon, dem, depthExaggeration, 0.25);
+
+        const ringGeo = new THREE.RingGeometry(rScene * 0.9, rScene, 36);
+        ringGeo.rotateX(-Math.PI / 2);
+        const ringMat = new THREE.MeshBasicMaterial({
+          color: hz.color || APP_THEME.colors.fault,
+          transparent: true,
+          opacity: 0.75,
+          side: THREE.DoubleSide,
         });
+        const ring = new THREE.Mesh(ringGeo, ringMat);
+        ring.position.copy(center);
+        hazGroup.add(ring);
 
-        const is360Waypoint = w.sol === 3 || w.sol === 68;
-        circle.bindPopup(`
-          <div style="font-size:11px; min-width:190px; font-family:'JetBrains Mono',monospace;">
-            <div style="font-weight:700; color:#edf0f5; border-bottom:1px solid #242933; padding-bottom:4px; margin-bottom:6px; text-transform:uppercase;">
-              SOL ${w.sol} // TELEMETRY
-            </div>
-            <div style="color:#9da5b4; line-height:1.5;">
-              <div><span style="color:#656d7d;">ELEV:</span> <span style="color:#edf0f5;">${w.elev} m</span></div>
-              <div><span style="color:#656d7d;">GRADE:</span> <span style="color:${tilt >= 14 ? '#ef4444' : '#edf0f5'};">${tilt} deg</span></div>
-              <div><span style="color:#656d7d;">ODOM:</span> <span style="color:#edf0f5;">${(w.dist_total_m / 1000).toFixed(2)} km</span></div>
-            </div>
-            <button onclick="window.dispatchMarsPano(${w.sol})" style="
-              margin-top:8px; width:100%; min-height:36px; padding:6px 10px;
-              background:${is360Waypoint ? '#16a34a' : '#222731'};
-              color:${is360Waypoint ? '#0b0d11' : '#edf0f5'};
-              font-weight:700; font-size:10px; border-radius:4px; border:1px solid ${is360Waypoint ? '#22c55e' : '#353c4a'};
-              cursor:pointer; text-transform:uppercase; letter-spacing:0.04em;
-            ">${is360Waypoint ? 'OPEN 360 PHOTOSPHERE' : 'VIEW SURFACE IMAGERY'}</button>
-          </div>
-        `);
-
-        circle.on('click', () => {
-          onSelectWaypointSol?.(w.sol);
+        const discGeo = new THREE.CircleGeometry(rScene * 0.9, 32);
+        discGeo.rotateX(-Math.PI / 2);
+        const discMat = new THREE.MeshBasicMaterial({
+          color: hz.color || APP_THEME.colors.fault,
+          transparent: true,
+          opacity: 0.16,
+          side: THREE.DoubleSide,
         });
-
-        circle.addTo(slope);
+        const disc = new THREE.Mesh(discGeo, discMat);
+        disc.position.copy(center);
+        hazGroup.add(disc);
       }
     }
-  }, [waypoints, layers.traverse, layers.slope, onSelectWaypointSol]);
 
-  // Render Hazard Zones (Terrain Hazards + Modeled Science Hazards)
-  useEffect(() => {
-    const { hazards } = layerGroupsRef.current;
-    if (!hazards) return;
-    hazards.clearLayers();
-
-    if (!layers.hazards) return;
-
-    hazardZones.forEach((hz) => {
-      const color =
-        hz.severity === 'critical'
-          ? APP_THEME.colors.fault
-          : hz.severity === 'high'
-          ? APP_THEME.colors.faultDark
-          : '#991b1b';
-
-      const circle = L.circle([hz.lat, hz.lon], {
-        radius: hz.radiusMeters,
-        color,
-        fillColor: color,
-        fillOpacity: 0.2,
-        weight: 1.5,
-        dashArray: '5, 5',
-      });
-
-      circle.bindPopup(`
-        <div style="font-size:11px; max-width:230px; font-family:'JetBrains Mono',monospace;">
-          <div style="font-weight:700; color:#ef4444; text-transform:uppercase; font-size:10px; border-bottom:1px solid #242933; padding-bottom:4px; margin-bottom:4px;">
-            [FAULT] ${hz.severity.toUpperCase()} TERRAIN HAZARD
-          </div>
-          <div style="font-weight:700; font-size:12px; color:#edf0f5; margin-bottom:4px;">${hz.name}</div>
-          <div style="color:#9da5b4; margin-bottom:4px;">PEAK GRADE: <span style="color:#edf0f5;">${hz.maxSlope} deg</span></div>
-          <p style="margin:0; color:#9da5b4; font-family:'Inter',sans-serif; font-size:11px; line-height:1.4;">${hz.description}</p>
-        </div>
-      `);
-
-      circle.addTo(hazards);
-    });
-
-    GROUND_CONTROL_SCIENCE_HAZARDS.forEach((h) => {
-      const circle = L.circle([h.lat, h.lon], {
-        radius: h.radius,
-        color: h.color,
-        fillColor: h.fillColor,
-        fillOpacity: 0.18,
-        weight: 1.5,
-        dashArray: '4, 4',
-      });
-
-      circle.bindTooltip(
-        `<div style="font-family:'JetBrains Mono',monospace;font-size:10px;line-height:1.4;color:#edf0f5;">
-          <span style="color:#ef4444;font-weight:700;">[ZONE: ${h.name}]</span><br>
-          <span>TYPE: ${h.type}</span><br>
-          <span>STATUS: ${h.severity}</span>
-        </div>`,
-        { sticky: true, opacity: 0.96 }
-      );
-
-      circle.addTo(hazards);
-    });
-  }, [hazardZones, layers.hazards]);
-
-  // Render Operator-Drawn Exclusion & Safe Corridor Polygons
-  useEffect(() => {
-    const { drawnZones: drawnGroup } = layerGroupsRef.current;
-    if (!drawnGroup) return;
-    drawnGroup.clearLayers();
-
-    drawnZones.forEach((z) => {
-      const style = APP_THEME.hazards[z.type] || APP_THEME.hazards.rough;
-      const poly = L.polygon(z.latlngs, {
-        color: style.color,
-        fillColor: style.fill,
-        fillOpacity: style.opacity,
-        weight: 2,
-      });
-
-      const isSafe = z.type === 'safe';
-      poly.bindPopup(`
-        <div style="font-family:'JetBrains Mono',monospace;font-size:11px;min-width:190px;">
-          <div style="font-weight:700;color:${isSafe ? '#22c55e' : '#ef4444'};border-bottom:1px solid #242933;padding-bottom:4px;margin-bottom:6px;text-transform:uppercase;">
-            ${isSafe ? '[OK] ' : '[EXCLUSION] '}${style.label}
-          </div>
-          <div style="color:#9da5b4;font-size:10px;margin-bottom:8px;">
-            ID: ${z.id} // VERTICES: ${z.latlngs.length}
-          </div>
-          <button onclick="window.dispatchDeleteZone('${z.id}')" style="
-            width:100%;min-height:36px;padding:6px 10px;background:#222731;color:#ef4444;
-            border:1px solid #ef4444;border-radius:4px;font-weight:700;font-size:10px;cursor:pointer;text-transform:uppercase;
-          ">DELETE ZONE</button>
-        </div>
-      `);
-
-      poly.addTo(drawnGroup);
-    });
-  }, [drawnZones]);
-
-  // Render Live Draw Polygon Preview while operator places vertices
-  useEffect(() => {
-    const { drawPreview } = layerGroupsRef.current;
-    if (!drawPreview) return;
-    drawPreview.clearLayers();
-
-    if (!activeDrawMode || drawVertices.length === 0) return;
-
-    const style = APP_THEME.hazards[activeDrawMode] || APP_THEME.hazards.rough;
-
-    if (drawVertices.length >= 3) {
-      L.polygon(drawVertices, {
-        color: style.color,
-        fillColor: style.fill,
-        fillOpacity: style.opacity * 0.85,
-        weight: 2,
-        dashArray: '4, 4',
-        interactive: false,
-      }).addTo(drawPreview);
-    } else if (drawVertices.length >= 2) {
-      L.polyline(drawVertices, {
-        color: style.color,
-        weight: 2,
-        dashArray: '4, 4',
-        interactive: false,
-      }).addTo(drawPreview);
+    // Drawn exclusion / safe zones
+    for (const zone of drawnZones) {
+      if (!zone.coords || zone.coords.length < 3) continue;
+      const isSafe = zone.type === 'safe';
+      const col = isSafe ? APP_THEME.colors.ok : APP_THEME.colors.fault;
+      const pts = zone.coords.map(([lat, lon]) => latLonToVec3(lat, lon, dem, depthExaggeration, 0.35));
+      pts.push(pts[0].clone());
+      const geo = new THREE.BufferGeometry().setFromPoints(pts);
+      drawnGroup.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: col })));
     }
 
-    drawVertices.forEach((pt, idx) => {
-      L.circleMarker(pt, {
-        radius: idx === 0 ? 5 : 4,
-        color: '#edf0f5',
-        fillColor: style.color,
-        fillOpacity: 1,
-        weight: 1.5,
-        interactive: false,
-      }).addTo(drawPreview);
-    });
-  }, [activeDrawMode, drawVertices]);
-
-  // Render Science, ISRU & Charging Stations (Monochrome / Green / Crimson only)
-  useEffect(() => {
-    const { science } = layerGroupsRef.current;
-    if (!science) return;
-    science.clearLayers();
-
-    if (!layers.science) return;
-
-    sciencePOIs.forEach((poi) => {
-      const isStart = startPOI?.id === poi.id;
-      const isEnd = endPOI?.id === poi.id;
-      const isStation = Boolean(poi.isChargingStation);
-      const isActivePitStop = routeResult?.chargingStop?.station?.id === poi.id;
-      const isCurrentLoc = poi.id === astronautLocId;
-
-      if (isStation) {
-        L.circle([poi.lat, poi.lon], {
-          radius: 2500,
-          color: APP_THEME.colors.ok,
-          fillColor: APP_THEME.colors.ok,
-          fillOpacity: isActivePitStop ? 0.08 : 0.03,
-          weight: isActivePitStop ? 1.5 : 0.8,
-          dashArray: '3, 6',
-          interactive: false,
-        }).addTo(science);
+    // Active drawing vertices
+    if (drawVertices.length > 0) {
+      const pts = drawVertices.map(([lat, lon]) => latLonToVec3(lat, lon, dem, depthExaggeration, 0.4));
+      if (pts.length > 1) {
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        drawnGroup.add(new THREE.Line(geo, new THREE.LineBasicMaterial({ color: '#edf0f5' })));
       }
-
-      // Monochrome & Green/Crimson Status Encoding only
-      const borderColor = isActivePitStop || isStation
-        ? APP_THEME.colors.ok
-        : isStart || isEnd
-        ? APP_THEME.colors.textPrimary
-        : APP_THEME.colors.borderStrong;
-
-      const markerBg = isEnd
-        ? '#16a34a'
-        : isStart
-        ? '#2c323f'
-        : '#13161c';
-
-      // Visual vector SVG glyphs per station type (zero emojis)
-      const strokeHex = isEnd ? '#0b0d11' : borderColor === APP_THEME.colors.ok ? '#22c55e' : '#edf0f5';
-      const svgIcon =
-        poi.type === 'charging' || poi.type === 'habitat'
-          ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${strokeHex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>`
-          : poi.type === 'isru'
-          ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${strokeHex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.69l5.66 5.66a8 8 0 1 1-11.31 0z"/></svg>`
-          : poi.type === 'resource'
-          ? `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${strokeHex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>`
-          : `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="${strokeHex}" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><circle cx="12" cy="12" r="3"/></svg>`;
-
-      const topBadgeHtml = isActivePitStop
-        ? `<div style="
-            position:absolute; top:-22px; left:50%; transform:translateX(-50%);
-            white-space:nowrap; background:#13161c; color:#22c55e; border:1px solid #22c55e;
-            font-size:9px; font-weight:700; font-family:'JetBrains Mono',monospace; padding:1px 6px; border-radius:4px;
-          ">PIT STOP 100%</div>`
-        : isCurrentLoc
-        ? `<div style="
-            position:absolute; bottom:-20px; left:50%; transform:translateX(-50%);
-            white-space:nowrap; background:#13161c; color:#edf0f5; border:1px solid #edf0f5;
-            font-size:9px; font-weight:700; font-family:'JetBrains Mono',monospace; padding:1px 6px; border-radius:4px;
-          ">UNIT BASE</div>`
-        : '';
-
-      const customIcon = L.divIcon({
-        className: 'custom-mars-poi',
-        html: `<div style="position:relative;">
-          ${topBadgeHtml}
-          <div style="
-            width: 32px; height: 32px; border-radius: 4px;
-            background: ${markerBg}; color: ${strokeHex};
-            display: flex; align-items: center; justify-content: center;
-            border: 1.5px solid ${borderColor};
-          ">${svgIcon}</div>
-        </div>`,
-        iconSize: [32, 32],
-        iconAnchor: [16, 16],
-      });
-
-      const marker = L.marker([poi.lat, poi.lon], { icon: customIcon });
-      const matchingLm = landmarks.find(
-        (l) =>
-          l.id === poi.id ||
-          l.id.replace(/_/g, '-') === poi.id.replace(/_/g, '-') ||
-          (poi.id === 'hab-alpha' && l.id === 'landing_site')
-      );
-
-      marker.bindPopup(`
-        <div style="font-size:12px; min-width:260px; max-width:280px; font-family:'JetBrains Mono',monospace;">
-          <div style="font-weight:700; color:#22c55e; font-size:11px; text-transform:uppercase; margin-bottom:3px; letter-spacing:0.04em;">
-            ${poi.type.toUpperCase()} NODE
-          </div>
-          <div style="font-weight:700; font-size:13px; color:#edf0f5; border-bottom:1px solid #242933; padding-bottom:5px; margin-bottom:8px;">
-            ${poi.name}
-          </div>
-          <p style="margin:0 0 10px; color:#9da5b4; font-family:'Inter',sans-serif; font-size:12px; line-height:1.45;">
-            ${poi.description}
-          </p>
-          <div style="display:flex; flex-direction:column; gap:6px;">
-            <button onclick="window.dispatchSetOrigin('${poi.id}')" style="
-              width:100%; min-height:42px; padding:8px 12px; background:#191d24; color:#edf0f5;
-              border:1px solid #353c4a; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; text-transform:uppercase; font-family:'JetBrains Mono',monospace;
-            ">SET AS ORIGIN BASE</button>
-            <button onclick="window.dispatchNavigateTo('${poi.id}')" style="
-              width:100%; min-height:42px; padding:8px 12px; background:#16a34a; color:#0b0d11;
-              border:1px solid #22c55e; border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; text-transform:uppercase; font-family:'JetBrains Mono',monospace;
-            ">ROUTE TO TARGET</button>
-            ${
-              matchingLm
-                ? `<button onclick="window.dispatchOpenLandmark('${matchingLm.id}')" style="
-                    width:100%; min-height:42px; padding:8px 12px; background:#222731; color:#22c55e;
-                    border:1px solid rgba(34,197,94,0.45); border-radius:6px; font-weight:700; font-size:11.5px; cursor:pointer; text-transform:uppercase; font-family:'JetBrains Mono',monospace;
-                  ">OPEN DOSSIER & PHOTOS</button>`
-                : ''
-            }
-          </div>
-        </div>
-      `);
-
-      marker.on('click', () => {
-        onSelectPOI?.(poi);
-      });
-
-      marker.addTo(science);
-    });
-  }, [
-    sciencePOIs,
-    layers.science,
-    startPOI,
-    endPOI,
-    routeResult,
-    astronautLocId,
-    landmarks,
-    onSelectPOI,
-  ]);
-
-  // Render 11 Regional Science Landmarks
-  useEffect(() => {
-    const { landmarks: lmGroup } = layerGroupsRef.current;
-    if (!lmGroup) return;
-    lmGroup.clearLayers();
-
-    if (!layers.landmarks || landmarks.length === 0) return;
-
-    landmarks.forEach((lm) => {
-      if (!lm.coords || lm.coords.length < 2) return;
-      const isCurrentLoc =
-        lm.id === astronautLocId ||
-        (astronautLocId === 'hab-alpha' && lm.id === 'landing_site');
-      const pinColor = isCurrentLoc ? '#22c55e' : '#edf0f5';
-
-      const labelTagHtml = cleanTabletMode
-        ? ''
-        : `<span style="
-            background:#13161c;border:1px solid #353c4a;
-            color:${pinColor};font-family:'JetBrains Mono',monospace;
-            font-size:9px;font-weight:700;letter-spacing:0.04em;
-            padding:2px 6px;border-radius:4px;white-space:nowrap;
-          ">${lm.name.toUpperCase()}</span>`;
-
-      const icon = L.divIcon({
-        className: 'aerospace-landmark-marker',
-        html: `
-          <div style="display:flex;align-items:center;gap:5px;transform:translate(-11px,-11px);cursor:pointer;">
-            <div style="
-              width:22px;height:22px;border-radius:4px;
-              background:#13161c;border:1.5px solid ${pinColor};
-              display:flex;align-items:center;justify-content:center;
-            ">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="${pinColor}" stroke-width="2">
-                <circle cx="12" cy="12" r="8" />
-                <circle cx="12" cy="12" r="2" fill="${pinColor}" />
-              </svg>
-            </div>
-            ${labelTagHtml}
-          </div>
-        `,
-        iconSize: [24, 24],
-        iconAnchor: [11, 11],
-      });
-
-      const marker = L.marker(lm.coords, { icon, zIndexOffset: 650 });
-      if (cleanTabletMode) {
-        marker.bindTooltip(lm.name.toUpperCase(), {
-          direction: 'right',
-          offset: [10, 0],
-        });
+      const vGeo = new THREE.SphereGeometry(0.28, 10, 10);
+      for (const p of pts) {
+        const m = new THREE.Mesh(vGeo.clone(), new THREE.MeshBasicMaterial({ color: '#edf0f5' }));
+        m.position.copy(p);
+        drawnGroup.add(m);
       }
-      const regolith = lm.regolith || 'Basaltic-Olivine Floor';
+      vGeo.dispose();
+    }
+  }, [demLoaded, hazardZones, drawnZones, drawVertices, layers.hazards, depthExaggeration]);
 
-      marker.bindPopup(`
-        <div style="font-size:12px; min-width:270px; max-width:300px; font-family:'Inter',sans-serif;">
-          <div style="font-family:'JetBrains Mono',monospace; font-size:10.5px; color:#22c55e; font-weight:700; text-transform:uppercase; letter-spacing:0.06em;">
-            REGIONAL LANDMARK
-          </div>
-          <div style="font-weight:700; font-size:14px; color:#edf0f5; margin:3px 0 5px;">
-            ${lm.name}
-          </div>
-          <div style="font-size:11.5px; color:#9da5b4; margin-bottom:10px; line-height:1.4;">
-            ${lm.type || 'Jezero Geologic Feature'} // ${lm.region || 'Jezero Quadrangle'}
-          </div>
-          <div style="background:#191d24; border:1px solid #242933; border-radius:6px; padding:8px; font-size:11px; margin-bottom:10px; font-family:'JetBrains Mono',monospace; line-height:1.6;">
-            <div><span style="color:#656d7d;">ELEV:</span> <span style="color:#edf0f5; font-weight:700;">${lm.elevation_m} m</span></div>
-            <div><span style="color:#656d7d;">COORDS:</span> <span style="color:#edf0f5;">${lm.coords[0].toFixed(4)} N, ${lm.coords[1].toFixed(4)} E</span></div>
-            <div><span style="color:#656d7d;">SOIL:</span> <span style="color:#9da5b4;">${regolith}</span></div>
-          </div>
-          <div style="display:flex; flex-direction:column; gap:6px;">
-            <button onclick="window.dispatchOpenLandmark('${lm.id}')" style="
-              width:100%; min-height:42px; padding:8px 12px; background:#191d24; color:#edf0f5;
-              border:1px solid #353c4a; border-radius:6px; font-weight:700; font-size:11px;
-              font-family:'JetBrains Mono',monospace; cursor:pointer; text-transform:uppercase;
-            ">OPEN DOSSIER & 6-PHOTO LOG</button>
-            <button onclick="window.dispatchOpenLandmarkVista('${lm.id}')" style="
-              width:100%; min-height:42px; padding:8px 12px; background:#222731; color:#edf0f5;
-              border:1px solid #4f5767; border-radius:6px; font-weight:700; font-size:11px;
-              font-family:'JetBrains Mono',monospace; cursor:pointer; text-transform:uppercase;
-            ">OPEN SURFACE VISTA / 360</button>
-            <button onclick="window.dispatchSetOrigin('${lm.id}')" style="
-              width:100%; min-height:42px; padding:8px 12px; background:#191d24; color:#9da5b4;
-              border:1px solid #353c4a; border-radius:6px; font-weight:700; font-size:11px;
-              font-family:'JetBrains Mono',monospace; cursor:pointer; text-transform:uppercase;
-            ">SET AS ORIGIN BASE</button>
-            <button onclick="window.dispatchNavigateTo('${lm.id}')" style="
-              width:100%; min-height:42px; padding:8px 12px; background:#16a34a; color:#0b0d11;
-              border:1px solid #22c55e; border-radius:6px; font-weight:700; font-size:11px;
-              font-family:'JetBrains Mono',monospace; cursor:pointer; text-transform:uppercase;
-            ">ROUTE TO THIS SITE</button>
-          </div>
-        </div>
-      `);
-
-      marker.on('click', () => {
-        onSelectLandmark?.(lm);
-      });
-
-      marker.addTo(lmGroup);
-    });
-  }, [landmarks, layers.landmarks, astronautLocId, onSelectLandmark, cleanTabletMode]);
-
-  // Render Dual-Layer Aerospace A* Safe Route
+  // Rebuild 3D Route Ribbons (Leg 1, Leg 2, Direct comparison, elevation posts)
   useEffect(() => {
-    const { route } = layerGroupsRef.current;
-    if (!route) return;
-    route.clearLayers();
-
+    const routeGroup = overlayGroupsRef.current.route;
+    if (!routeGroup || !demRef.current) return;
+    disposeGroup(routeGroup);
     if (!routeResult) return;
+    const dem = demRef.current;
 
-    if (showDirectComparison && routeResult.directCoords) {
-      L.polyline(routeResult.directCoords, {
+    const addRibbon = (coords, color, tubeRadius = 0.24, lift = 0.45) => {
+      if (!coords || coords.length < 2) return;
+      const pts = coords.map(([lat, lon]) => latLonToVec3(lat, lon, dem, depthExaggeration, lift));
+      const curve = new THREE.CatmullRomCurve3(pts);
+      const segments = Math.min(220, Math.max(24, pts.length * 2));
+      const tubeGeo = new THREE.TubeGeometry(curve, segments, tubeRadius, 8, false);
+      const tubeMat = new THREE.MeshStandardMaterial({
+        color,
+        emissive: color,
+        emissiveIntensity: 0.45,
+        roughness: 0.35,
+      });
+      routeGroup.add(new THREE.Mesh(tubeGeo, tubeMat));
+    };
+
+    const leg1Color = routeResult.isSurvivalPossible === false ? APP_THEME.routeLine.faultColor : APP_THEME.routeLine.coreColor;
+    if (routeResult.leg1_coords?.length > 1) {
+      addRibbon(routeResult.leg1_coords, leg1Color, 0.26, 0.55);
+    } else if (routeResult.coords?.length > 1) {
+      addRibbon(routeResult.coords, leg1Color, 0.26, 0.55);
+    }
+
+    if (routeResult.leg2_coords?.length > 1) {
+      addRibbon(routeResult.leg2_coords, APP_THEME.routeLine.leg2Color, 0.24, 0.55);
+    }
+
+    if (showDirectComparison && startPOI && endPOI) {
+      const p1 = latLonToVec3(startPOI.lat, startPOI.lon, dem, depthExaggeration, 0.8);
+      const p2 = latLonToVec3(endPOI.lat, endPOI.lon, dem, depthExaggeration, 0.8);
+      const geo = new THREE.BufferGeometry().setFromPoints([p1, p2]);
+      const mat = new THREE.LineDashedMaterial({
         color: APP_THEME.routeLine.directColor,
-        weight: 2,
-        opacity: 0.7,
-        dashArray: '6, 8',
-      })
-        .bindTooltip('DIRECT LINE (UNPLANNED)', { sticky: true })
-        .addTo(route);
+        dashSize: 1.2,
+        gapSize: 0.7,
+      });
+      const line = new THREE.Line(geo, mat);
+      line.computeLineDistances();
+      routeGroup.add(line);
     }
+  }, [demLoaded, routeResult, showDirectComparison, startPOI, endPOI, depthExaggeration]);
 
-    if (routeResult.chargingStop && routeResult.leg1Coords && routeResult.leg2Coords) {
-      // Leg 1 halo + off-white core
-      L.polyline(routeResult.leg1Coords, {
-        color: APP_THEME.routeLine.haloColor,
-        weight: APP_THEME.routeLine.haloWeight,
-        opacity: 0.9,
-        lineJoin: 'round',
-      }).addTo(route);
-
-      L.polyline(routeResult.leg1Coords, {
-        color: APP_THEME.routeLine.coreColor,
-        weight: APP_THEME.routeLine.coreWeight,
-        opacity: 1.0,
-        lineJoin: 'round',
-      })
-        .bindTooltip(
-          `LEG 1 TO ${routeResult.chargingStop.station.name.toUpperCase()}: ${routeResult.chargingStop.leg1Stats.distKm} KM`,
-          { sticky: true }
-        )
-        .addTo(route);
-
-      // Leg 2 halo + status-green core
-      L.polyline(routeResult.leg2Coords, {
-        color: APP_THEME.routeLine.haloColor,
-        weight: APP_THEME.routeLine.haloWeight,
-        opacity: 0.9,
-        lineJoin: 'round',
-      }).addTo(route);
-
-      L.polyline(routeResult.leg2Coords, {
-        color: APP_THEME.routeLine.leg2Color,
-        weight: APP_THEME.routeLine.coreWeight,
-        opacity: 1.0,
-        lineJoin: 'round',
-      })
-        .bindTooltip(
-          `LEG 2 (POST-CHARGE 100%): ${routeResult.chargingStop.leg2Stats.distKm} KM`,
-          { sticky: true }
-        )
-        .addTo(route);
-    } else if (routeResult.pathCoords?.length) {
-      const coreColor =
-        routeResult.rangeStatus === 'out_of_range'
-          ? APP_THEME.routeLine.faultColor
-          : weatherCondition === 'solar_storm'
-          ? APP_THEME.routeLine.faultColor
-          : APP_THEME.routeLine.coreColor;
-
-      L.polyline(routeResult.pathCoords, {
-        color: APP_THEME.routeLine.haloColor,
-        weight: APP_THEME.routeLine.haloWeight,
-        opacity: 0.9,
-        lineJoin: 'round',
-      }).addTo(route);
-
-      L.polyline(routeResult.pathCoords, {
-        color: coreColor,
-        weight: APP_THEME.routeLine.coreWeight,
-        opacity: 1.0,
-        lineJoin: 'round',
-      })
-        .bindTooltip(
-          `A* SAFE TRAVERSE: ${routeResult.distKm} KM | ${routeResult.durationMin} MIN`,
-          { sticky: true }
-        )
-        .addTo(route);
-    }
-  }, [routeResult, showDirectComparison, weatherCondition]);
-
-  // Render Predictive Dust Squall Radar & Vector (Crimson Alert Palette only)
+  // Rebuild 3D POI / Landmark Pins & Projected HTML Marker Anchors
   useEffect(() => {
-    const { dustFront } = layerGroupsRef.current;
-    if (!dustFront) return;
-    dustFront.clearLayers();
+    const markerGroup = overlayGroupsRef.current.markers3d;
+    if (!markerGroup || !demRef.current) return;
+    disposeGroup(markerGroup);
+    const dem = demRef.current;
 
-    if (!dustFrontState?.active) return;
+    const items = [];
+    const pinMatBase = (col) =>
+      new THREE.MeshStandardMaterial({ color: col, emissive: col, emissiveIntensity: 0.4 });
 
-    const { lat, lon, radiusMeters = 1150, distanceAheadKm, etaMin } = dustFrontState;
+    if (layers.science !== false) {
+      for (const poi of sciencePOIs) {
+        const isCharging = poi.isChargingStation || poi.type === 'charging' || poi.type === 'habitat';
+        const isStart = startPOI?.id === poi.id;
+        const isEnd = endPOI?.id === poi.id;
+        const col = isStart
+          ? '#22c55e'
+          : isEnd
+          ? '#ef4444'
+          : isCharging
+          ? '#edf0f5'
+          : '#9da5b4';
 
-    L.circle([lat, lon], {
-      radius: radiusMeters * 1.5,
-      color: APP_THEME.colors.fault,
-      fillColor: APP_THEME.colors.faultDark,
-      fillOpacity: 0.08,
-      weight: 1.5,
-      dashArray: '4, 8',
-    }).addTo(dustFront);
+        const basePos = latLonToVec3(poi.lat, poi.lon, dem, depthExaggeration, 0.05);
+        const pinH = isStart || isEnd || isCharging ? 2.4 : 1.7;
+        const topPos = basePos.clone().add(new THREE.Vector3(0, pinH, 0));
 
-    L.circle([lat, lon], {
-      radius: radiusMeters,
-      color: APP_THEME.colors.fault,
-      fillColor: '#991b1b',
-      fillOpacity: 0.25,
-      weight: 2,
-      dashArray: '8, 6',
-    }).addTo(dustFront);
+        const stemGeo = new THREE.CylinderGeometry(0.06, 0.06, pinH, 6);
+        const stem = new THREE.Mesh(stemGeo, pinMatBase(col));
+        stem.position.copy(basePos).add(new THREE.Vector3(0, pinH / 2, 0));
+        markerGroup.add(stem);
 
-    if (liveNavState?.currentLatLon) {
-      L.polyline([[lat, lon], liveNavState.currentLatLon], {
-        color: APP_THEME.colors.fault,
-        weight: 1.5,
-        dashArray: '5, 8',
-        opacity: 0.75,
-      }).addTo(dustFront);
-    }
+        const headGeo = new THREE.SphereGeometry(isStart || isEnd ? 0.36 : 0.26, 12, 12);
+        const head = new THREE.Mesh(headGeo, pinMatBase(col));
+        head.position.copy(topPos);
+        markerGroup.add(head);
 
-    const stormBadge = L.divIcon({
-      className: 'dust-storm-radar-badge',
-      html: `<div style="
-        transform: translate(-50%, -50%);
-        white-space: nowrap;
-        background: #13161c;
-        color: #ef4444;
-        border: 1px solid #ef4444;
-        padding: 4px 10px;
-        border-radius: 4px;
-        font-size: 10px;
-        font-weight: 700;
-        font-family: 'JetBrains Mono', monospace;
-        letter-spacing: 0.04em;
-      ">SQUALL VECTOR: ${distanceAheadKm} KM // IMPACT T-${etaMin}M</div>`,
-      iconSize: [0, 0],
-      iconAnchor: [0, 0],
-    });
-
-    L.marker([lat, lon], { icon: stormBadge, interactive: false }).addTo(dustFront);
-  }, [dustFrontState, liveNavState?.currentLatLon]);
-
-  // Live Astronaut Heading Chevron & Telemetry Puck (Zero Blue / Zero Emojis)
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
-
-    if (!liveNavState?.currentLatLon) {
-      if (liveMarkerRef.current) {
-        liveMarkerRef.current.remove();
-        liveMarkerRef.current = null;
+        items.push({
+          key: `poi-${poi.id}`,
+          kind: 'poi',
+          data: poi,
+          pos: topPos.clone().add(new THREE.Vector3(0, 0.45, 0)),
+          label: poi.name.split('(')[0].trim().slice(0, 18),
+          badge: isStart ? 'ORIGIN' : isEnd ? 'TARGET' : isCharging ? 'PWR/O2' : 'SCI',
+          color: col,
+        });
       }
-      return;
     }
 
-    const { currentLatLon, heading = 0, currentBattery = 85, isRecharging, active } = liveNavState;
-    const arrowColor = isRecharging
-      ? APP_THEME.colors.ok
-      : currentBattery < 20
-      ? APP_THEME.colors.fault
-      : APP_THEME.colors.textPrimary;
+    if (layers.landmarks !== false) {
+      for (const lm of landmarks) {
+        const [lat, lon] = lm.coords || [];
+        if (lat == null || lon == null) continue;
+        const basePos = latLonToVec3(lat, lon, dem, depthExaggeration, 0.05);
+        const pinH = 2.0;
+        const topPos = basePos.clone().add(new THREE.Vector3(0, pinH, 0));
 
-    const pillBorder = isRecharging
-      ? APP_THEME.colors.ok
-      : currentBattery < 20
-      ? APP_THEME.colors.fault
-      : APP_THEME.colors.borderMedium;
+        const stemGeo = new THREE.CylinderGeometry(0.05, 0.05, pinH, 6);
+        const stem = new THREE.Mesh(stemGeo, pinMatBase('#656d7d'));
+        stem.position.copy(basePos).add(new THREE.Vector3(0, pinH / 2, 0));
+        markerGroup.add(stem);
 
-    const pillColor = isRecharging
-      ? APP_THEME.colors.ok
-      : currentBattery < 20
-      ? APP_THEME.colors.fault
-      : APP_THEME.colors.textPrimary;
+        const headGeo = new THREE.OctahedronGeometry(0.28, 0);
+        const head = new THREE.Mesh(headGeo, pinMatBase('#edf0f5'));
+        head.position.copy(topPos);
+        markerGroup.add(head);
 
-    const showLocatingRadar = Boolean(locatePulse?.showWave);
+        items.push({
+          key: `lm-${lm.id}`,
+          kind: 'landmark',
+          data: lm,
+          pos: topPos.clone().add(new THREE.Vector3(0, 0.45, 0)),
+          label: lm.name.slice(0, 18),
+          badge: 'VISTA',
+          color: '#edf0f5',
+        });
+      }
+    }
 
-    const puckHtml = `
-      <div class="google-maps-astronaut-puck">
-        ${showLocatingRadar ? '<div class="locating-radar-wave"></div>' : ''}
+    projectedItemsRef.current = items;
+    setProjectedMarkers(items);
+  }, [demLoaded, sciencePOIs, landmarks, startPOI, endPOI, layers.science, layers.landmarks, depthExaggeration]);
 
-        <div style="
-          position: absolute; top: -28px; left: 50%; transform: translateX(-50%);
-          white-space: nowrap; background: #13161c; color: ${pillColor};
-          border: 1px solid ${pillBorder}; font-family: 'JetBrains Mono', monospace;
-          font-size: 9.5px; font-weight: 700; padding: 2px 7px; border-radius: 4px;
-          letter-spacing: 0.04em; z-index: 10;
-        ">${isRecharging ? 'CHG 100%' : `BAT ${Math.round(currentBattery)}%`}</div>
+  // Update 3D Live Astronaut / Rover Puck
+  useEffect(() => {
+    const liveGroup = overlayGroupsRef.current.live;
+    if (!liveGroup || !demRef.current) return;
+    disposeGroup(liveGroup);
+    const dem = demRef.current;
 
-        <div class="nav-pulse-ring"></div>
-        <div class="nav-heading-beam" style="transform: translateX(-50%) rotate(${heading}deg); transform-origin: bottom center;"></div>
+    let lat = liveNavState?.lat;
+    let lon = liveNavState?.lon;
+    if (lat == null || lon == null) {
+      const home = sciencePOIs.find((p) => p.id === astronautLocId) || sciencePOIs[0];
+      if (home) {
+        lat = home.lat;
+        lon = home.lon;
+      }
+    }
+    if (lat == null || lon == null) return;
 
-        <div style="transform: rotate(${heading}deg); transform-origin: center center; display: flex; align-items: center; justify-content: center;">
-          <svg viewBox="0 0 24 24" class="nav-chevron-arrow">
-            <path d="M12 2L4.5 20.29l.71.71L12 18l6.79 3 .71-.71z" fill="${arrowColor}" stroke="#0b0d11" stroke-width="2" stroke-linejoin="round"/>
-          </svg>
-        </div>
-      </div>
-    `;
+    const pos = latLonToVec3(lat, lon, dem, depthExaggeration, 0.5);
 
-    const icon = L.divIcon({
-      className: 'google-maps-nav-icon',
-      html: puckHtml,
-      iconSize: [48, 48],
-      iconAnchor: [24, 24],
+    const puckGeo = new THREE.CylinderGeometry(0.55, 0.65, 0.45, 16);
+    const puckMat = new THREE.MeshStandardMaterial({
+      color: '#22c55e',
+      emissive: '#22c55e',
+      emissiveIntensity: 0.75,
     });
+    const puck = new THREE.Mesh(puckGeo, puckMat);
+    puck.position.copy(pos);
+    liveGroup.add(puck);
 
-    if (!liveMarkerRef.current) {
-      liveMarkerRef.current = L.marker(currentLatLon, {
-        icon,
-        zIndexOffset: 1200,
-      }).addTo(map);
+    const ringGeo = new THREE.RingGeometry(0.75, 0.95, 28);
+    ringGeo.rotateX(-Math.PI / 2);
+    const ringMat = new THREE.MeshBasicMaterial({
+      color: '#22c55e',
+      transparent: true,
+      opacity: 0.85,
+      side: THREE.DoubleSide,
+    });
+    const ring = new THREE.Mesh(ringGeo, ringMat);
+    ring.name = 'locate-pulse-ring';
+    ring.position.copy(pos).add(new THREE.Vector3(0, -0.1, 0));
+    ring.visible = pulseStateRef.current.active;
+    liveGroup.add(ring);
+
+    if (followAstronaut && controlsRef.current && cameraRef.current) {
+      const prevTarget = controlsRef.current.target.clone();
+      const delta = pos.clone().sub(prevTarget);
+      controlsRef.current.target.copy(pos);
+      cameraRef.current.position.add(delta);
+    }
+  }, [demLoaded, liveNavState, astronautLocId, sciencePOIs, followAstronaut, depthExaggeration]);
+
+  // Trigger locate pulse
+  useEffect(() => {
+    if (!locatePulse) return;
+    pulseStateRef.current = { active: true, t: 0, lat: locatePulse.lat, lon: locatePulse.lon };
+    if (controlsRef.current && cameraRef.current && demRef.current) {
+      const targetPos = latLonToVec3(locatePulse.lat, locatePulse.lon, demRef.current, depthExaggeration, 0.5);
+      const offset = cameraRef.current.position.clone().sub(controlsRef.current.target);
+      flyAnimRef.current = {
+        progress: 0,
+        startTarget: controlsRef.current.target.clone(),
+        endTarget: targetPos,
+        startCam: cameraRef.current.position.clone(),
+        endCam: targetPos.clone().add(offset.clampLength(16, 42)),
+      };
+    }
+  }, [locatePulse, depthExaggeration]);
+
+  // Smooth camera flight to target
+  useEffect(() => {
+    if (!flyToTarget || !controlsRef.current || !cameraRef.current || !demRef.current) return;
+    const targetPos = latLonToVec3(flyToTarget.lat, flyToTarget.lon, demRef.current, depthExaggeration, 0.5);
+    const offset = cameraRef.current.position.clone().sub(controlsRef.current.target);
+    flyAnimRef.current = {
+      progress: 0,
+      startTarget: controlsRef.current.target.clone(),
+      endTarget: targetPos,
+      startCam: cameraRef.current.position.clone(),
+      endCam: targetPos.clone().add(offset.clampLength(18, 40)),
+    };
+  }, [flyToTarget, depthExaggeration]);
+
+  // Dust squall 3D dome
+  useEffect(() => {
+    const dustGroup = overlayGroupsRef.current.dust;
+    if (!dustGroup || !demRef.current) return;
+    disposeGroup(dustGroup);
+    if (!dustFrontState?.active || dustFrontState.lat == null) return;
+    const dem = demRef.current;
+    const metersToScene = TERRAIN_W / 56100;
+    const rScene = Math.max(2.0, (dustFrontState.radiusM || 3500) * metersToScene);
+    const center = latLonToVec3(dustFrontState.lat, dustFrontState.lon, dem, depthExaggeration, 0.2);
+
+    const domeGeo = new THREE.SphereGeometry(rScene, 24, 16, 0, Math.PI * 2, 0, Math.PI / 2);
+    const domeMat = new THREE.MeshBasicMaterial({
+      color: '#ef4444',
+      transparent: true,
+      opacity: 0.14,
+      wireframe: true,
+    });
+    const dome = new THREE.Mesh(domeGeo, domeMat);
+    dome.position.copy(center);
+    dustGroup.add(dome);
+  }, [demLoaded, dustFrontState, depthExaggeration]);
+
+  const applyCameraPreset = (preset) => {
+    setCameraPreset(preset);
+    if (!controlsRef.current || !cameraRef.current) return;
+    const t = controlsRef.current.target.clone();
+    let endCam;
+    if (preset === 'top_2d') {
+      endCam = t.clone().add(new THREE.Vector3(0, 72, 0.01));
+    } else if (preset === 'iso_3d') {
+      endCam = t.clone().add(new THREE.Vector3(34, 30, 38));
+    } else if (preset === 'rim_view') {
+      endCam = new THREE.Vector3(24, 24, 32);
+      t.set(-14, 4, -8);
     } else {
-      liveMarkerRef.current.setLatLng(currentLatLon);
-      liveMarkerRef.current.setIcon(icon);
+      endCam = t.clone().add(new THREE.Vector3(0, 34, 42));
     }
+    flyAnimRef.current = {
+      progress: 0,
+      startTarget: controlsRef.current.target.clone(),
+      endTarget: t,
+      startCam: cameraRef.current.position.clone(),
+      endCam,
+    };
+  };
 
-    if (followAstronaut && active) {
-      map.panTo(currentLatLon, { animate: true, duration: 0.35 });
-    }
-  }, [liveNavState, followAstronaut, locatePulse]);
+  const handleZoomStep = (factor) => {
+    if (!cameraRef.current || !controlsRef.current) return;
+    const offset = cameraRef.current.position.clone().sub(controlsRef.current.target);
+    offset.multiplyScalar(factor).clampLength(8, 145);
+    cameraRef.current.position.copy(controlsRef.current.target).add(offset);
+  };
 
   return (
-    <div className="relative w-full h-full bg-[#0b0d11]">
-      <div ref={mapContainerRef} className="w-full h-full z-0" />
+    <div className="relative w-full h-full bg-[#090b0f] overflow-hidden select-none">
+      <div
+        ref={containerRef}
+        className={`w-full h-full ${activeDrawMode ? 'cursor-crosshair' : 'cursor-grab active:cursor-grabbing'}`}
+      />
 
-      {/* Neutral Daylight / Dusk / Night Atmospheric Overlay (Zero Blue/Indigo) */}
-      {solarPhase === 'dusk' && (
-        <div className="pointer-events-none absolute inset-0 z-[340] bg-[#0b0d11]/30 transition-opacity duration-500" />
-      )}
-      {solarPhase === 'night' && (
-        <div className="pointer-events-none absolute inset-0 z-[340] bg-[#0b0d11]/60 transition-opacity duration-500" />
+      {/* Projected 3D Marker Pins */}
+      <div className="pointer-events-none absolute inset-0 overflow-hidden z-[20]">
+        {projectedMarkers.map((m) => (
+          <button
+            key={m.key}
+            type="button"
+            ref={(el) => {
+              if (el) markerDomRefs.current.set(m.key, el);
+              else markerDomRefs.current.delete(m.key);
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              setSelectedPopup(m);
+              if (m.kind === 'poi' && onSelectPOI) onSelectPOI(m.data);
+            }}
+            style={{ opacity: 0 }}
+            className="absolute top-0 left-0 flex items-center gap-1 px-1.5 py-0.5 rounded-[3px] bg-[#13161c]/90 border border-[#353c4a] hover:border-[#edf0f5] text-[9.5px] font-mono text-[#edf0f5] shadow-md transition-colors whitespace-nowrap"
+          >
+            <span
+              className="w-1.5 h-1.5 rounded-full shrink-0"
+              style={{ backgroundColor: m.color }}
+            />
+            <span className="font-bold tracking-tight">{m.label}</span>
+            {!cleanTabletMode && (
+              <span className="text-[8px] px-1 rounded bg-[#191d24] text-[#9da5b4]">
+                {m.badge}
+              </span>
+            )}
+          </button>
+        ))}
+      </div>
+
+      {/* Selected 3D Pin Tactical Popup */}
+      {selectedPopup && (
+        <div className="absolute bottom-14 left-3 z-[460] w-[290px] bg-[#13161c]/95 border border-[#4f5767] rounded-[6px] p-3 font-mono text-[11px] text-[#edf0f5] shadow-2xl">
+          <div className="flex items-start justify-between gap-2 pb-2 mb-2 border-b border-[#242933]">
+            <div>
+              <div className="text-[9px] font-bold text-[#9da5b4] uppercase tracking-wider">
+                {selectedPopup.kind === 'poi' ? selectedPopup.data.type : selectedPopup.data.category}
+              </div>
+              <div className="text-[12px] font-bold text-[#edf0f5]">
+                {selectedPopup.data.name}
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setSelectedPopup(null)}
+              className="text-[#9da5b4] hover:text-[#edf0f5] text-[11px] px-1"
+            >
+              ✕
+            </button>
+          </div>
+
+          {selectedPopup.kind === 'poi' ? (
+            <div className="space-y-2">
+              <div className="flex justify-between text-[10px] text-[#9da5b4]">
+                <span>ELEV: {selectedPopup.data.elev} m</span>
+                <span>SLOPE: {selectedPopup.data.slope_deg ?? '—'}°</span>
+              </div>
+              <p className="text-[10px] text-[#9da5b4] leading-relaxed">
+                {selectedPopup.data.description}
+              </p>
+              <div className="flex flex-col gap-1.5 pt-1">
+                {onSetOrigin && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSetOrigin(selectedPopup.data.id);
+                      setSelectedPopup(null);
+                    }}
+                    className="w-full py-1 px-2 rounded bg-[#22c55e]/15 border border-[#22c55e]/50 text-[#22c55e] font-bold text-[10px] hover:bg-[#22c55e]/25"
+                  >
+                    SET AS ORIGIN BASE
+                  </button>
+                )}
+                {onNavigateToPOI && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onNavigateToPOI(selectedPopup.data.id);
+                      setSelectedPopup(null);
+                    }}
+                    className="w-full py-1 px-2 rounded bg-[#edf0f5] text-[#0b0d11] font-bold text-[10px] hover:bg-white"
+                  >
+                    ROUTE TO TARGET
+                  </button>
+                )}
+                {onOpenPanorama && selectedPopup.data.sol != null && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenPanorama(selectedPopup.data.sol)}
+                    className="w-full py-1 px-2 rounded bg-[#191d24] border border-[#353c4a] text-[#edf0f5] text-[10px] hover:border-[#edf0f5]"
+                  >
+                    OPEN SURFACE VISTA / 360
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-2">
+              <div className="flex justify-between text-[10px] text-[#9da5b4]">
+                <span>ELEV: {selectedPopup.data.elevation_m} m</span>
+                <span>SLOPE: {selectedPopup.data.slope_deg ?? '—'}°</span>
+              </div>
+              <p className="text-[10px] text-[#9da5b4] leading-relaxed">
+                {selectedPopup.data.brief}
+              </p>
+              <div className="flex flex-col gap-1.5 pt-1">
+                {onSelectLandmark && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onSelectLandmark(selectedPopup.data);
+                      setSelectedPopup(null);
+                    }}
+                    className="w-full py-1 px-2 rounded bg-[#edf0f5] text-[#0b0d11] font-bold text-[10px]"
+                  >
+                    OPEN DOSSIER & PHOTOS
+                  </button>
+                )}
+                {onOpenLandmarkVista && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenLandmarkVista(selectedPopup.data.id)}
+                    className="w-full py-1 px-2 rounded bg-[#191d24] border border-[#353c4a] text-[#edf0f5] text-[10px]"
+                  >
+                    OPEN SURFACE VISTA / 360
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
-      {/* Environmental Weather Overlays (Neutral Slate / Crimson Only — Zero Amber/Orange) */}
-      {weatherCondition === 'dust_storm' && (
-        <div className="pointer-events-none absolute inset-0 z-[350] bg-[#191d24]/30 border-2 border-[#ef4444]/40 transition-opacity duration-500" />
-      )}
-      {weatherCondition === 'solar_storm' && (
-        <div className="pointer-events-none absolute inset-0 z-[350] border-2 border-[#ef4444]/70 bg-[#dc2626]/10 transition-opacity duration-500" />
-      )}
+      {/* 3D Depth & Camera Controls HUD (Bottom-Right) */}
+      <div className="absolute bottom-3 right-3 z-[450] flex flex-col items-end gap-1.5 font-mono text-[9.5px]">
+        <div className="flex items-center gap-1 bg-[#13161c]/95 border border-[#242933] rounded-[4px] p-1">
+          {[
+            { id: '3d_plan', label: '3D PLAN' },
+            { id: 'iso_3d', label: 'ISO 3D' },
+            { id: 'rim_view', label: 'RIM VIEW' },
+            { id: 'top_2d', label: 'TOP 2D' },
+          ].map((p) => (
+            <button
+              key={p.id}
+              type="button"
+              onClick={() => applyCameraPreset(p.id)}
+              className={`px-2 py-0.5 rounded-[3px] font-bold transition-colors ${
+                cameraPreset === p.id
+                  ? 'bg-[#edf0f5] text-[#0b0d11]'
+                  : 'text-[#9da5b4] hover:text-[#edf0f5] hover:bg-[#191d24]'
+              }`}
+            >
+              {p.label}
+            </button>
+          ))}
+          <div className="w-[1px] h-3.5 bg-[#242933] mx-0.5" />
+          <button
+            type="button"
+            onClick={() => handleZoomStep(0.8)}
+            className="px-1.5 py-0.5 rounded bg-[#191d24] text-[#edf0f5] hover:bg-[#2c323f] font-bold"
+            title="Zoom In"
+          >
+            +
+          </button>
+          <button
+            type="button"
+            onClick={() => handleZoomStep(1.25)}
+            className="px-1.5 py-0.5 rounded bg-[#191d24] text-[#edf0f5] hover:bg-[#2c323f] font-bold"
+            title="Zoom Out"
+          >
+            −
+          </button>
+        </div>
+
+        <div className="flex items-center gap-2 bg-[#13161c]/95 border border-[#242933] rounded-[4px] px-2.5 py-1 text-[#9da5b4]">
+          <span className="font-bold text-[#edf0f5]">3D DEPTH</span>
+          <input
+            type="range"
+            min="1.0"
+            max="5.5"
+            step="0.2"
+            value={depthExaggeration}
+            onChange={(e) => setDepthExaggeration(parseFloat(e.target.value))}
+            className="w-20 accent-[#edf0f5] cursor-pointer"
+          />
+          <span className="text-[#edf0f5] w-7 text-right">{depthExaggeration.toFixed(1)}x</span>
+        </div>
+
+        {/* Depth Luminance Legend: Deeper = Darker, Upper = Lighter */}
+        <div className="flex items-center gap-2 bg-[#13161c]/95 border border-[#242933] rounded-[4px] px-2.5 py-1 text-[9px] text-[#9da5b4]">
+          <span>DEEP −3070m</span>
+          <div
+            className="w-20 h-2 rounded-sm border border-[#353c4a]"
+            style={{
+              background: 'linear-gradient(90deg, #0c1018 0%, #4b5565 50%, #e5ebf3 100%)',
+            }}
+          />
+          <span className="text-[#edf0f5]">UPPER −1376m</span>
+        </div>
+      </div>
+
+      {/* Subtle 3D Navigation Hint (Bottom-Left) */}
+      <div className="absolute bottom-3 left-3 z-[450] bg-[#13161c]/90 border border-[#242933] rounded-[4px] px-2 py-1 font-mono text-[9px] text-[#9da5b4]">
+        CONSOLIDATED 20m DTM · LEFT: ORBIT · RIGHT: PAN · SCROLL: ZOOM
+      </div>
     </div>
   );
 }

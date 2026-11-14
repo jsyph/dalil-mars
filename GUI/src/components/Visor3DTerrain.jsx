@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import * as THREE from 'three';
 import scienceHazardsData from '../data/jezero_science_hazards.json';
+import { renderArHudToCanvas } from '../utils/arHudRenderer';
 
 const MARS_MTM_RADIUS = 3396190.0;
 const CENTRAL_MERIDIAN_RAD = (77.5 * Math.PI) / 180;
@@ -289,6 +290,14 @@ export default function Visor3DTerrain({
   isDusty = false,
   isLowLight = false,
   showContours = true,
+  arPassthrough = false,
+  xrSession = null,
+  hudState = null,
+  targetBearingDeg = null,
+  targetDistM = null,
+  projectedMarkers = [],
+  onXrHeadYaw,
+  onXrStickMove,
   onGroundElevation,
   onProjectedScreenMarkers,
 }) {
@@ -341,15 +350,31 @@ export default function Visor3DTerrain({
     const baseElev = -2550;
 
     const scene = new THREE.Scene();
-    scene.background = new THREE.Color('#1a0f0a');
-    scene.fog = new THREE.FogExp2('#2a160e', 0.000045);
+    scene.background = arPassthrough ? null : new THREE.Color('#1a0f0a');
+    scene.fog = arPassthrough ? null : new THREE.FogExp2('#2a160e', 0.000045);
 
     const width = container.clientWidth || window.innerWidth;
     const height = container.clientHeight || window.innerHeight;
-    const camera = new THREE.PerspectiveCamera(VISOR_VERTICAL_FOV, width / height, 2, 70000);
+    const camera = new THREE.PerspectiveCamera(
+      VISOR_VERTICAL_FOV,
+      width / height,
+      0.1,
+      70000
+    );
     camera.rotation.order = 'YXZ';
+    const vrRig = new THREE.Group();
+    scene.add(vrRig);
+    vrRig.add(camera);
 
-    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    const renderer = new THREE.WebGLRenderer({
+      antialias: true,
+      alpha: arPassthrough,
+      powerPreference: 'high-performance',
+    });
+    renderer.xr.enabled = true;
+    if (arPassthrough) {
+      renderer.setClearColor(0x000000, 0);
+    }
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(width, height);
     renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -402,13 +427,14 @@ export default function Visor3DTerrain({
         const slopeApprox = Math.hypot((eRight - elev) / dx, (eDown - elev) / dy);
 
         const normH = Math.max(0, Math.min(1, (elev - minElev) / elevSpan));
-        // Martian basalt-to-ochre palette (brightened for clear visibility with NASA CTX mosaic)
-        let red = 0.82 + normH * 0.18;
-        let green = 0.48 + normH * 0.22;
-        let blue = 0.32 + normH * 0.16;
+        // Depth-aware Martian palette: deeper terrain is darker, upper terrain is lighter
+        const depthLum = Math.pow(normH, 0.9);
+        let red = 0.24 + depthLum * 0.72;
+        let green = 0.16 + depthLum * 0.58;
+        let blue = 0.13 + depthLum * 0.45;
         if (slopeApprox > 0.25) {
-          red = Math.min(1, red + 0.14);
-          green *= 0.92;
+          red = Math.min(1, red + 0.10);
+          green *= 0.94;
         }
         colors[idx * 3] = red;
         colors[idx * 3 + 1] = green;
@@ -645,7 +671,7 @@ export default function Visor3DTerrain({
       depthWrite: false,
     });
     const dustPoints = new THREE.Points(dustGeo, dustMat);
-    scene.add(dustPoints);
+    dustPoints.visible = false;
 
     // Synthetic AR contour wireframe overlay
     const wireframeMat = new THREE.MeshBasicMaterial({
@@ -658,7 +684,44 @@ export default function Visor3DTerrain({
     wireMesh.position.y = 1.5;
     scene.add(wireMesh);
 
-    // Add 3D Science POI & Hazard beacons on terrain and store world anchors
+    // Hide the Martian world meshes in AR Passthrough mode so real-world camera feed shows through
+    if (arPassthrough) {
+      skyDome.visible = false;
+      terrainMesh.visible = false;
+      hiriseMesh.visible = false;
+      bouldersMesh.visible = false;
+      outcropsMesh.visible = false;
+      sunSprite.visible = false;
+      dustPoints.visible = false;
+      wireMesh.visible = false;
+    }
+
+    // Add 3D Science POI & Hazard beacons + world-space 3D sprite pins on terrain
+    const makeWaypointSprite = (label, bg, border, fg) => {
+      const c = document.createElement('canvas');
+      c.width = 512;
+      c.height = 128;
+      const g = c.getContext('2d');
+      g.fillStyle = bg;
+      g.strokeStyle = border;
+      g.lineWidth = 5;
+      g.beginPath();
+      g.roundRect(12, 16, 488, 96, 48);
+      g.fill();
+      g.stroke();
+      g.font = 'bold 34px ui-monospace, SFMono-Regular, Menlo, monospace';
+      g.fillStyle = fg;
+      g.textAlign = 'center';
+      g.textBaseline = 'middle';
+      g.fillText(label.slice(0, 22), 256, 65);
+      const tex = new THREE.CanvasTexture(c);
+      tex.colorSpace = THREE.SRGBColorSpace;
+      const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: true });
+      const sp = new THREE.Sprite(mat);
+      sp.scale.set(240, 60, 1);
+      return sp;
+    };
+
     const markerAnchors = [];
     const { sciencePOIs = [], hazardZones = [] } = scienceHazardsData;
     for (const poi of sciencePOIs) {
@@ -676,6 +739,15 @@ export default function Visor3DTerrain({
       const beacon = new THREE.Mesh(beaconGeo, beaconMat);
       beacon.position.set(wx, wy + 110, wz);
       scene.add(beacon);
+
+      const pin = makeWaypointSprite(
+        poi.name || 'POI',
+        poi.isChargingStation ? 'rgba(69,26,3,0.88)' : 'rgba(2,6,23,0.88)',
+        poi.isChargingStation ? '#fbbf24' : '#22d3ee',
+        poi.isChargingStation ? '#fde68a' : '#a5f3fc'
+      );
+      pin.position.set(wx, wy + 265, wz);
+      scene.add(pin);
 
       markerAnchors.push({
         id: `poi-${poi.id}`,
@@ -701,6 +773,15 @@ export default function Visor3DTerrain({
       ring.position.set(wx, wy + 8, wz);
       scene.add(ring);
 
+      const hPin = makeWaypointSprite(
+        hz.name || 'HAZARD',
+        'rgba(69,10,10,0.88)',
+        '#f87171',
+        '#fecaca'
+      );
+      hPin.position.set(wx, wy + 95, wz);
+      scene.add(hPin);
+
       markerAnchors.push({
         id: `hz-${hz.id}`,
         worldPos: new THREE.Vector3(wx, wy + 36, wz),
@@ -710,6 +791,7 @@ export default function Visor3DTerrain({
     sceneRefs.current = {
       scene,
       camera,
+      vrRig,
       renderer,
       wireframeMat,
       skyCanvas,
@@ -738,29 +820,141 @@ export default function Visor3DTerrain({
     };
     window.addEventListener('resize', handleResize);
 
-    let animId = 0;
     let lastTime = performance.now();
+    let lastXrYawTs = 0;
+    let lastStickMoveTs = 0;
+    let stickAccumDt = 0;
+    let lastDrawnYaw = null;
+    const xrEuler = new THREE.Euler(0, 0, 0, 'YXZ');
+    const xrQuat = new THREE.Quaternion();
     const renderLoop = () => {
-      animId = requestAnimationFrame(renderLoop);
       const now = performance.now();
       const dt = Math.min(0.05, Math.max(0.001, (now - lastTime) / 1000));
       lastTime = now;
-
       const refs = sceneRefs.current;
+
+      // Sync Quest 2 gyroscope/6DOF head yaw & animate 3D AR walking path when in WebXR
+      if (renderer.xr.isPresenting) {
+        const xrCam = renderer.xr.getCamera(camera);
+        // WebXRManager updates matrixWorld directly; getWorldQuaternion reads the true world head pose (including vrRig)
+        xrCam.getWorldQuaternion(xrQuat);
+        xrEuler.setFromQuaternion(xrQuat, 'YXZ');
+        const baseHeading = arHudRef.current.hudState?.liveNavState?.heading ?? 285;
+        const liveHeading = (((Math.round((-xrEuler.y * 180) / Math.PI)) % 360) + 360) % 360;
+        const yawDeg = Math.round(((liveHeading - baseHeading + 540) % 360) - 180);
+        arHudRef.current.viewHeading = liveHeading;
+
+        if (liveHeading !== lastDrawnYaw && arHudRef.current.canvas && arHudRef.current.texture) {
+          lastDrawnYaw = liveHeading;
+          renderArHudToCanvas(arHudRef.current.canvas, arHudRef.current.hudState, {
+            headingDeg: liveHeading,
+            targetBearingDeg: arHudRef.current.targetBearingDeg,
+            targetDistM: arHudRef.current.targetDistM,
+            markers: arHudRef.current.projectedMarkers || [],
+            linkLive: true,
+          });
+          arHudRef.current.texture.needsUpdate = true;
+        }
+
+        if (now - lastXrYawTs > 100 && arHudRef.current.onXrHeadYaw) {
+          lastXrYawTs = now;
+          arHudRef.current.onXrHeadYaw(yawDeg);
+        }
+
+        // Poll Quest 2 Touch controller thumbstick axes to move astronaut
+        const xrSessionActive = renderer.xr.getSession();
+        if (xrSessionActive && arHudRef.current.onXrStickMove) {
+          let stickX = 0;
+          let stickY = 0;
+          for (const src of xrSessionActive.inputSources) {
+            const axes = src.gamepad?.axes;
+            if (!axes || axes.length < 2) continue;
+            const axX = axes.length >= 4 ? axes[2] : axes[0];
+            const axY = axes.length >= 4 ? axes[3] : axes[1];
+            if (Math.abs(axX) > 0.18 || Math.abs(axY) > 0.18) {
+              stickX = axX;
+              stickY = axY;
+              break;
+            }
+          }
+          stickAccumDt += dt;
+          if ((stickX !== 0 || stickY !== 0) && now - lastStickMoveTs > 65) {
+            lastStickMoveTs = now;
+            arHudRef.current.onXrStickMove(-stickY, stickX, Math.min(0.2, stickAccumDt));
+            stickAccumDt = 0;
+          } else if (stickX === 0 && stickY === 0) {
+            stickAccumDt = 0;
+          }
+        }
+
+        const pd = arHudRef.current.pathData;
+        if (pd) {
+          if (pd.pathGroup) {
+            pd.pathGroup.rotation.y = -THREE.MathUtils.degToRad(yawDeg);
+          }
+          const { targetBearingDeg: tb, viewHeading: vh, isOffRoute: offRoute } = arHudRef.current;
+          const deltaDeg = tb !== null && tb !== undefined ? ((tb - vh + 540) % 360) - 180 : 0;
+          const clampedTurn = Math.max(-55, Math.min(55, deltaDeg));
+          const maxLateral = Math.sin((clampedTurn * Math.PI) / 180) * 2.2;
+          const mainColor = offRoute ? 0xf87171 : 0x22d3ee;
+          const accentColor = offRoute ? 0xfbbf24 : 0x34d399;
+          pd.railMat.color.setHex(accentColor);
+          pd.beaconMat.color.setHex(accentColor);
+
+          const tPulse = (now * 0.0022) % 1;
+          const numChev = pd.chevrons.length;
+          for (let i = 0; i < numChev; i++) {
+            const frac = (i + 0.5) / numChev;
+            const z = -(1.25 + frac * 4.2);
+            const x = maxLateral * (frac * frac);
+            const yaw = -Math.atan2(2 * maxLateral * frac, 4.2);
+            const chev = pd.chevrons[i];
+            chev.position.set(x, 0, z);
+            chev.rotation.set(0, yaw, 0);
+            const waveDist = Math.abs(((i / numChev - tPulse + 1) % 1) - 0.5);
+            const highlight = Math.max(0, 1 - waveDist * 4.5);
+            chev.material.color.setHex(highlight > 0.35 ? accentColor : mainColor);
+            chev.material.opacity = 0.45 + highlight * 0.55;
+            const s = 0.9 + highlight * 0.28;
+            chev.scale.set(s, 1, s);
+          }
+
+          const lp = pd.leftRail.geometry.attributes.position.array;
+          const rp = pd.rightRail.geometry.attributes.position.array;
+          for (let i = 0; i < 20; i++) {
+            const frac = i / 19;
+            const z = -(1.1 + frac * 4.5);
+            const xc = maxLateral * (frac * frac);
+            lp[i * 3] = xc - 0.28;
+            lp[i * 3 + 1] = -0.01;
+            lp[i * 3 + 2] = z;
+            rp[i * 3] = xc + 0.28;
+            rp[i * 3 + 1] = -0.01;
+            rp[i * 3 + 2] = z;
+          }
+          pd.leftRail.geometry.attributes.position.needsUpdate = true;
+          pd.rightRail.geometry.attributes.position.needsUpdate = true;
+
+          pd.beacon.position.set(maxLateral, 0.35 + Math.sin(now * 0.003) * 0.06, -5.65);
+          pd.beacon.rotation.y = now * 0.0018;
+        }
+      }
+
       if (refs.hasCamPos) {
         const alpha = 1 - Math.exp(-14 * dt);
-        camera.position.lerp(refs.targetCamPos, alpha);
+        vrRig.position.lerp(refs.targetCamPos, alpha);
       }
-      camera.updateMatrixWorld();
+      vrRig.updateMatrixWorld(true);
 
-      // Drift airborne Martian dust motes subtly around the camera
+      // Drift airborne Martian dust motes subtly around the rig
       dustPoints.position.set(
-        camera.position.x + Math.sin(now * 0.00025) * 14,
-        camera.position.y,
-        camera.position.z + Math.cos(now * 0.0002) * 14
+        vrRig.position.x + Math.sin(now * 0.00025) * 14,
+        vrRig.position.y,
+        vrRig.position.z + Math.cos(now * 0.0002) * 14
       );
 
       if (
+        !renderer.xr.isPresenting &&
         refs.onProjectedScreenMarkers &&
         refs.markerAnchors?.length &&
         (camera.position.distanceTo(refs.lastProjPos) > 0.15 ||
@@ -786,11 +980,11 @@ export default function Visor3DTerrain({
 
       renderer.render(scene, camera);
     };
-    renderLoop();
+    renderer.setAnimationLoop(renderLoop);
 
     return () => {
       isUnmounted = true;
-      cancelAnimationFrame(animId);
+      renderer.setAnimationLoop(null);
       window.removeEventListener('resize', handleResize);
       geometry.dispose();
       hiriseGeo.dispose();
@@ -818,7 +1012,182 @@ export default function Visor3DTerrain({
       skyTexture.dispose();
       renderer.dispose();
     };
-  }, [demData]);
+  }, [demData, arPassthrough]);
+
+  const arHudRef = useRef({
+    canvas: null,
+    texture: null,
+    tintMat: null,
+    pathData: null,
+    onXrHeadYaw: null,
+    targetBearingDeg: null,
+    viewHeading: 0,
+    isOffRoute: false,
+  });
+
+  // Attach/detach WebXR session (supports both Full 3D Mars VR and AR Passthrough)
+  useEffect(() => {
+    const { renderer, camera, vrRig } = sceneRefs.current;
+    if (!renderer || !camera || !vrRig || !xrSession) return;
+
+    // Align vrRig forward (-Z) to the initial route heading so Quest 2 faces straight down the route
+    vrRig.rotation.order = 'YXZ';
+    vrRig.rotation.y = -THREE.MathUtils.degToRad(hudState?.liveNavState?.heading ?? 285);
+
+    renderer.xr.enabled = true;
+    renderer.xr.setReferenceSpaceType('local-floor');
+
+    // Head-locked Fullscreen HUD CanvasTexture (guaranteed to render in Quest 2 WebXR)
+    const hudCanvas = document.createElement('canvas');
+    hudCanvas.width = 1280;
+    hudCanvas.height = 720;
+    renderArHudToCanvas(hudCanvas, hudState, {
+      headingDeg: viewHeading,
+      targetBearingDeg,
+      targetDistM,
+      markers: projectedMarkers,
+      linkLive: true,
+    });
+    const hudTex = new THREE.CanvasTexture(hudCanvas);
+    hudTex.colorSpace = THREE.SRGBColorSpace;
+    hudTex.minFilter = THREE.LinearFilter;
+    hudTex.magFilter = THREE.LinearFilter;
+
+    const hudGeo = new THREE.PlaneGeometry(0.96, 0.54);
+    const hudMat = new THREE.MeshBasicMaterial({
+      map: hudTex,
+      transparent: true,
+      depthTest: false,
+      depthWrite: false,
+    });
+    const hudMesh = new THREE.Mesh(hudGeo, hudMat);
+    hudMesh.frustumCulled = false;
+    hudMesh.renderOrder = 999;
+    hudMesh.position.set(0, 0, -1.05);
+    camera.add(hudMesh);
+
+    // 3D Google-Maps-Style AR Walking Path & Chevrons on the floor in front of user
+    const pathGroup = new THREE.Group();
+    pathGroup.position.set(0, 0.25, 0);
+    const numChevrons = 7;
+    const chevrons = [];
+    const chevShape = new THREE.Shape();
+    chevShape.moveTo(0, 0.14);
+    chevShape.lineTo(0.18, -0.06);
+    chevShape.lineTo(0.12, -0.12);
+    chevShape.lineTo(0, 0.02);
+    chevShape.lineTo(-0.12, -0.12);
+    chevShape.lineTo(-0.18, -0.06);
+    chevShape.closePath();
+    const chevGeo = new THREE.ShapeGeometry(chevShape);
+    chevGeo.rotateX(-Math.PI / 2);
+
+    for (let i = 0; i < numChevrons; i++) {
+      const cMat = new THREE.MeshBasicMaterial({
+        color: 0x22d3ee,
+        transparent: true,
+        opacity: 0.85,
+        side: THREE.DoubleSide,
+        depthWrite: false,
+      });
+      const cm = new THREE.Mesh(chevGeo, cMat);
+      cm.frustumCulled = false;
+      cm.renderOrder = 995;
+      pathGroup.add(cm);
+      chevrons.push(cm);
+    }
+
+    const leftLineGeo = new THREE.BufferGeometry();
+    leftLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(20 * 3), 3));
+    const rightLineGeo = new THREE.BufferGeometry();
+    rightLineGeo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(20 * 3), 3));
+    const railMat = new THREE.LineBasicMaterial({
+      color: 0x34d399,
+      transparent: true,
+      opacity: 0.7,
+    });
+    const leftRail = new THREE.Line(leftLineGeo, railMat);
+    const rightRail = new THREE.Line(rightLineGeo, railMat);
+    leftRail.frustumCulled = false;
+    rightRail.frustumCulled = false;
+    pathGroup.add(leftRail, rightRail);
+
+    const beaconGeo = new THREE.OctahedronGeometry(0.14, 0);
+    const beaconMat = new THREE.MeshBasicMaterial({
+      color: 0x34d399,
+      transparent: true,
+      opacity: 0.9,
+    });
+    const beacon = new THREE.Mesh(beaconGeo, beaconMat);
+    beacon.frustumCulled = false;
+    pathGroup.add(beacon);
+
+    vrRig.add(pathGroup);
+    const pathData = { pathGroup, chevrons, leftRail, rightRail, beacon, railMat, beaconMat };
+
+    arHudRef.current = {
+      canvas: hudCanvas,
+      texture: hudTex,
+      pathData,
+      onXrHeadYaw,
+      targetBearingDeg,
+      viewHeading,
+      isOffRoute,
+    };
+
+    renderer.xr.setSession(xrSession).catch((err) => {
+      console.error('Failed to bind XR session to Visor3DTerrain:', err);
+    });
+
+    return () => {
+      camera.remove(hudMesh);
+      vrRig.remove(pathGroup);
+      vrRig.rotation.y = 0;
+      hudGeo.dispose();
+      hudMat.dispose();
+      hudTex.dispose();
+      chevGeo.dispose();
+      chevrons.forEach((c) => c.material.dispose());
+      leftLineGeo.dispose();
+      rightLineGeo.dispose();
+      railMat.dispose();
+      beaconGeo.dispose();
+      beaconMat.dispose();
+      arHudRef.current = {
+        canvas: null,
+        texture: null,
+        pathData: null,
+        onXrHeadYaw: null,
+        targetBearingDeg: null,
+        viewHeading: 0,
+        isOffRoute: false,
+      };
+    };
+  }, [xrSession, arPassthrough, demData]);
+
+  // Keep WebXR HUD and Path Bearings updated as telemetry/heading changes
+  useEffect(() => {
+    arHudRef.current.onXrHeadYaw = onXrHeadYaw;
+    arHudRef.current.onXrStickMove = onXrStickMove;
+    arHudRef.current.targetBearingDeg = targetBearingDeg;
+    arHudRef.current.targetDistM = targetDistM;
+    arHudRef.current.hudState = hudState;
+    arHudRef.current.viewHeading = viewHeading;
+    arHudRef.current.isOffRoute = isOffRoute;
+    arHudRef.current.projectedMarkers = projectedMarkers;
+
+    const { canvas, texture } = arHudRef.current;
+    if (canvas && texture) {
+      renderArHudToCanvas(canvas, hudState, {
+        headingDeg: viewHeading,
+        targetBearingDeg,
+        targetDistM,
+        markers: projectedMarkers,
+        linkLive: true,
+      });
+      texture.needsUpdate = true;
+    }
+  }, [hudState, viewHeading, targetBearingDeg, targetDistM, isOffRoute, projectedMarkers, onXrHeadYaw, onXrStickMove]);
 
   // Update 3D Terrain-Draped A* Route Ribbon whenever routePathCoords or isOffRoute changes
   useEffect(() => {
@@ -855,7 +1224,7 @@ export default function Visor3DTerrain({
         const my = y0 + (y1 - y0) * t;
         const wx = mx - originX;
         const wz = -(my - originY);
-        const wy = (sampleDemElevation(demData, mx, my) - baseElev) * VERTICAL_EXAGGERATION + 6;
+        const wy = (sampleDemElevation(demData, mx, my) - baseElev) * VERTICAL_EXAGGERATION + 10;
         densePts.push(new THREE.Vector3(wx, wy, wz));
       }
     }
@@ -863,13 +1232,13 @@ export default function Visor3DTerrain({
     densePts.push(
       new THREE.Vector3(
         lastMx - originX,
-        (sampleDemElevation(demData, lastMx, lastMy) - baseElev) * VERTICAL_EXAGGERATION + 6,
+        (sampleDemElevation(demData, lastMx, lastMy) - baseElev) * VERTICAL_EXAGGERATION + 10,
         -(lastMy - originY)
       )
     );
 
     const routeGroup = new THREE.Group();
-    const halfWidth = 11; // 22m wide AR path corridor
+    const halfWidth = 18; // 36m wide AR path corridor visible end-to-end
     const positions = [];
     const indices = [];
 
@@ -904,13 +1273,35 @@ export default function Visor3DTerrain({
       color: routeColor,
       side: THREE.DoubleSide,
       transparent: true,
-      opacity: 0.82,
+      opacity: 0.92,
+      fog: false,
       polygonOffset: true,
       polygonOffsetFactor: -2,
       polygonOffsetUnits: -2,
     });
     const ribbonMesh = new THREE.Mesh(ribbonGeo, ribbonMat);
     routeGroup.add(ribbonMesh);
+
+    // Add glowing waypoint pylons along the route + tall destination beacon so the full route is visible end-to-end
+    for (let i = 0; i < rawPts.length; i++) {
+      const [mx, my] = rawPts[i];
+      const wx = mx - originX;
+      const wz = -(my - originY);
+      const wy = (sampleDemElevation(demData, mx, my) - baseElev) * VERTICAL_EXAGGERATION;
+      const isEnd = i === rawPts.length - 1;
+      const h = isEnd ? 320 : 120;
+      const r = isEnd ? 14 : 7;
+      const postGeo = new THREE.CylinderGeometry(r, r, h, 8);
+      const postMat = new THREE.MeshBasicMaterial({
+        color: isEnd ? 0x34d399 : routeColor,
+        transparent: true,
+        opacity: isEnd ? 0.85 : 0.65,
+        fog: false,
+      });
+      const post = new THREE.Mesh(postGeo, postMat);
+      post.position.set(wx, wy + h / 2, wz);
+      routeGroup.add(post);
+    }
 
     scene.add(routeGroup);
     sceneRefs.current.routeLine = routeGroup;
@@ -957,8 +1348,8 @@ export default function Visor3DTerrain({
   // Update First-Person Camera Position, Yaw (viewHeading), and Pitch (lookPitchDeg)
   useEffect(() => {
     const refs = sceneRefs.current;
-    const { camera, originMtm, baseElev } = refs;
-    if (!camera || !demData || !currentLatLon) return;
+    const { camera, vrRig, originMtm, baseElev } = refs;
+    if (!camera || !vrRig || !demData || !currentLatLon) return;
 
     const [lat, lon] = currentLatLon;
     const [mx, my] = latLonToMTM(lat, lon);
@@ -972,8 +1363,9 @@ export default function Visor3DTerrain({
     const camY = (groundElev - baseElev) * VERTICAL_EXAGGERATION + 28; // 28m astronaut/mast vantage
 
     refs.targetCamPos.set(camX, camY, camZ);
-    if (!refs.hasCamPos || camera.position.distanceTo(refs.targetCamPos) > 400) {
-      camera.position.copy(refs.targetCamPos);
+    if (!refs.hasCamPos || vrRig.position.distanceTo(refs.targetCamPos) > 400) {
+      vrRig.position.copy(refs.targetCamPos);
+      camera.position.set(0, 0, 0);
       refs.hasCamPos = true;
     }
 
