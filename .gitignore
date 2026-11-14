@@ -13,6 +13,15 @@ dist-ssr
 *.local
 __pycache__/
 *.pyc
+*.pyo
+.venv/
+venv/
+env/
+backend/data/cache/
+*.gdb/
+*.mxd
+*.tif
+*.tiff
 
 # Editor directories and files
 .vscode/*

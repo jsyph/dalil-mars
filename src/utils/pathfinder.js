@@ -1,7 +1,8 @@
 /**
- * ARES-EVA A* Terrain Pathfinder, Range Analyzer & Charging Pit-Stop Engine
- * Computes obstacle-avoiding Marswalk routes over Jezero Crater using
- * real elevation/tilt data, hazard polygons, battery/O2 limits, and virtual charging stations.
+ * Jezero A* Terrain Pathfinder, Range Analyzer & Charging Pit-Stop Engine
+ * Computes obstacle-avoiding Marswalk routes over Jezero Crater / Nili Planum using
+ * elevation/tilt data, hazard zones, custom exclusion polygons, battery/O2 limits,
+ * and intermediate charging stations.
  */
 
 export const SAFE_RESERVE_PCT = 15;
@@ -10,74 +11,82 @@ export const SUIT_O2_CAPACITY_LITERS = 480;
 export const LOADOUT_PROFILES = {
   light: {
     id: 'light',
-    name: 'Light Recon (Solo)',
+    name: 'SOLO SUIT (XEMU)',
     speedKmh: 2.0,
+    speedKmH: 2.0,
     maxSlopeDeg: 18,
     o2RateLpm: 0.85,
+    o2Rate: 0.85,
     batteryDrainPerKm: 11.5,
     suitMassKg: 115,
-    description: 'Standard xEMU suit. High agility, limited sample capacity.',
+    description: 'Standard xEMU EVA configuration. High mobility, 18 deg slope limit.',
   },
   heavy: {
     id: 'heavy',
-    name: 'Heavy Sample Kit',
+    name: 'HEAVY SAMPLE KIT',
     speedKmh: 1.3,
+    speedKmH: 1.3,
     maxSlopeDeg: 12,
     o2RateLpm: 1.25,
+    o2Rate: 1.25,
     batteryDrainPerKm: 16.5,
     suitMassKg: 155,
-    description: 'Carrying core drill & sample cache. Avoids >12° slopes & loose sand.',
+    description: 'Core drill and sample payload. Avoids slopes > 12 deg and high-slip sand.',
   },
   rover: {
     id: 'rover',
-    name: 'Rover-Assisted EVA',
+    name: 'ROVER MULE ASSIST',
     speedKmh: 2.6,
+    speedKmH: 2.6,
     maxSlopeDeg: 21,
     o2RateLpm: 0.70,
+    o2Rate: 0.70,
     batteryDrainPerKm: 9.0,
     suitMassKg: 115,
-    description: 'Uncrewed mule carries payload; tether enables steeper ridge climbs.',
+    description: 'Uncrewed mule payload carrier. Tether assist up to 21 deg.',
   },
 };
 
 export const WEATHER_CONDITIONS = {
   nominal: {
     id: 'nominal',
-    label: 'Nominal Sol',
+    label: 'NOMINAL SOL',
+    solarFlux: 590,
+    radiationDoseRate: 0.011,
     radRateMgyHr: 0.011,
     tempMultiplier: 1.0,
     visibilityKm: 25,
+    tau: 0.45,
     dustTau: 0.45,
     evaAllowed: true,
     alert: null,
   },
   dust_storm: {
     id: 'dust_storm',
-    label: 'Regional Dust Storm',
+    label: 'REGIONAL DUST SQUALL',
+    solarFlux: 140,
+    radiationDoseRate: 0.009,
     radRateMgyHr: 0.009,
-    tempMultiplier: 1.35, // colder daytime highs due to blocked sun
+    tempMultiplier: 1.35,
     visibilityKm: 0.4,
+    tau: 3.8,
     dustTau: 3.8,
     evaAllowed: false,
-    alert: 'DUST STORM WARNING: Visibility <400m. Return to nearest Hab immediately.',
+    alert: 'DUST SQUALL WARNING: Visibility < 400 m. Return to pressurized shelter.',
   },
   solar_storm: {
     id: 'solar_storm',
-    label: 'Solar Particle Event (SPE)',
-    radRateMgyHr: 0.85, // 75x radiation spike
+    label: 'SOLAR PARTICLE EVENT (SPE)',
+    solarFlux: 680,
+    radiationDoseRate: 0.85,
+    radRateMgyHr: 0.85,
     tempMultiplier: 1.0,
     visibilityKm: 25,
+    tau: 0.45,
     dustTau: 0.45,
     evaAllowed: false,
-    alert: 'RADIATION ALERT: SPE detected. Seek pressurized shelter within 45 min.',
+    alert: 'RADIATION FAULT: SPE flux spike detected. Seek shelter within 45 min.',
   },
-};
-
-const BOUNDS = {
-  minLat: 18.415,
-  maxLat: 18.502,
-  minLon: 77.215,
-  maxLon: 77.468,
 };
 
 const GRID_ROWS = 52;
@@ -95,21 +104,91 @@ export function marsDistanceMeters(lat1, lon1, lat2, lon2) {
   return 2 * R * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 }
 
-function latLonToGrid(lat, lon) {
+// HRSC/MOLA regional elevation estimator (meters)
+export function estimateElev(lat, lon) {
+  const dLat = (lat - 18.44) * 111320;
+  const dLon = (lon - 77.45) * 111320 * Math.cos((18.44 * Math.PI) / 180);
+  const dist = Math.sqrt(dLat * dLat + dLon * dLon);
+
+  let e;
+  if (dist > 29400) {
+    e = -1200 - (dist - 29400) * 0.005;
+  } else if (dist > 20800) {
+    const t = (dist - 20800) / 8600;
+    e = -2600 + 1100 * Math.sin(t * Math.PI);
+  } else {
+    const t = dist / 20800;
+    e = -2600 + 330 * t * t;
+  }
+  const dfD = Math.hypot((lat - 18.56) * 111320, (lon - 77.37) * 111320 * 0.948);
+  if (dfD < 8000) e += 210 * (1 - dfD / 8000);
+  e += 25 * Math.sin(lat * 123.4) * Math.cos(lon * 98.7);
+  return Math.round(e * 10) / 10;
+}
+
+export function checkCursorHazards(lat, lon, hazardZones = [], customExclusionZones = []) {
+  for (const hz of hazardZones) {
+    const dist = marsDistanceMeters(lat, lon, hz.lat, hz.lon);
+    if (dist <= hz.radiusMeters) {
+      return { label: `HAZARD: ${hz.name.toUpperCase()}`, isFault: true };
+    }
+  }
+  for (const zone of customExclusionZones) {
+    if (zone.coords?.length >= 3 && pointInPolygon(lat, lon, zone.coords)) {
+      if (zone.type === 'safe') {
+        return { label: 'SAFE CORRIDOR (DESIGNATED)', isFault: false };
+      }
+      return { label: `EXCLUSION: ${zone.type.toUpperCase()}`, isFault: true };
+    }
+  }
+  const d1 = Math.hypot(lat - 18.56, lon - 77.37);
+  const d2 = Math.hypot(lat - 18.85, lon - 77.50);
+  if (d1 < 0.04 || d2 < 0.04) {
+    return { label: 'ELEVATED RISK', isFault: true };
+  }
+  return { label: 'CLEAR / PASSABLE', isFault: false };
+}
+
+function pointInPolygon(lat, lon, polygon) {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i][0];
+    const yi = polygon[i][1];
+    const xj = polygon[j][0];
+    const yj = polygon[j][1];
+    const intersect =
+      yi > lon !== yj > lon && lat < ((xj - xi) * (lon - yi)) / (yj - yi + 1e-12) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+function computeDynamicBounds(start, end) {
+  const padLat = 0.025;
+  const padLon = 0.025;
+  return {
+    minLat: Math.min(18.415, start.lat, end.lat) - padLat,
+    maxLat: Math.max(18.502, start.lat, end.lat) + padLat,
+    minLon: Math.min(77.215, start.lon, end.lon) - padLon,
+    maxLon: Math.max(77.468, start.lon, end.lon) + padLon,
+  };
+}
+
+function latLonToGrid(lat, lon, bounds) {
   const r = Math.min(
     GRID_ROWS - 1,
-    Math.max(0, Math.round(((lat - BOUNDS.minLat) / (BOUNDS.maxLat - BOUNDS.minLat)) * (GRID_ROWS - 1)))
+    Math.max(0, Math.round(((lat - bounds.minLat) / (bounds.maxLat - bounds.minLat)) * (GRID_ROWS - 1)))
   );
   const c = Math.min(
     GRID_COLS - 1,
-    Math.max(0, Math.round(((lon - BOUNDS.minLon) / (BOUNDS.maxLon - BOUNDS.minLon)) * (GRID_COLS - 1)))
+    Math.max(0, Math.round(((lon - bounds.minLon) / (bounds.maxLon - bounds.minLon)) * (GRID_COLS - 1)))
   );
   return { r, c };
 }
 
-function gridToLatLon(r, c) {
-  const lat = BOUNDS.minLat + (r / (GRID_ROWS - 1)) * (BOUNDS.maxLat - BOUNDS.minLat);
-  const lon = BOUNDS.minLon + (c / (GRID_COLS - 1)) * (BOUNDS.maxLon - BOUNDS.minLon);
+function gridToLatLon(r, c, bounds) {
+  const lat = bounds.minLat + (r / (GRID_ROWS - 1)) * (bounds.maxLat - bounds.minLat);
+  const lon = bounds.minLon + (c / (GRID_COLS - 1)) * (bounds.maxLon - bounds.minLon);
   return [Number(lat.toFixed(6)), Number(lon.toFixed(6))];
 }
 
@@ -125,28 +204,37 @@ export function calculateBearingDegrees(lat1, lon1, lat2, lon2) {
 }
 
 function getCompassBearing(lat1, lon1, lat2, lon2) {
-  const dLon = ((lon2 - lon1) * Math.PI) / 180;
-  const rLat1 = (lat1 * Math.PI) / 180;
-  const rLat2 = (lat2 * Math.PI) / 180;
-  const y = Math.sin(dLon) * Math.cos(rLat2);
-  const x =
-    Math.cos(rLat1) * Math.sin(rLat2) -
-    Math.sin(rLat1) * Math.cos(rLat2) * Math.cos(dLon);
-  const brng = ((Math.atan2(y, x) * 180) / Math.PI + 360) % 360;
-  const dirs = ['North', 'Northeast', 'East', 'Southeast', 'South', 'Southwest', 'West', 'Northwest'];
-  return dirs[Math.round(brng / 45) % 8];
+  const brng = calculateBearingDegrees(lat1, lon1, lat2, lon2);
+  const dirs = ['N', 'NE', 'E', 'SE', 'S', 'SW', 'W', 'NW'];
+  return `${Math.round(brng)} deg (${dirs[Math.round(brng / 45) % 8]})`;
 }
 
-function getCellHazardPenalty(lat, lon, hazardZones, loadout, waypoints) {
+function getCellHazardPenalty(
+  lat,
+  lon,
+  hazardZones,
+  loadout,
+  waypoints,
+  customExclusionZones = []
+) {
   let penalty = 1.0;
-  let localSlope = 3.5; // gentle baseline crater floor
+  let localSlope = 3.5;
 
-  // Check proximity to real Perseverance waypoints to inherit real tilt/slope
   for (let i = 0; i < waypoints.length; i += 4) {
     const wp = waypoints[i];
     const d = Math.abs(wp.lat - lat) + Math.abs(wp.lon - lon);
     if (d < 0.004) {
       localSlope = Math.max(localSlope, wp.tilt || 3.5);
+    }
+  }
+
+  for (const zone of customExclusionZones) {
+    if (zone.coords?.length >= 3 && pointInPolygon(lat, lon, zone.coords)) {
+      if (zone.type === 'safe') {
+        penalty *= 0.65;
+      } else {
+        return { cost: 9999, slope: 26, blocked: true };
+      }
     }
   }
 
@@ -173,8 +261,11 @@ function getCellHazardPenalty(lat, lon, hazardZones, loadout, waypoints) {
 }
 
 /**
- * Runs A* search for a single leg from `start` to `end`
+ * Runs A* search for a single leg from `start` to `end` (with LRU memoization)
  */
+const legCache = new Map();
+const MAX_LEG_CACHE_SIZE = 120;
+
 export function computeSingleLeg({
   start,
   end,
@@ -182,9 +273,24 @@ export function computeSingleLeg({
   waypoints,
   loadout,
   weather,
+  customExclusionZones = [],
 }) {
-  const startCell = latLonToGrid(start.lat, start.lon);
-  const endCell = latLonToGrid(end.lat, end.lon);
+  if (!start || !end) return null;
+
+  const startKey = `${Number(start.lat).toFixed(4)},${Number(start.lon).toFixed(4)}`;
+  const endKey = `${Number(end.lat).toFixed(4)},${Number(end.lon).toFixed(4)}`;
+  const lKey = loadout?.id || loadout?.name || 'def';
+  const wKey = weather?.id || weather?.name || 'def';
+  const zKey = customExclusionZones?.map((z) => `${z.id || ''}:${z.coords?.length || 0}`).join(';') || '';
+  const cacheKey = `${startKey}->${endKey}__${lKey}__${wKey}__${zKey}`;
+
+  if (legCache.has(cacheKey)) {
+    return legCache.get(cacheKey);
+  }
+
+  const bounds = computeDynamicBounds(start, end);
+  const startCell = latLonToGrid(start.lat, start.lon, bounds);
+  const endCell = latLonToGrid(end.lat, end.lon, bounds);
 
   const key = (r, c) => `${r},${c}`;
   const openSet = new Set([key(startCell.r, startCell.c)]);
@@ -199,14 +305,20 @@ export function computeSingleLeg({
   fScore.set(startK, marsDistanceMeters(start.lat, start.lon, end.lat, end.lon));
 
   const dirs = [
-    [-1, 0], [1, 0], [0, -1], [0, 1],
-    [-1, -1], [-1, 1], [1, -1], [1, 1],
+    [-1, 0],
+    [1, 0],
+    [0, -1],
+    [0, 1],
+    [-1, -1],
+    [-1, 1],
+    [1, -1],
+    [1, 1],
   ];
 
   let found = false;
   let iterations = 0;
 
-  while (openSet.size > 0 && iterations < 8000) {
+  while (openSet.size > 0 && iterations < 9000) {
     iterations++;
     let currentK = null;
     let lowestF = Infinity;
@@ -227,7 +339,7 @@ export function computeSingleLeg({
     }
 
     openSet.delete(currentK);
-    const [cLat, cLon] = gridToLatLon(cr, cc);
+    const [cLat, cLon] = gridToLatLon(cr, cc, bounds);
 
     for (const [dr, dc] of dirs) {
       const nr = cr + dr;
@@ -235,12 +347,19 @@ export function computeSingleLeg({
       if (nr < 0 || nr >= GRID_ROWS || nc < 0 || nc >= GRID_COLS) continue;
 
       const nk = key(nr, nc);
-      const [nLat, nLon] = gridToLatLon(nr, nc);
+      const [nLat, nLon] = gridToLatLon(nr, nc, bounds);
       const stepDist = marsDistanceMeters(cLat, cLon, nLat, nLon);
 
       let meta = cellMeta.get(nk);
       if (!meta) {
-        meta = getCellHazardPenalty(nLat, nLon, hazardZones, loadout, waypoints);
+        meta = getCellHazardPenalty(
+          nLat,
+          nLon,
+          hazardZones,
+          loadout,
+          waypoints,
+          customExclusionZones
+        );
         cellMeta.set(nk, meta);
       }
 
@@ -264,7 +383,7 @@ export function computeSingleLeg({
     let curr = key(endCell.r, endCell.c);
     while (curr) {
       const [r, c] = curr.split(',').map(Number);
-      const [lat, lon] = gridToLatLon(r, c);
+      const [lat, lon] = gridToLatLon(r, c, bounds);
       pathCoords.unshift([lat, lon]);
       const m = cellMeta.get(curr);
       if (m && m.slope > maxSlopeAlongPath) {
@@ -279,13 +398,32 @@ export function computeSingleLeg({
   }
 
   let totalDistM = 0;
+  let hazardCrossings = 0;
+  const elevProfile = [{ distKm: 0, elev: estimateElev(pathCoords[0][0], pathCoords[0][1]), lat: pathCoords[0][0], lon: pathCoords[0][1] }];
+
   for (let i = 1; i < pathCoords.length; i++) {
-    totalDistM += marsDistanceMeters(
+    const segM = marsDistanceMeters(
       pathCoords[i - 1][0],
       pathCoords[i - 1][1],
       pathCoords[i][0],
       pathCoords[i][1]
     );
+    totalDistM += segM;
+    const ptLat = pathCoords[i][0];
+    const ptLon = pathCoords[i][1];
+    elevProfile.push({
+      distKm: Number((totalDistM / 1000).toFixed(3)),
+      elev: estimateElev(ptLat, ptLon),
+      lat: ptLat,
+      lon: ptLon,
+    });
+
+    for (const zone of customExclusionZones) {
+      if (zone.type !== 'safe' && zone.coords?.length >= 3 && pointInPolygon(ptLat, ptLon, zone.coords)) {
+        hazardCrossings++;
+        break;
+      }
+    }
   }
 
   const directDistM = marsDistanceMeters(start.lat, start.lon, end.lat, end.lon);
@@ -299,6 +437,16 @@ export function computeSingleLeg({
         bypassedHazardNames.push(hz.name);
         break;
       }
+    }
+  }
+
+  const elevValues = elevProfile.map((p) => p.elev);
+  const minElevationM = Math.min(...elevValues);
+  const maxElevationM = Math.max(...elevValues);
+  let elevGainM = 0;
+  for (let i = 1; i < elevValues.length; i++) {
+    if (elevValues[i] > elevValues[i - 1]) {
+      elevGainM += elevValues[i] - elevValues[i - 1];
     }
   }
 
@@ -321,8 +469,13 @@ export function computeSingleLeg({
 
   const radiationDoseMgy = Number((durationHours * weather.radRateMgyHr).toFixed(3));
 
-  return {
+  const result = {
     pathCoords,
+    elevProfile,
+    minElevationM: Number(minElevationM.toFixed(1)),
+    maxElevationM: Number(maxElevationM.toFixed(1)),
+    elevGainM: Number(elevGainM.toFixed(1)),
+    hazardCrossings,
     distKm: Number(distKm.toFixed(2)),
     directDistKm: Number((directDistM / 1000).toFixed(2)),
     durationMin,
@@ -334,6 +487,14 @@ export function computeSingleLeg({
     bypassedHazardNames,
     radiationDoseMgy,
   };
+
+  if (legCache.size >= MAX_LEG_CACHE_SIZE) {
+    const oldestKey = legCache.keys().next().value;
+    legCache.delete(oldestKey);
+  }
+  legCache.set(cacheKey, result);
+
+  return result;
 }
 
 function buildNavigationSteps({ start, end, leg1, leg2, chargingStation }) {
@@ -348,9 +509,9 @@ function buildNavigationSteps({ start, end, leg1, leg2, chargingStation }) {
   steps.push({
     id: 'depart',
     icon: 'start',
-    instruction: `Depart ${start.name} heading ${bearing1}`,
+    instruction: `DEPART ${start.name.toUpperCase()} HDG ${bearing1}`,
     distanceKm: leg1.distKm,
-    detail: `PLSS & battery pre-check complete (${leg1.durationMin} min leg).`,
+    detail: `PLSS & power check nominal (${leg1.durationMin} min leg).`,
     warning: null,
   });
 
@@ -358,10 +519,10 @@ function buildNavigationSteps({ start, end, leg1, leg2, chargingStation }) {
     steps.push({
       id: 'hazard-1',
       icon: 'hazard',
-      instruction: `Detour around ${leg1.bypassedHazardNames.join(', ')}`,
+      instruction: `DETOUR AROUND ${leg1.bypassedHazardNames.join(', ').toUpperCase()}`,
       distanceKm: null,
-      detail: `A* corridor keeps terrain slope ≤ ${leg1.maxSlopeAlongPath}°.`,
-      warning: 'Hazard Avoidance Active',
+      detail: `A* corridor holding terrain slope <= ${leg1.maxSlopeAlongPath} deg.`,
+      warning: 'HAZARD AVOIDANCE ACTIVE',
     });
   }
 
@@ -369,10 +530,10 @@ function buildNavigationSteps({ start, end, leg1, leg2, chargingStation }) {
     steps.push({
       id: 'charge',
       icon: 'charge',
-      instruction: `Dock at ${chargingStation.name} (Virtual Base)`,
+      instruction: `DOCK AT ${chargingStation.name.toUpperCase()} [CHARGING BASE]`,
       distanceKm: 0,
-      detail: `Fast-charge suit/rover battery to 100% & refill O2 (+15 min pit stop).`,
-      warning: `${chargingStation.powerOutputKw || 25} kW KILOPOWER Pad`,
+      detail: `Recharge battery to 100% and refill PLSS O2 (+15 min pit stop).`,
+      warning: `${chargingStation.powerOutputKw || 25} kW KILOPOWER PAD`,
     });
 
     const bearing2 = getCompassBearing(
@@ -385,9 +546,9 @@ function buildNavigationSteps({ start, end, leg1, leg2, chargingStation }) {
     steps.push({
       id: 'leg2',
       icon: 'nav',
-      instruction: `Resume ${bearing2} toward ${end.name}`,
+      instruction: `PROCEED HDG ${bearing2} TOWARD ${end.name.toUpperCase()}`,
       distanceKm: leg2.distKm,
-      detail: `Fresh 100% reserves • ${leg2.durationMin} min trek.`,
+      detail: `100% reserves restored. ${leg2.durationMin} min trek.`,
       warning: null,
     });
 
@@ -395,10 +556,10 @@ function buildNavigationSteps({ start, end, leg1, leg2, chargingStation }) {
       steps.push({
         id: 'hazard-2',
         icon: 'hazard',
-        instruction: `Circumvent ${leg2.bypassedHazardNames.join(', ')}`,
+        instruction: `CIRCUMVENT ${leg2.bypassedHazardNames.join(', ').toUpperCase()}`,
         distanceKm: null,
-        detail: `Safe ridge corridor holding ≤ ${leg2.maxSlopeAlongPath}° slope.`,
-        warning: 'Hazard Avoidance Active',
+        detail: `Safe corridor holding <= ${leg2.maxSlopeAlongPath} deg slope.`,
+        warning: 'HAZARD AVOIDANCE ACTIVE',
       });
     }
   }
@@ -406,9 +567,9 @@ function buildNavigationSteps({ start, end, leg1, leg2, chargingStation }) {
   steps.push({
     id: 'arrive',
     icon: 'arrive',
-    instruction: `Arrive at ${end.name}`,
+    instruction: `ARRIVE AT ${end.name.toUpperCase()}`,
     distanceKm: 0,
-    detail: `Elev ${end.elev} m • ${end.minerals || 'Target site'}.`,
+    detail: `Elev ${end.elev} m | ${end.minerals || 'Target site'}.`,
     warning: null,
   });
 
@@ -426,11 +587,11 @@ export function computeMarswalkRoute({
   startBatteryPct = 85,
   startO2Pct = 90,
   useChargingStop = 'auto',
+  customExclusionZones = [],
 }) {
   const loadout = LOADOUT_PROFILES[loadoutKey] || LOADOUT_PROFILES.light;
   const weather = WEATHER_CONDITIONS[weatherKey] || WEATHER_CONDITIONS.nominal;
 
-  // 1. Compute direct A* route (start -> end)
   const directLeg = computeSingleLeg({
     start,
     end,
@@ -438,6 +599,7 @@ export function computeMarswalkRoute({
     waypoints,
     loadout,
     weather,
+    customExclusionZones,
   });
 
   const directArrivalBattery = Number((startBatteryPct - directLeg.batteryPercentUsed).toFixed(1));
@@ -447,7 +609,6 @@ export function computeMarswalkRoute({
     start.id !== end.id &&
     (directArrivalBattery < SAFE_RESERVE_PCT || directArrivalO2 < SAFE_RESERVE_PCT);
 
-  // 2. Evaluate best intermediate Virtual Base Charging Station
   const candidateStations = sciencePOIs.filter(
     (p) => p.isChargingStation && p.id !== start.id && p.id !== end.id
   );
@@ -462,11 +623,11 @@ export function computeMarswalkRoute({
         waypoints,
         loadout,
         weather,
+        customExclusionZones,
       });
       const arrStationBat = Number((startBatteryPct - leg1.batteryPercentUsed).toFixed(1));
       const arrStationO2 = Number((startO2Pct - leg1.o2PercentUsed).toFixed(1));
 
-      // Can the astronaut safely reach this charging station? (Needs >= 5% emergency buffer)
       if (arrStationBat >= 5 && arrStationO2 >= 5) {
         const leg2 = computeSingleLeg({
           start: station,
@@ -475,6 +636,7 @@ export function computeMarswalkRoute({
           waypoints,
           loadout,
           weather,
+          customExclusionZones,
         });
         const arrEndBat = Number((100 - leg2.batteryPercentUsed).toFixed(1));
         const arrEndO2 = Number((100 - leg2.o2PercentUsed).toFixed(1));
@@ -505,6 +667,14 @@ export function computeMarswalkRoute({
   if (shouldUseChargingStop && bestPitStopPlan) {
     const { station, leg1, leg2, arrStationBat, arrStationO2, arrEndBat, arrEndO2 } = bestPitStopPlan;
     const combinedPath = [...leg1.pathCoords, ...leg2.pathCoords.slice(1)];
+    const leg1EndDist = leg1.elevProfile[leg1.elevProfile.length - 1]?.distKm || 0;
+    const combinedElevProfile = [
+      ...leg1.elevProfile,
+      ...leg2.elevProfile.slice(1).map((p) => ({
+        ...p,
+        distKm: Number((leg1EndDist + p.distKm).toFixed(3)),
+      })),
+    ];
     const pitStopIndex = leg1.pathCoords.length - 1;
     const chargeDwellMin = 15;
 
@@ -513,11 +683,25 @@ export function computeMarswalkRoute({
     const totalO2Liters = leg1.o2LitersUsed + leg2.o2LitersUsed;
     const maxSlope = Math.max(leg1.maxSlopeAlongPath, leg2.maxSlopeAlongPath);
     const totalRad = Number((leg1.radiationDoseMgy + leg2.radiationDoseMgy).toFixed(3));
-    const roundTripMin = totalDurationMin; // already includes waypoint recharge
+    const roundTripMin = totalDurationMin;
     const safeMarginMin = 300 - totalDurationMin;
+    const minElevationM = Math.min(leg1.minElevationM, leg2.minElevationM);
+    const maxElevationM = Math.max(leg1.maxElevationM, leg2.maxElevationM);
+    const elevGainM = Number((leg1.elevGainM + leg2.elevGainM).toFixed(1));
+    const hazardCrossings = leg1.hazardCrossings + leg2.hazardCrossings;
+    const viabilityScore = Math.max(
+      0,
+      Math.min(100, Math.round(100 - hazardCrossings * 25 - (maxSlope > loadout.maxSlopeDeg ? 30 : 0)))
+    );
 
     return {
       pathCoords: combinedPath,
+      elevProfile: combinedElevProfile,
+      minElevationM,
+      maxElevationM,
+      elevGainM,
+      hazardCrossings,
+      viabilityScore,
       leg1Coords: leg1.pathCoords,
       leg2Coords: leg2.pathCoords,
       directCoords: [
@@ -551,7 +735,11 @@ export function computeMarswalkRoute({
         pitStopIndex,
       },
       pitStopIndex,
-      isFeasible: weather.evaAllowed && arrEndBat >= SAFE_RESERVE_PCT && arrEndO2 >= SAFE_RESERVE_PCT && safeMarginMin > 0,
+      isFeasible:
+        weather.evaAllowed &&
+        arrEndBat >= SAFE_RESERVE_PCT &&
+        arrEndO2 >= SAFE_RESERVE_PCT &&
+        safeMarginMin > 0,
       navigationSteps: buildNavigationSteps({
         start,
         end,
@@ -562,7 +750,6 @@ export function computeMarswalkRoute({
     };
   }
 
-  // Otherwise use Direct A* Leg
   const canReachDirectly =
     directArrivalBattery >= SAFE_RESERVE_PCT && directArrivalO2 >= SAFE_RESERVE_PCT;
   const roundTripMin = directLeg.durationMin * 2;
@@ -573,8 +760,26 @@ export function computeMarswalkRoute({
     rangeStatus = 'out_of_range';
   }
 
+  const viabilityScore = Math.max(
+    0,
+    Math.min(
+      100,
+      Math.round(
+        (canReachDirectly ? 100 : 45) -
+          directLeg.hazardCrossings * 25 -
+          (directLeg.maxSlopeAlongPath > loadout.maxSlopeDeg ? 30 : 0)
+      )
+    )
+  );
+
   return {
     pathCoords: directLeg.pathCoords,
+    elevProfile: directLeg.elevProfile,
+    minElevationM: directLeg.minElevationM,
+    maxElevationM: directLeg.maxElevationM,
+    elevGainM: directLeg.elevGainM,
+    hazardCrossings: directLeg.hazardCrossings,
+    viabilityScore,
     leg1Coords: directLeg.pathCoords,
     leg2Coords: null,
     directCoords: [
@@ -601,10 +806,7 @@ export function computeMarswalkRoute({
     chargingStop: null,
     pitStopIndex: null,
     canOfferStation: bestPitStopPlan ? bestPitStopPlan.station : null,
-    isFeasible:
-      weather.evaAllowed &&
-      canReachDirectly &&
-      safeMarginMin > 0,
+    isFeasible: weather.evaAllowed && canReachDirectly && safeMarginMin > 0,
     navigationSteps: buildNavigationSteps({
       start,
       end,
