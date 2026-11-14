@@ -61,15 +61,16 @@ Unlike generic pathfinders that treat terrain as an abstract cost grid, Dalil-Ma
                                          v
                       [ Pure Python Library API: import engine ]
     +-------------------------------------------------------------------------+
-    | • plan_route()                   • plan_emergency_abort()               |
-    | • plan_science_tour()            • find_optimal_departure()              |
-    | • evaluate_rf_comms()            • get_waypoints() / get_weather()      |
+    | • plan_route()                   • predict_life_support() (Field Monitor)|
+    | • plan_emergency_abort()         • plan_science_tour()                  |
+    | • find_optimal_departure()       • evaluate_rf_comms()                  |
+    | • get_waypoints() / get_weather()• get_charging_stations()              |
     +-------------------------------------------------------------------------+
                                          |
          +-------------------------------+-------------------------------+
          |                               |                               |
          v                               v                               v
-[ Autonomous Rover (ROS 2 / Nav2) ] [ Mission Control Backend ] [ Science Campaign Planner ]
+[ Astronaut Field Computer / HUD ] [ Autonomous Rover (Nav2) ] [ Mission Control Backend ]
 ```
 
 ---
@@ -454,6 +455,40 @@ print(f"Direct Hab LOS: {comms_result['direct_hab_los']}")
 
 ---
 
+### Portable Field Computer: Real-Time Telemetry & Life Support Prediction
+Designed for an astronaut's portable field computer, chest tablet, or spacesuit visor HUD. Rather than assuming nominal 100% life-support reserves, the field application streams live sensor telemetry (battery %, O2 %, biometric heart rate, coordinates) into `engine.predict_life_support()` at periodic intervals (e.g. every 10–60 seconds). The engine dynamically predicts metabolic burn rates, slope hazards underfoot, solar/shadow status, and instantaneous Apollo/Artemis Rule #1 walkback margins:
+
+```python
+import engine
+
+# Periodic telemetry evaluation from spacesuit hardware sensors
+telemetry_step = engine.predict_life_support(
+    current_location=(18.4520, 77.4410),  # Astronaut GPS coordinates
+    battery_pct=72.5,                     # Measured from suit battery BMS
+    o2_pct=68.0,                          # Measured from primary PLSS O2 tank
+    destination=(18.4875, 77.3190),       # Intended science destination (optional)
+    mode="on_foot",
+    lst_hours=13.5,                       # Current Mars Local Solar Time
+    heart_rate_bpm=105.0,                 # Suit biometric telemetry
+)
+
+print(f"Status: {telemetry_step['status']} | Alert: {telemetry_step['alert_level']}")
+print(f"Action: {telemetry_step['action']}")
+print(f"Dynamic O2 Burn: {telemetry_step['dynamic_consumption_rates']['o2_consumption_rate_lpm']} L/min")
+print(f"Time to Empty: O2={telemetry_step['dynamic_consumption_rates']['time_to_empty_o2_min']}m | Batt={telemetry_step['dynamic_consumption_rates']['time_to_empty_battery_min']}m")
+print(f"Terrain Underfoot: Slope={telemetry_step['current_telemetry']['slope_deg']}° ({telemetry_step['current_telemetry']['slope_safety_rating']})")
+
+wb = telemetry_step["walkback_horizon"]
+print(f"Rule #1 Shelter: {wb['nearest_shelter']} ({wb['shelter_distance_km']} km away, ETA {wb['shelter_eta_min']}m)")
+print(f"Safe Abort Margin: O2={wb['walkback_o2_margin_pct']}% | Batt={wb['walkback_battery_margin_pct']}%")
+
+# If an abort threshold is breached, an emergency escape vector is automatically generated
+if telemetry_step["emergency_abort_route"]:
+    print("Emergency escape corridor ready!")
+```
+
+---
+
 ## 7. System Integration Patterns (Robotics, Autonomous Navigation & Mission Backends)
 
 The Dalil-Mars engine is designed as an embedded, zero-overhead algorithmic library that seamlessly integrates into onboard robotic autonomy architectures, real-time safety watchdogs, and mission control planning pipelines.
@@ -517,71 +552,64 @@ class MarsNav2GlobalPlanner:
         }
 ```
 
-### 7.2 Surface Mission Control & Crew Safety Watchdog Loop
+### 7.2 Astronaut Portable Field Computer & Crew EVA Telemetry Loop
 
-For human EVA operations or remote rover operations, a safety watchdog monitors telemetry in real-time. If life-support or battery reserves breach the Apollo/Artemis Rule #1 walkback boundary, or if an impending dust storm threatens power equilibrium, the system automatically triggers `engine.plan_emergency_abort()`:
+On a human Marswalk, the engine runs directly on the astronaut's portable field computer or chest/wrist unit. Rather than assuming default life-support states, the field software receives raw sensor telemetry every 10–60 seconds, invokes `engine.predict_life_support()`, and updates the suit HUD with dynamic burn rates, terrain safety, and walkback margins. If an abort threshold is breached, the escape vector is rendered on the visor immediately:
 
 ```python
 """
-Example Telemetry Watchdog Loop with Instantaneous Emergency Abort Trigger.
+Example Portable Field Computer Real-Time EVA Monitor Loop.
+Runs on the astronaut's field computer / tablet / suit HUD.
+Calls engine.predict_life_support() on every sensor telemetry tick.
 """
 import engine
 
-class EvaSafetyWatchdog:
-    def __init__(self, crew_callsign: str = "EVA-1"):
-        self.crew_callsign = crew_callsign
-        self.abort_triggered = False
+class PortableSuitComputer:
+    def __init__(self, astronaut_id: str = "ASTRONAUT-1", target_site=(18.4875, 77.3190)):
+        self.astronaut_id = astronaut_id
+        self.target_site = target_site
 
-    def evaluate_telemetry_tick(self, telemetry: dict) -> dict:
+    def process_sensor_packet(self, sensor_packet: dict) -> dict:
         """
-        telemetry: {
-            "lat": 18.4580,
-            "lon": 77.4320,
-            "mode": "on_foot",
-            "battery_pct": 34.0,
-            "o2_pct": 38.0,
-            "lst_hours": 15.2,
-            "weather": "dust_storm"
+        sensor_packet receives raw hardware sensor readings:
+        {
+            "coords": (18.4520, 77.4410),
+            "battery_pct": 68.5,
+            "o2_pct": 64.0,
+            "heart_rate_bpm": 110.0,
+            "lst_hours": 14.2,
+            "weather": "nominal"
         }
         """
-        loc = (telemetry["lat"], telemetry["lon"])
-        mode = telemetry.get("mode", "on_foot")
-        batt = telemetry["battery_pct"]
-        o2 = telemetry["o2_pct"]
+        # Periodic assessment without assuming any default life-support states
+        assessment = engine.predict_life_support(
+            current_location=sensor_packet["coords"],
+            battery_pct=sensor_packet["battery_pct"],
+            o2_pct=sensor_packet["o2_pct"],
+            destination=self.target_site,
+            heart_rate_bpm=sensor_packet.get("heart_rate_bpm"),
+            lst_hours=sensor_packet["lst_hours"],
+            weather=sensor_packet.get("weather", "nominal"),
+            mode="on_foot"
+        )
 
-        # Check RF comms link status
-        comms = engine.evaluate_rf_comms(loc, mode=mode)
+        # Update HUD Display
+        alert = assessment["alert_level"]
+        rec = assessment["tactical_recommendation"]
+        rates = assessment["dynamic_consumption_rates"]
+        wb = assessment["walkback_horizon"]
 
-        # Check abort threshold (e.g. O2 < 35% or battery < 30% or storm alert)
-        if o2 < 35.0 or batt < 30.0 or telemetry["weather"] == "dust_storm":
-            print(f"[ALERT] Critical threshold reached for {self.crew_callsign}! Computing emergency abort...")
-            abort_plan = engine.plan_emergency_abort(
-                current_location=loc,
-                mode=mode,
-                initial_battery_pct=batt,
-                initial_o2_pct=o2,
-                weather=telemetry["weather"],
-                lst_hours=telemetry["lst_hours"],
-            )
-            target = abort_plan["abort_target_shelter"]
-            summary = abort_plan["summary"]
-            return {
-                "action": "EXECUTE_EMERGENCY_ABORT",
-                "shelter": target["name"],
-                "shelter_coords": (target["lat"], target["lon"]),
-                "distance_km": summary["total_distance_km"],
-                "eta_minutes": summary["duration_min"],
-                "battery_on_ingress_pct": summary["battery_remaining_pct"],
-                "o2_on_ingress_pct": summary["o2_remaining_pct"],
-                "comms_status": comms["status"],
-                "path_geojson": abort_plan["geojson"],
-            }
+        print(f"[{assessment['timestamp_lst']}] HUD Status: {alert} | Action: {assessment['action']}")
+        print(f"   O2 Burn: {rates['o2_consumption_rate_lpm']} L/min | TTE: {rates['time_to_empty_o2_min']} min")
+        print(f"   Walkback Safe Margin: {wb['minimum_margin_pct']}% to {wb['nearest_shelter']}")
 
-        return {
-            "action": "PROCEED",
-            "comms_status": comms["status"],
-            "comms_active_link": comms["active_link"],
-        }
+        if assessment["action"] == "ABORT_IMMEDIATELY":
+            print(f"   [HUD ALARM] FLASHING RED: {rec}")
+            # Instantaneous abort geometry is already attached!
+            abort_nav = assessment["emergency_abort_route"]
+            return {"display_mode": "EMERGENCY_RETREAT_HUD", "nav_geometry": abort_nav}
+
+        return {"display_mode": "NOMINAL_TACTICAL_HUD", "assessment": assessment}
 ```
 
 ### 7.3 Multi-Target Science Campaign Scheduler & Batch Geospatial Pipeline
@@ -768,6 +796,46 @@ def evaluate_rf_comms(location: tuple[float, float] | str, mode: str = "rover") 
   * `mode`: Mobility profile.
 * **Returns:** `dict` containing `"status"` (`"CONNECTED"` / `"BLACKOUT"`), `"direct_hab_los"` (`bool`), `"active_link"`, `"path_loss_db"`, `"masts_in_view"`, and `"all_links"`.
 * **Aliases:** `evaluate_comms(...)`, `comms(...)`.
+
+#### `predict_life_support(...)`
+High-frequency periodic telemetry evaluation designed for an astronaut's portable field computer or chest unit. Dynamically predicts consumption rates, local terrain hazards, solar insolation, and instantaneous Apollo/Artemis Rule #1 walkback margins without assuming arbitrary baseline reserves.
+```python
+def predict_life_support(
+    current_location: tuple[float, float] | list[float] | dict | str,
+    battery_pct: float,
+    o2_pct: float | None = None,
+    destination: tuple[float, float] | str | None = None,
+    mode: str = "on_foot",
+    lst_hours: float = 14.0,
+    metabolic_rate_watts: float | None = None,
+    heart_rate_bpm: float | None = None,
+    speed_kmh: float | None = None,
+    weather: str = "nominal",
+    include_abort_route: bool = False,
+    **kwargs,
+) -> dict
+```
+* **Parameters:**
+  * `current_location`: Astronaut's instantaneous coordinate `(lat, lon)` or landmark.
+  * `battery_pct`: Current battery state-of-charge ($0.0 - 100.0\%$) streamed from BMS hardware.
+  * `o2_pct`: Primary PLSS oxygen tank percentage ($0.0 - 100.0\%$, relevant for `on_foot`).
+  * `destination`: Optional target coordinate or landmark where the astronaut is currently walking.
+  * `mode`: `"on_foot"` (xEMU EVA spacesuit) or `"rover"`.
+  * `lst_hours`: Current Mars Local Solar Time.
+  * `heart_rate_bpm`: Real-time biometric heart rate (scales metabolic work rate dynamically).
+  * `metabolic_rate_watts`: Direct biometric metabolic power (defaults to nominal 300W scaled by terrain slope).
+  * `speed_kmh`: Current ground speed (defaults to nominal $3.6\text{ km/h}$).
+  * `include_abort_route`: If `True`, forces inclusion of the emergency retreat GeoJSON route (automatically populated on `WARNING` or `CRITICAL` alert).
+* **Returns:** `dict` containing:
+  * `"status"`: `"NOMINAL"`, `"CAUTION"`, `"WARNING_LOW_MARGIN"`, or `"CRITICAL_ABORT_REQUIRED"`.
+  * `"alert_level"`: Rule #1 alert rating.
+  * `"action"`: Operational guidance (`"PROCEED"`, `"MONITOR_CLOSELY"`, `"TURN_BACK_NOW"`, or `"ABORT_IMMEDIATELY"`).
+  * `"current_telemetry"`: Instantaneous elevation, slope angle, slope safety rating, sunlit status, solar flux, and RF comms link.
+  * `"dynamic_consumption_rates"`: Real-time $O_2$ consumption rate ($L/min$), electrical discharge rate ($W$), and time-to-empty ($TTE_{O2}$, $TTE_{\text{battery}}$ in minutes).
+  * `"walkback_horizon"`: Apollo/Artemis Rule #1 margins, nearest shelter, retreat distance and ETA, and net abort buffer.
+  * `"destination_projection"`: ETA, distance remaining, and predicted arrival battery and $O_2$ reserves (if `destination` provided).
+  * `"emergency_abort_route"`: Full emergency escape route if warranted.
+* **Aliases:** `evaluate_field_telemetry(...)`, `monitor_eva_step(...)`, `predict_consumption(...)`.
 
 #### Environmental & Catalog Telemetry Functions
 * `get_waypoints() -> list[dict]`: Returns cataloged POIs, science sites, and habitats.

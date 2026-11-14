@@ -1839,6 +1839,289 @@ class DalilMarsEngine:
         dirs = ["North", "Northeast", "East", "Southeast", "South", "Southwest", "West", "Northwest"]
         return dirs[int(round(brng / 45.0)) % 8]
 
+    def predict_life_support(
+        self,
+        current_location,
+        battery_pct: float,
+        o2_pct: float | None = None,
+        destination=None,
+        mode: str = "on_foot",
+        lst_hours: float = 14.0,
+        metabolic_rate_watts: float | None = None,
+        heart_rate_bpm: float | None = None,
+        speed_kmh: float | None = None,
+        weather: str = "nominal",
+        include_abort_route: bool = False,
+        **kwargs,
+    ) -> dict:
+        """Periodic real-time life support prediction and walkback monitor for astronaut portable field computers.
+
+        Designed to be called continuously or at regular intervals (e.g. every 10s-60s) during an EVA.
+        Does NOT assume life-support levels: caller supplies exact telemetry from suit/rover hardware sensors.
+        Dynamically computes consumption rates, local terrain hazards, solar insolation, RF line-of-sight,
+        forward progress to destination, and instantaneous Apollo/Artemis Rule #1 walkback point-of-no-return margins.
+        """
+        r, c, lat, lon = self._resolve_coords(current_location)
+        elev_m = float(round(float(self.elev_matrix[r, c]), 1)) if self.elev_matrix is not None else -2500.0
+        slope_deg = float(round(float(self.slope_matrix[r, c]), 1)) if self.slope_matrix is not None else 2.0
+
+        mode_prof = MOBILITY_PROFILES.get(mode, MOBILITY_PROFILES["on_foot"])
+        crit_slope = mode_prof.get("criticalSlopeDeg", 18.0)
+        caut_slope = mode_prof.get("cautionSlopeDeg", 10.0)
+
+        if slope_deg >= crit_slope:
+            slope_rating = "HAZARD_RED_NODE"
+        elif slope_deg >= caut_slope:
+            slope_rating = "CAUTION_SLOPE"
+        else:
+            slope_rating = "OPTIMAL_SAFE"
+
+        # Solar & Thermal Environment
+        weather_prof = WEATHER_MODELS.get(weather, WEATHER_MODELS["nominal"])
+        tau = weather_prof.get("tau", 0.45)
+        sun_elev, sun_az = SolarPhysics.calculate_sun_position(lst_hours)
+        is_shadowed = bool(
+            SolarPhysics.test_fine_shadow(self.elev_matrix, r, c, sun_az, sun_elev, self.pixel_res)
+            if self.elev_matrix is not None
+            else False
+        )
+        solar_flux = float(
+            round(
+                SolarPhysics.calculate_solar_flux(sun_elev, tau, is_shadowed=is_shadowed),
+                1,
+            )
+        )
+
+        # Dynamic Life-Support Modeling
+        active_speed = float(speed_kmh if speed_kmh is not None else mode_prof.get("speedKmh", 3.6))
+
+        if mode == "on_foot":
+            curr_o2 = float(o2_pct if o2_pct is not None else 100.0)
+            # Metabolic exertion model
+            if heart_rate_bpm is not None:
+                p_metabolic = 100.0 + 2.5 * max(50.0, float(heart_rate_bpm))
+            elif metabolic_rate_watts is not None:
+                p_metabolic = float(metabolic_rate_watts)
+            else:
+                p_metabolic = 300.0  # Nominal active spacesuit work rate
+
+            # Slope mechanical work multiplier against Mars gravity (3.72 m/s^2)
+            slope_rad = np.radians(max(0.0, slope_deg))
+            climb_mult = 1.0 + 2.5 * np.tan(slope_rad)
+            effective_metabolic = p_metabolic * climb_mult
+
+            # Oxygen consumption rate (L/min)
+            o2_rate_lpm = float(round(0.85 * (effective_metabolic / 300.0), 3))
+            o2_liters_remain = (curr_o2 / 100.0) * SUIT_O2_CAPACITY_L
+            tte_o2_min = int(round(o2_liters_remain / max(0.05, o2_rate_lpm)))
+
+            # Electrical power discharge rate (Watts)
+            # Avionics/sensors (120W) + Sublimator/LCVG pump (230W) + Shadow heater (60W)
+            shadow_heat_load = 60.0 if is_shadowed else 0.0
+            p_electrical = 350.0 + shadow_heat_load
+            battery_cap_wh = 1200.0  # Standard xEMU 1.2 kWh dual Li-ion pack
+            batt_remain_wh = (battery_pct / 100.0) * battery_cap_wh
+            tte_batt_min = int(round((batt_remain_wh / max(10.0, p_electrical)) * 60.0))
+
+            limiting_resource = "oxygen" if tte_o2_min < tte_batt_min else "battery"
+        else:
+            # Rover mode
+            curr_o2 = 100.0
+            o2_rate_lpm = 0.0
+            tte_o2_min = 99999
+            slope_rad = np.radians(max(0.0, slope_deg))
+            p_locomotion = 800.0 * (1.0 + 1.8 * np.tan(slope_rad))
+            p_harvest = 0.28 * 4.2 * solar_flux  # 28% efficiency 4.2m^2 array
+            p_electrical = float(round(max(50.0, 200.0 + p_locomotion - p_harvest), 1))
+            battery_cap_wh = 16000.0  # 16 kWh rover traction battery
+            batt_remain_wh = (battery_pct / 100.0) * battery_cap_wh
+            tte_batt_min = int(round((batt_remain_wh / max(10.0, p_electrical)) * 60.0))
+            limiting_resource = "battery"
+
+        # Apollo/Artemis Rule #1 Instantaneous Walkback Horizon
+        I_now = min(max(0, r // self.M), self.cH - 1)
+        J_now = min(max(0, c // self.M), self.cW - 1)
+
+        best_shelter = None
+        min_sh_dist = np.inf
+        for sh in self.shelters:
+            sr, sc = self.latlon_to_grid(sh["lat"], sh["lon"])
+            sI = min(max(0, sr // self.M), self.cH - 1)
+            sJ = min(max(0, sc // self.M), self.cW - 1)
+            d = float(self.all_pairs_4d[I_now, J_now, sI, sJ])
+            if not np.isinf(d) and d < min_sh_dist:
+                min_sh_dist = d
+                best_shelter = sh
+
+        if not best_shelter and self.shelters:
+            best_shelter = self.shelters[0]
+            min_sh_dist = float(
+                np.hypot(
+                    r - self.latlon_to_grid(best_shelter["lat"], best_shelter["lon"])[0],
+                    c - self.latlon_to_grid(best_shelter["lat"], best_shelter["lon"])[1],
+                )
+                * self.pixel_res
+            )
+
+        abort_dist_km = float(round(min_sh_dist / 1000.0, 2))
+        abort_time_min = int(round((abort_dist_km / max(0.5, active_speed)) * 60.0))
+
+        if mode == "on_foot":
+            abort_o2_liters = abort_time_min * o2_rate_lpm * 1.15  # 15% safety contingency
+            abort_o2_pct = float(round((abort_o2_liters / SUIT_O2_CAPACITY_L) * 100.0, 1))
+            abort_batt_wh = (abort_time_min / 60.0) * p_electrical
+            abort_batt_pct = float(round((abort_batt_wh / 1200.0) * 100.0, 1))
+            margin_o2 = float(round(curr_o2 - abort_o2_pct, 1))
+            margin_batt = float(round(battery_pct - abort_batt_pct, 1))
+            min_margin = min(margin_o2, margin_batt)
+        else:
+            abort_o2_pct = 0.0
+            margin_o2 = 100.0
+            abort_batt_wh = (abort_time_min / 60.0) * p_electrical
+            abort_batt_pct = float(round((abort_batt_wh / 16000.0) * 100.0, 1))
+            margin_batt = float(round(battery_pct - abort_batt_pct, 1))
+            min_margin = margin_batt
+
+        # Rule #1 Alert Level Classification
+        if min_margin < 0.0:
+            alert_level = "CRITICAL_BREACH_POINT_OF_NO_RETURN"
+            status = "CRITICAL_ABORT_REQUIRED"
+            action = "ABORT_IMMEDIATELY"
+            recommendation = (
+                f"CRITICAL: Point of No Return breached ({min_margin:+.1f}% margin)! "
+                f"Immediately retreat to {best_shelter['name']} ({abort_dist_km} km away)!"
+            )
+        elif min_margin < 10.0:
+            alert_level = "WARNING_APPROACHING_WALKBACK_LIMIT"
+            status = "WARNING_LOW_MARGIN"
+            action = "TURN_BACK_NOW"
+            recommendation = (
+                f"WARNING: Safe walkback margin is under 10% ({min_margin:.1f}% buffer). "
+                f"Conclude surface sampling and return toward base."
+            )
+        elif min_margin < 20.0:
+            alert_level = "CAUTION_LOW_MARGIN"
+            status = "CAUTION"
+            action = "MONITOR_CLOSELY"
+            recommendation = (
+                f"CAUTION: Safe walkback margin at {min_margin:.1f}%. "
+                f"Monitor life-support expenditure closely."
+            )
+        else:
+            alert_level = "NOMINAL"
+            status = "NOMINAL"
+            action = "PROCEED"
+            recommendation = "Nominal life-support reserves. Walkback horizon safely maintained."
+
+        # RF Line-of-Sight Comms
+        comms = self.evaluate_rf_comms(lat, lon, mode=mode)
+
+        # Forward Destination Projection (if provided)
+        dest_projection = None
+        if destination is not None:
+            dr, dc, dlat, dlon = self._resolve_coords(destination)
+            dI = min(max(0, dr // self.M), self.cH - 1)
+            dJ = min(max(0, dc // self.M), self.cW - 1)
+            d_to_goal_m = float(self.all_pairs_4d[I_now, J_now, dI, dJ])
+            if np.isinf(d_to_goal_m):
+                d_to_goal_m = float(np.hypot(dr - r, dc - c) * self.pixel_res * 1.25)
+
+            dist_rem_km = float(round(d_to_goal_m / 1000.0, 2))
+            eta_rem_min = int(round((dist_rem_km / max(0.5, active_speed)) * 60.0))
+
+            if mode == "on_foot":
+                cost_o2_pct = float(round(((eta_rem_min * o2_rate_lpm) / SUIT_O2_CAPACITY_L) * 100.0, 1))
+                cost_batt_pct = float(round(((eta_rem_min / 60.0 * p_electrical) / 1200.0) * 100.0, 1))
+                arr_o2 = float(round(max(0.0, curr_o2 - cost_o2_pct), 1))
+                arr_batt = float(round(max(0.0, battery_pct - cost_batt_pct), 1))
+                feasible = bool(arr_o2 >= 15.0 and arr_batt >= 15.0)
+            else:
+                cost_o2_pct = 0.0
+                arr_o2 = 100.0
+                cost_batt_pct = float(round(((eta_rem_min / 60.0 * p_electrical) / 16000.0) * 100.0, 1))
+                arr_batt = float(round(max(0.0, battery_pct - cost_batt_pct), 1))
+                feasible = bool(arr_batt >= 15.0)
+
+            dest_name = str(destination) if isinstance(destination, str) else f"Target ({dlat:.4f}, {dlon:.4f})"
+            dest_projection = {
+                "destination_name": dest_name,
+                "destination_coords": {"lat": dlat, "lon": dlon},
+                "distance_remaining_km": dist_rem_km,
+                "eta_minutes": eta_rem_min,
+                "predicted_battery_on_arrival_pct": arr_batt,
+                "predicted_o2_on_arrival_pct": arr_o2,
+                "destination_reachable": feasible,
+            }
+
+        # Auto-compute emergency abort route if critical or specifically requested
+        emergency_route = None
+        if include_abort_route or alert_level in (
+            "CRITICAL_BREACH_POINT_OF_NO_RETURN",
+            "WARNING_APPROACHING_WALKBACK_LIMIT",
+        ):
+            try:
+                emergency_route = self.plan_emergency_abort(
+                    current_location=(lat, lon),
+                    mode=mode,
+                    lst_hours=lst_hours,
+                    initial_battery_pct=battery_pct,
+                    initial_o2_pct=curr_o2,
+                    weather=weather,
+                )
+            except Exception as e:
+                emergency_route = {"error": f"Abort route calculation failed: {str(e)}"}
+
+        h_int = int(lst_hours)
+        m_int = int((lst_hours - h_int) * 60.0)
+
+        return {
+            "status": status,
+            "alert_level": alert_level,
+            "action": action,
+            "timestamp_lst": f"{h_int:02d}:{m_int:02d} LST",
+            "mode": mode,
+            "tactical_recommendation": recommendation,
+            "current_telemetry": {
+                "location": {"lat": lat, "lon": lon},
+                "elevation_m": elev_m,
+                "slope_deg": slope_deg,
+                "slope_safety_rating": slope_rating,
+                "battery_pct": float(round(battery_pct, 1)),
+                "o2_pct": float(round(curr_o2, 1)),
+                "sunlit": bool(not is_shadowed),
+                "solar_flux_w_m2": solar_flux,
+                "rf_comms": {
+                    "status": comms["status"],
+                    "active_link": comms["active_link"],
+                    "direct_hab_los": comms["direct_hab_los"],
+                    "path_loss_db": comms["path_loss_db"],
+                    "signal_quality": comms["signal_quality"],
+                },
+            },
+            "dynamic_consumption_rates": {
+                "o2_consumption_rate_lpm": o2_rate_lpm,
+                "battery_discharge_rate_watts": float(round(p_electrical, 1)),
+                "time_to_empty_o2_min": tte_o2_min,
+                "time_to_empty_battery_min": tte_batt_min,
+                "limiting_resource": limiting_resource,
+            },
+            "walkback_horizon": {
+                "rule_one_status": "SAFE_HORIZON_MAINTAINED" if min_margin >= 0.0 else "POINT_OF_NO_RETURN_EXCEEDED",
+                "nearest_shelter": str(best_shelter["name"]),
+                "shelter_coords": {"lat": best_shelter["lat"], "lon": best_shelter["lon"]},
+                "shelter_distance_km": abort_dist_km,
+                "shelter_eta_min": abort_time_min,
+                "required_retreat_o2_pct": abort_o2_pct,
+                "required_retreat_battery_pct": abort_batt_pct,
+                "walkback_o2_margin_pct": margin_o2,
+                "walkback_battery_margin_pct": margin_batt,
+                "minimum_margin_pct": float(round(min_margin, 1)),
+                "safe_horizon_maintained": bool(min_margin >= 0.0),
+            },
+            "destination_projection": dest_projection,
+            "emergency_abort_route": emergency_route,
+        }
+
 
 _DEFAULT_ENGINE = None
 
@@ -1880,10 +2163,20 @@ def plan_route(
     """High-level function API to plan an optimal, terrain-aware Martian route.
 
     Supports flexible coordinate formats (lat/lon tuple, list, or dict) and parameter aliases.
+    Designed for portable astronaut field computers: accepts measured life-support telemetry
+    (battery_pct, o2_pct) directly from spacesuit or rover sensors.
     """
     lst_val = lst if lst is not None else lst_hours
-    batt_val = initial_battery if initial_battery is not None else initial_battery_pct
-    o2_val = initial_o2 if initial_o2 is not None else initial_o2_pct
+    batt_in = kwargs.pop("battery_pct", None)
+    if batt_in is None:
+        batt_in = kwargs.pop("battery", None)
+    batt_val = batt_in if batt_in is not None else (initial_battery if initial_battery is not None else initial_battery_pct)
+
+    o2_in = kwargs.pop("o2_pct", None)
+    if o2_in is None:
+        o2_in = kwargs.pop("o2", None)
+    o2_val = o2_in if o2_in is not None else (initial_o2 if initial_o2 is not None else initial_o2_pct)
+
     pitstop_val = allow_pitstop if allow_pitstop is not None else allow_charging_pitstop
     climb_val = uphill_cost_factor if uphill_cost_factor is not None else uphill_penalty
 
@@ -1923,8 +2216,15 @@ def plan_emergency_abort(
 ) -> dict:
     """Calculates immediate, highest-priority emergency retreat route to the closest habitat or storm shelter."""
     lst_val = lst if lst is not None else lst_hours
-    batt_val = initial_battery if initial_battery is not None else initial_battery_pct
-    o2_val = initial_o2 if initial_o2 is not None else initial_o2_pct
+    batt_in = kwargs.pop("battery_pct", None)
+    if batt_in is None:
+        batt_in = kwargs.pop("battery", None)
+    batt_val = batt_in if batt_in is not None else (initial_battery if initial_battery is not None else initial_battery_pct)
+
+    o2_in = kwargs.pop("o2_pct", None)
+    if o2_in is None:
+        o2_in = kwargs.pop("o2", None)
+    o2_val = o2_in if o2_in is not None else (initial_o2 if initial_o2 is not None else initial_o2_pct)
 
     return get_engine().plan_emergency_abort(
         current_location=current_location,
@@ -1961,8 +2261,15 @@ def plan_science_tour(
     """Plans an optimal multi-stop science exploration tour visiting cataloged Jezero targets."""
     target_list = target_landmarks if target_landmarks is not None else targets
     lst_val = lst if lst is not None else lst_hours
-    batt_val = initial_battery if initial_battery is not None else initial_battery_pct
-    o2_val = initial_o2 if initial_o2 is not None else initial_o2_pct
+    batt_in = kwargs.pop("battery_pct", None)
+    if batt_in is None:
+        batt_in = kwargs.pop("battery", None)
+    batt_val = batt_in if batt_in is not None else (initial_battery if initial_battery is not None else initial_battery_pct)
+
+    o2_in = kwargs.pop("o2_pct", None)
+    if o2_in is None:
+        o2_in = kwargs.pop("o2", None)
+    o2_val = o2_in if o2_in is not None else (initial_o2 if initial_o2 is not None else initial_o2_pct)
 
     return get_engine().plan_science_tour(
         base_location=base_location,
@@ -2033,6 +2340,66 @@ def evaluate_rf_comms(location, mode: str = "rover") -> dict:
 
 evaluate_comms = evaluate_rf_comms
 comms = evaluate_rf_comms
+
+
+def predict_life_support(
+    current_location,
+    battery_pct: float | None = None,
+    battery: float | None = None,
+    o2_pct: float | None = None,
+    o2: float | None = None,
+    destination=None,
+    mode: str = "on_foot",
+    lst: float | None = None,
+    lst_hours: float = 14.0,
+    metabolic_rate_watts: float | None = None,
+    heart_rate_bpm: float | None = None,
+    speed_kmh: float | None = None,
+    weather: str = "nominal",
+    include_abort_route: bool = False,
+    **kwargs,
+) -> dict:
+    """Periodic real-time life support prediction and walkback monitor for astronaut portable field computers.
+
+    Evaluates measured telemetry from suit/rover hardware sensors. Dynamically predicts consumption rates,
+    terrain hazards underfoot, solar insolation/shadows, RF comms link, and Apollo/Artemis Rule #1 walkback margins.
+    """
+    batt_in = kwargs.pop("initial_battery_pct", None)
+    if batt_in is None:
+        batt_in = kwargs.pop("initial_battery", None)
+    batt_val = (
+        battery_pct
+        if battery_pct is not None
+        else (battery if battery is not None else (batt_in if batt_in is not None else 100.0))
+    )
+
+    o2_in = kwargs.pop("initial_o2_pct", None)
+    if o2_in is None:
+        o2_in = kwargs.pop("initial_o2", None)
+    o2_val = o2_pct if o2_pct is not None else (o2 if o2 is not None else (o2_in if o2_in is not None else 100.0))
+
+    lst_val = lst if lst is not None else lst_hours
+
+    return get_engine().predict_life_support(
+        current_location=current_location,
+        battery_pct=batt_val,
+        o2_pct=o2_val,
+        destination=destination,
+        mode=mode,
+        lst_hours=lst_val,
+        metabolic_rate_watts=metabolic_rate_watts,
+        heart_rate_bpm=heart_rate_bpm,
+        speed_kmh=speed_kmh,
+        weather=weather,
+        include_abort_route=include_abort_route,
+        **kwargs,
+    )
+
+
+# Method aliases for field computer workflows
+evaluate_field_telemetry = predict_life_support
+monitor_eva_step = predict_life_support
+predict_consumption = predict_life_support
 
 
 def get_waypoints() -> list[dict]:
@@ -2151,6 +2518,11 @@ __all__ = [
     "evaluate_rf_comms",
     "evaluate_comms",
     "comms",
+    # Portable Field Computer Telemetry & Life-Support Prediction
+    "predict_life_support",
+    "evaluate_field_telemetry",
+    "monitor_eva_step",
+    "predict_consumption",
     # Environmental & Landmark Telemetry
     "get_waypoints",
     "get_charging_stations",
