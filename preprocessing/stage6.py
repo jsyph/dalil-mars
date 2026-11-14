@@ -129,10 +129,26 @@ class Stage6HeuristicPipeline:
         )
         print(f"Each macro-cell covers: {macro_cell_res_m:.1f}m x {macro_cell_res_m:.1f}m (~{macro_cell_res_m**2/10000:.1f} hectares)")
 
-        # 1. Conservative min-pooling
+        # 1. True Obstacle-Aware & Dangerous Slope Macro Aggregation
         trimmed = grid[: cH * self.M, : cW * self.M]
         blocks = trimmed.reshape(cH, self.M, cW, self.M)
-        coarse_cost = np.nanmin(blocks, axis=(1, 3))
+
+        # Detect blocked nodes (inf or nan: cliffs, red slopes > 20 deg, boundaries)
+        is_blocked = np.isinf(blocks) | np.isnan(blocks)
+        blocked_frac = np.mean(is_blocked, axis=(1, 3))
+
+        clean_blocks = np.where(is_blocked, np.nan, blocks)
+        with np.errstate(all="ignore"):
+            mean_valid = np.nanmean(clean_blocks, axis=(1, 3))
+
+        # Cells with > 25% blocked nodes are impassable macro barriers
+        # Cells with obstacles / dangerous slopes receive proportional hazard weight
+        coarse_cost = np.where(
+            blocked_frac > 0.25,
+            np.inf,
+            mean_valid * (1.0 + 3.5 * blocked_frac),
+        )
+        coarse_cost[np.isnan(coarse_cost)] = np.inf
         flat_cost = coarse_cost.ravel()
 
         # 2. Build 8-connected adjacency graph

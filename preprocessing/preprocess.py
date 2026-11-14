@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""ARES-EVA: Jezero Crater Mars Preprocessing Master Pipeline.
+"""Dalil-Mars: Jezero Crater Mars Preprocessing Master Pipeline.
 
 End-to-end orchestrator for stages 1 through 6:
   Stage 1: Consolidated DTM Mosaic & Elevation Matrix
@@ -7,7 +7,7 @@ End-to-end orchestrator for stages 1 through 6:
   Stage 3: Surface Hazard Overlays (Sand Dunes, Boulders, Dust)
   Stage 4: Structural Cliff Barriers & Cliff Drop-offs (Master Grid)
   Stage 5: Waypoint Snapping & Coordinate Georeferencing
-  Stage 6: Obstacle-Aware Hierarchical Heuristics (75k Coarse Grid)
+  Stage 6: Obstacle-Aware Hierarchical Heuristics (All-Pairs Coarse Grid)
 """
 
 import sys
@@ -151,7 +151,7 @@ def main():
     else:
         stages_to_run = [s for s in range(args.from_stage, 7)]
 
-    print_banner("ARES-EVA: JEZERO CRATER END-TO-END PREPROCESSING PIPELINE")
+    print_banner("DALIL-MARS: JEZERO CRATER END-TO-END PREPROCESSING PIPELINE")
     print(f"Workspace Base: {BASE_DIR}")
     print(f"Stages Scheduled: {', '.join(str(s) for s in stages_to_run)}")
 

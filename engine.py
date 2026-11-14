@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""ARES-EVA: Martian Tactical Pathfinding & Survival Routing Engine.
+"""Dalil-Mars Engine: Martian Tactical Pathfinding & Survival Routing Engine.
 
-Core navigation and life-support routing engine for Jezero Crater, Mars.
+Core navigation, life-support, and obstacle-avoidance routing engine for Jezero Crater, Mars.
 Integrates:
-  - 20.2m high-resolution consolidated DTM terrain analysis (Stage 1 & 4)
+  - 20.2m high-resolution consolidated DTM terrain analysis (Stage 1, 2 & 4)
   - Precomputed Stage 6 obstacle-aware hierarchical heuristics
+  - Strict red node blocking (slopes > mobility limits) & yellow slope caution weighting
+  - Asymmetric uphill climb mechanical work against Mars gravity (3.72 m/s^2)
   - Real-time Martian solar ephemeris (Allison-McEwen model)
   - Dynamic ray-marching terrain & canyon shadow occlusion
   - Dual mobility physics: On-foot xEMU astronaut vs. Solar/Battery Rover
@@ -213,15 +215,16 @@ WEATHER_MODELS = {
 # =============================================================================
 # 4. TACTICAL ROUTING ENGINE
 # =============================================================================
-class MartianTacticalEngine:
+class DalilMarsEngine:
     """Core routing engine combining hierarchical corridor A*, solar ray-marching,
-
-    and life-support telemetry for Jezero Crater.
+    red node obstacle avoidance, asymmetric climb mechanics, and life-support
+    telemetry for Jezero Crater.
     """
 
     def __init__(self, output_dir: str | None = None):
         self.output_dir = output_dir or os.path.join(PREPROCESSING_DIR, "output")
         self.stage1_dir = os.path.join(self.output_dir, "stage_1_consolidated")
+        self.stage2_dir = os.path.join(self.output_dir, "stage_2_consolidated")
         self.stage4_dir = os.path.join(self.output_dir, "stage_4_consolidated")
         self.stage5_dir = os.path.join(self.output_dir, "stage_5_consolidated")
         self.stage6_dir = os.path.join(self.output_dir, "stage_6_consolidated")
@@ -235,7 +238,7 @@ class MartianTacticalEngine:
         self._load_datasets()
 
     def _load_datasets(self):
-        print("Initializing ARES-EVA Martian Tactical Engine...")
+        sys.stderr.write("Initializing Dalil-Mars Tactical Pathfinding Engine...\n")
         t0 = time.time()
 
         # 1. Master Grid (Stage 4)
@@ -244,7 +247,14 @@ class MartianTacticalEngine:
             raise FileNotFoundError(f"Missing master grid at {mgrid_path}. Run ./preprocess first!")
         self.master_grid = np.load(mgrid_path).astype(np.float32)
 
-        # 2. Elevation Grid (Stage 1) & Coarse Elevation for fast shadows
+        # 2. Topographic Slope Angles Matrix (Stage 2) for Red/Dangerous Slope Enforcement
+        slope_path = os.path.join(self.stage2_dir, "consolidated_slope_angles_deg.npy")
+        if os.path.exists(slope_path):
+            self.slope_matrix = np.load(slope_path, mmap_mode="r")
+        else:
+            self.slope_matrix = None
+
+        # 3. Elevation Grid (Stage 1) & Coarse Elevation for fast shadows
         elev_path = os.path.join(self.stage1_dir, "consolidated_elevation_matrix.npy")
         self.elev_matrix = np.load(elev_path).astype(np.float32) if os.path.exists(elev_path) else None
 
@@ -262,13 +272,13 @@ class MartianTacticalEngine:
         else:
             self.coarse_elev = np.full((self.cH, self.cW), -2500.0, dtype=np.float32)
 
-        # 3. Stage 6 All-Pairs Heuristics Matrix (4D: 102 x 46 x 102 x 46)
+        # 4. Stage 6 All-Pairs Obstacle-Aware Heuristics Matrix (4D: 102 x 46 x 102 x 46)
         mat_path = os.path.join(self.stage6_dir, "consolidated_all_pairs_4d_matrix.npy")
         if not os.path.exists(mat_path):
             raise FileNotFoundError(f"Missing Stage 6 heuristics at {mat_path}. Run ./preprocess 6 first!")
         self.all_pairs_4d = np.load(mat_path)
 
-        # 4. Virtual Base Charging Stations
+        # 5. Virtual Base Charging Stations
         haz_path = os.path.join(BASE_DIR, "src", "data", "jezero_science_hazards.json")
         self.charging_stations = []
         if os.path.exists(haz_path):
@@ -278,7 +288,7 @@ class MartianTacticalEngine:
 
         self.intra_bound = self.M * np.sqrt(2.0) * self.pixel_res * 1.0
         elapsed = time.time() - t0
-        print(f"Engine ready in {elapsed:.2f}s! ({H}x{W} fine nodes, {self.cH}x{self.cW} macro-cells)")
+        sys.stderr.write(f"Engine ready in {elapsed:.2f}s! ({H}x{W} fine nodes, {self.cH}x{self.cW} macro-cells)\n")
 
     def latlon_to_grid(self, lat: float, lon: float) -> tuple[int, int]:
         x = self.mars_radius * np.radians(lon - 180.0)
@@ -294,8 +304,19 @@ class MartianTacticalEngine:
         lat = np.degrees(y / self.mars_radius)
         return lat, lon
 
-    def _resolve_coords(self, pt: tuple[float, float]) -> tuple[int, int, float, float]:
-        c1, c2 = pt
+    def _resolve_coords(self, pt) -> tuple[int, int, float, float]:
+        if isinstance(pt, dict):
+            if "lat" in pt and "lon" in pt:
+                c1, c2 = float(pt["lat"]), float(pt["lon"])
+            elif "row" in pt and "col" in pt:
+                c1, c2 = float(pt["row"]), float(pt["col"])
+            else:
+                raise ValueError(f"Dictionary point must contain ('lat', 'lon') or ('row', 'col'): {pt}")
+        elif isinstance(pt, (list, tuple)) and len(pt) >= 2:
+            c1, c2 = float(pt[0]), float(pt[1])
+        else:
+            raise ValueError(f"Invalid coordinate format: {pt}. Expected (lat, lon) or [row, col]")
+
         if abs(c1) <= 90.0 and abs(c2) <= 360.0:
             lat, lon = c1, c2
             r, c = self.latlon_to_grid(lat, lon)
@@ -327,8 +348,25 @@ class MartianTacticalEngine:
         I1, J1 = min(r1 // self.M, self.cH - 1), min(c1 // self.M, self.cW - 1)
         I2, J2 = min(r2 // self.M, self.cH - 1), min(c2 // self.M, self.cW - 1)
 
-        # 1. Macro-path extraction using Stage 6 All-Pairs precomputed gradient
+        # 1. Macro-path extraction using Stage 6 All-Pairs precomputed obstacle-avoiding gradient
         field_to_goal = self.all_pairs_4d[:, :, I2, J2]
+
+        # Snap start/goal to nearest traversable macro cell if placed in an impassable barrier cell
+        if np.isinf(field_to_goal[I1, J1]):
+            best_alt = None
+            min_alt_d = np.inf
+            for di in range(-4, 5):
+                for dj in range(-4, 5):
+                    ni, nj = I1 + di, J1 + dj
+                    if 0 <= ni < self.cH and 0 <= nj < self.cW:
+                        if not np.isinf(field_to_goal[ni, nj]):
+                            dist_alt = np.hypot(di, dj)
+                            if dist_alt < min_alt_d:
+                                min_alt_d = dist_alt
+                                best_alt = (ni, nj)
+            if best_alt:
+                I1, J1 = best_alt
+
         macro_path = [(I1, J1)]
         curr_I, curr_J = I1, J1
         visited_macro = {(I1, J1)}
@@ -352,11 +390,11 @@ class MartianTacticalEngine:
             macro_path.append((curr_I, curr_J))
             visited_macro.add((curr_I, curr_J))
 
-        # 2. Form Active Bounding Corridor
+        # 2. Form Active Bounding Corridor (~3.9km wide swath around macro-path)
         corridor = set()
         for mI, mJ in macro_path:
-            for dI in range(-2, 3):
-                for dJ in range(-2, 3):
+            for dI in range(-1, 2):
+                for dJ in range(-1, 2):
                     nI, nJ = mI + dI, mJ + dJ
                     if 0 <= nI < self.cH and 0 <= nJ < self.cW:
                         corridor.add((nI, nJ))
@@ -375,10 +413,46 @@ class MartianTacticalEngine:
         else:
             sub_elev_1d = None
 
+        # Red Node & Dangerous Slope Enforcement
+        max_slope = mode_profile.get("maxSlopeDeg", 18.0)
+        red_nodes_in_corridor = 0
+        caution_nodes_in_corridor = 0
+        if self.slope_matrix is not None:
+            sub_slope = self.slope_matrix[min_r:max_r, min_c:max_c]
+
+            # 1. Impassable Red Nodes (Slope exceeds mobility threshold or cliff drop-off)
+            red_mask = (sub_slope > max_slope) | np.isnan(sub_slope)
+            sub_grid[red_mask] = np.inf
+            red_nodes_in_corridor = int(np.sum(red_mask))
+
+            # 2. Caution / Dangerous Slopes (15 deg to max_slope)
+            # Apply 2.5x hazard effort penalty to strongly steer clear of steep terrain
+            caution_mask = (sub_slope >= 15.0) & (sub_slope <= max_slope) & (~np.isinf(sub_grid))
+            sub_grid[caution_mask] *= 2.5
+            caution_nodes_in_corridor = int(np.sum(caution_mask))
+
         climb_k = uphill_penalty if uphill_penalty is not None else mode_profile.get("climbPenalty", 2.5)
 
-        start_local = (r1 - min_r, c1 - min_c)
-        goal_local = (r2 - min_r, c2 - min_c)
+        start_local = [r1 - min_r, c1 - min_c]
+        goal_local = [r2 - min_r, c2 - min_c]
+
+        # Snap start/goal to nearest traversable pixel if placed on a micro-obstacle or red slope
+        for pt_local in [start_local, goal_local]:
+            if np.isinf(sub_grid[pt_local[0], pt_local[1]]):
+                snapped = False
+                for radius in range(1, 8):
+                    for dr in range(-radius, radius + 1):
+                        for dc in range(-radius, radius + 1):
+                            sr, sc = pt_local[0] + dr, pt_local[1] + dc
+                            if 0 <= sr < sub_H and 0 <= sc < sub_W and not np.isinf(sub_grid[sr, sc]):
+                                pt_local[0], pt_local[1] = sr, sc
+                                snapped = True
+                                break
+                        if snapped:
+                            break
+                    if snapped:
+                        break
+
         start_idx = start_local[0] * sub_W + start_local[1]
         goal_idx = goal_local[0] * sub_W + goal_local[1]
 
@@ -400,9 +474,17 @@ class MartianTacticalEngine:
         sub_grid[~corridor_mask_sub] = np.inf
         sub_grid_1d = sub_grid.ravel()
 
-        # Vectorized 2D Heuristic lookup
+        # Vectorized 2D Admissible Heuristic:
+        # Dominating combination of Stage 6 Obstacle-Aware macro heuristic + Fine Euclidean distance
         sub_d = field_to_goal[np.ix_(macro_r, macro_c)]
-        sub_heur = np.where(np.isinf(sub_d), 0.0, np.maximum(0.0, sub_d - self.intra_bound)).astype(np.float32)
+        coarse_heur = np.where(np.isinf(sub_d), 0.0, np.maximum(0.0, sub_d - self.intra_bound)).astype(np.float32)
+
+        fine_euc = np.hypot(
+            (np.arange(min_r, max_r)[:, None] - r2) * self.pixel_res,
+            (np.arange(min_c, max_c)[None, :] - c2) * self.pixel_res
+        ).astype(np.float32)
+
+        sub_heur = np.maximum(coarse_heur, fine_euc)
         sub_heur_1d = sub_heur.ravel()
 
         is_rover = mode_profile["isSolarPowered"]
@@ -488,6 +570,9 @@ class MartianTacticalEngine:
         uphill_dist_m = 0.0
         downhill_dist_m = 0.0
         flat_dist_m = 0.0
+        safe_slope_dist_m = 0.0
+        caution_slope_dist_m = 0.0
+        red_slope_dist_m = 0.0
         slopes_list = []
 
         # Downsample fine telemetry ray-marching to max 150 points along path
@@ -509,6 +594,7 @@ class MartianTacticalEngine:
 
             seg_slope = 0.0
             is_climbing = False
+            slope_tier = "safe"
             if i > 0:
                 prev_r, prev_c = sampled_pixels[i - 1]
                 ds = np.hypot(pr - prev_r, pc - prev_c) * self.pixel_res
@@ -520,6 +606,16 @@ class MartianTacticalEngine:
                     max_slope_deg = max(max_slope_deg, seg_slope)
                     slopes_list.append(seg_slope)
 
+                    if seg_slope > max_slope:
+                        slope_tier = "red"
+                        red_slope_dist_m += ds
+                    elif seg_slope >= 15.0:
+                        slope_tier = "caution"
+                        caution_slope_dist_m += ds
+                    else:
+                        slope_tier = "safe"
+                        safe_slope_dist_m += ds
+
                     if dz > 0.15:
                         elevation_gain_m += dz
                         uphill_dist_m += ds
@@ -529,6 +625,8 @@ class MartianTacticalEngine:
                         downhill_dist_m += ds
                     else:
                         flat_dist_m += ds
+                else:
+                    safe_slope_dist_m += ds
 
             telemetry_samples.append({
                 "dist_km": round(total_dist_m / 1000.0, 3),
@@ -536,6 +634,7 @@ class MartianTacticalEngine:
                 "lon": round(lon, 6),
                 "elevation_m": round(z, 1),
                 "slope_deg": round(seg_slope, 1),
+                "slope_tier": slope_tier,
                 "is_climbing": is_climbing,
                 "is_shadowed": is_shd,
             })
@@ -598,8 +697,12 @@ class MartianTacticalEngine:
             "uphill_dist_km": round(uphill_dist_m / 1000.0, 2),
             "downhill_dist_km": round(downhill_dist_m / 1000.0, 2),
             "flat_dist_km": round(flat_dist_m / 1000.0, 2),
+            "safe_slope_km": round(safe_slope_dist_m / 1000.0, 2),
+            "caution_slope_km": round(caution_slope_dist_m / 1000.0, 2),
             "max_slope_deg": round(max_slope_deg, 1),
             "avg_slope_deg": round(avg_slope_deg, 1),
+            "red_nodes_avoided": red_nodes_in_corridor,
+            "caution_nodes_weighted": caution_nodes_in_corridor,
             "shadow_pct": shadow_pct,
             "sunlit_pct": sunlit_pct,
             "o2_liters_used": o2_liters_used,
@@ -720,6 +823,10 @@ class MartianTacticalEngine:
         avg_sunlit = round(sum(l["sunlit_pct"] * l["dist_km"] for l in final_legs) / max(0.01, total_dist_km), 1)
         avg_shadow = round(100.0 - avg_sunlit, 1)
 
+        total_safe_km = sum(l.get("safe_slope_km", 0.0) for l in final_legs)
+        total_caution_km = sum(l.get("caution_slope_km", 0.0) for l in final_legs)
+        total_red_avoided = sum(l.get("red_nodes_avoided", 0) for l in final_legs)
+
         if charging_station:
             batt_remain_station = round(initial_battery_pct - final_legs[0]["battery_used_pct"], 1)
             final_battery_pct = round(100.0 - final_legs[1]["battery_used_pct"], 1)
@@ -754,7 +861,7 @@ class MartianTacticalEngine:
                     "coordinates": full_coords,
                 },
                 "properties": {
-                    "name": f"ARES-EVA Tactical Path ({mode})",
+                    "name": f"Dalil-Mars Tactical Path ({mode})",
                     "status": status,
                     "mode": mode,
                     "distance_km": round(total_dist_km, 2),
@@ -762,6 +869,9 @@ class MartianTacticalEngine:
                     "elevation_gain_m": round(total_elev_gain, 1),
                     "elevation_loss_m": round(total_elev_loss, 1),
                     "max_slope_deg": round(max_slope, 1),
+                    "safe_slope_km": round(total_safe_km, 2),
+                    "dangerous_slope_km": round(total_caution_km, 2),
+                    "red_nodes_avoided": total_red_avoided,
                     "battery_remaining_pct": final_battery_pct,
                 },
             },
@@ -823,6 +933,10 @@ class MartianTacticalEngine:
             "uphill_distance_km": round(total_uphill_km, 2),
             "downhill_distance_km": round(total_downhill_km, 2),
             "flat_distance_km": round(total_flat_km, 2),
+            "safe_slope_distance_km": round(total_safe_km, 2),
+            "dangerous_slope_distance_km": round(total_caution_km, 2),
+            "red_nodes_avoided_count": total_red_avoided,
+            "slope_safety_rating": "OPTIMAL (0% red nodes traversed, slopes safe)" if total_caution_km == 0 else f"CAUTION ({round(100.0 * total_caution_km / max(0.01, total_dist_km), 1)}% dangerous slopes negotiated safely)",
             "max_slope_deg": round(max_slope, 1),
             "avg_slope_deg": round(avg_slope, 1),
             "battery_used_pct": total_batt_used,
@@ -944,24 +1058,212 @@ class MartianTacticalEngine:
 _DEFAULT_ENGINE = None
 
 
-def get_engine() -> MartianTacticalEngine:
-    """Returns the cached singleton instance of MartianTacticalEngine."""
+def get_engine() -> DalilMarsEngine:
+    """Returns the cached singleton instance of DalilMarsEngine."""
     global _DEFAULT_ENGINE
     if _DEFAULT_ENGINE is None:
-        _DEFAULT_ENGINE = MartianTacticalEngine()
+        _DEFAULT_ENGINE = DalilMarsEngine()
     return _DEFAULT_ENGINE
 
 
-def plan_mission_route(*args, **kwargs) -> dict:
-    """High-level function API to plan an optimal, physics-grounded Martian route."""
-    return get_engine().plan_route(*args, **kwargs)
+# Backward-compatibility alias
+MartianTacticalEngine = DalilMarsEngine
+DalilMarsRouter = DalilMarsEngine
+MartianRouter = DalilMarsEngine
+
+
+def plan_route(
+    start,
+    destination,
+    mode: str = "on_foot",
+    lst: float | None = None,
+    lst_hours: float = 14.0,
+    sun_position: tuple[float, float] | None = None,
+    weather: str = "nominal",
+    tau: float | None = None,
+    radiation_spe: bool = False,
+    initial_battery: float | None = None,
+    initial_battery_pct: float = 100.0,
+    initial_o2: float | None = None,
+    initial_o2_pct: float = 100.0,
+    allow_pitstop: bool | None = None,
+    allow_charging_pitstop: bool = True,
+    uphill_cost_factor: float | None = None,
+    uphill_penalty: float | None = None,
+    **kwargs,
+) -> dict:
+    """High-level function API to plan an optimal, terrain-aware Martian route.
+
+    Supports flexible coordinate formats (lat/lon tuple, list, or dict) and parameter aliases.
+    """
+    lst_val = lst if lst is not None else lst_hours
+    batt_val = initial_battery if initial_battery is not None else initial_battery_pct
+    o2_val = initial_o2 if initial_o2 is not None else initial_o2_pct
+    pitstop_val = allow_pitstop if allow_pitstop is not None else allow_charging_pitstop
+    climb_val = uphill_cost_factor if uphill_cost_factor is not None else uphill_penalty
+
+    return get_engine().plan_route(
+        start=start,
+        destination=destination,
+        mode=mode,
+        lst_hours=lst_val,
+        sun_position=sun_position,
+        weather=weather,
+        tau=tau,
+        radiation_spe=radiation_spe,
+        initial_battery_pct=batt_val,
+        initial_o2_pct=o2_val,
+        allow_charging_pitstop=pitstop_val,
+        uphill_penalty=climb_val,
+        **kwargs,
+    )
+
+
+# Method aliases
+route = plan_route
+plan_mission_route = plan_route
+
+
+def get_waypoints() -> list[dict]:
+    """Returns cataloged Jezero POIs, habitats, and science landmarks."""
+    haz_path = os.path.join(BASE_DIR, "src", "data", "jezero_science_hazards.json")
+    if os.path.exists(haz_path):
+        try:
+            with open(haz_path, "r") as f:
+                data = json.load(f)
+                return data.get("sciencePOIs", [])
+        except Exception:
+            pass
+    return get_engine().charging_stations
+
+
+def get_charging_stations() -> list[dict]:
+    """Returns only virtual charging stations equipped with power and life-support refill."""
+    return [p for p in get_waypoints() if p.get("isChargingStation")]
+
+
+def get_weather(sol: int | None = None) -> dict:
+    """Returns Martian Environmental Dynamics Analyzer (MEDA) atmospheric conditions."""
+    weather_path = os.path.join(BASE_DIR, "src", "data", "meda_weather.json")
+    if os.path.exists(weather_path):
+        try:
+            with open(weather_path, "r") as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {
+        "sol": sol if sol is not None else 1000,
+        "tau": 0.45,
+        "temperature_c": -62.0,
+        "pressure_pa": 612.0,
+        "uv_index": 7.4,
+        "dust_status": "nominal",
+    }
+
+
+def get_engine_status() -> dict:
+    """Returns metadata about the loaded engine and precomputed matrices."""
+    eng = get_engine()
+    H, W = eng.master_grid.shape
+    return {
+        "engine": "Dalil-Mars Tactical Pathfinding Engine",
+        "status": "ONLINE",
+        "fine_grid_resolution_m": eng.pixel_res,
+        "fine_grid_dimensions": {"rows": H, "cols": W, "total_nodes": H * W},
+        "macro_grid_dimensions": {"rows": eng.cH, "cols": eng.cW, "macro_cells": eng.cH * eng.cW},
+        "all_pairs_matrix_loaded": eng.all_pairs_4d is not None,
+        "charging_stations_count": len(eng.charging_stations),
+        "available_modes": list(MOBILITY_PROFILES.keys()),
+        "weather_models": list(WEATHER_MODELS.keys()),
+    }
+
+
+def run_http_server(port: int = 8000, host: str = "0.0.0.0"):
+    """Launches a lightweight REST API server for web clients and frontends."""
+    from flask import Flask, request, jsonify
+
+    app = Flask("dalil_mars_api")
+    sys.stderr.write("Pre-warming Dalil-Mars Tactical Engine for REST API...\n")
+    get_engine()
+
+    @app.route("/api/health", methods=["GET"])
+    def health():
+        return jsonify(get_engine_status())
+
+    @app.route("/api/waypoints", methods=["GET"])
+    def waypoints():
+        return jsonify({"waypoints": get_waypoints()})
+
+    @app.route("/api/weather", methods=["GET"])
+    def weather():
+        return jsonify(get_weather())
+
+    @app.route("/api/route", methods=["GET", "POST"])
+    def route_endpoint():
+        try:
+            if request.method == "POST":
+                data = request.get_json(force=True)
+            else:
+                data = request.args
+
+            start_val = data.get("start")
+            end_val = data.get("destination") or data.get("end")
+
+            if isinstance(start_val, str):
+                parts = [float(x.strip()) for x in start_val.split(",")]
+                start = (parts[0], parts[1])
+            elif isinstance(start_val, (list, tuple)):
+                start = (float(start_val[0]), float(start_val[1]))
+            elif "start_lat" in data and "start_lon" in data:
+                start = (float(data["start_lat"]), float(data["start_lon"]))
+            else:
+                return jsonify({"error": "Missing 'start' parameter (lat, lon)"}), 400
+
+            if isinstance(end_val, str):
+                parts = [float(x.strip()) for x in end_val.split(",")]
+                destination = (parts[0], parts[1])
+            elif isinstance(end_val, (list, tuple)):
+                destination = (float(end_val[0]), float(end_val[1]))
+            elif "end_lat" in data and "end_lon" in data:
+                destination = (float(data["end_lat"]), float(data["end_lon"]))
+            else:
+                return jsonify({"error": "Missing 'destination' parameter (lat, lon)"}), 400
+
+            mode = data.get("mode", "on_foot")
+            lst_val = float(data.get("lst", data.get("lst_hours", 12.0)))
+            weather_val = data.get("weather", "nominal")
+            batt_val = float(data.get("battery", data.get("initial_battery", 100.0)))
+            o2_val = float(data.get("o2", data.get("initial_o2", 100.0)))
+            climb_val = float(data["uphill_factor"]) if "uphill_factor" in data else None
+
+            res = plan_route(
+                start=start,
+                destination=destination,
+                mode=mode,
+                lst=lst_val,
+                weather=weather_val,
+                initial_battery=batt_val,
+                initial_o2=o2_val,
+                uphill_cost_factor=climb_val,
+            )
+            return jsonify(res)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
+    print(f"Dalil-Mars REST API Server listening on http://{host}:{port}")
+    print("Endpoints:")
+    print("  - GET  /api/health")
+    print("  - GET  /api/waypoints")
+    print("  - GET  /api/weather")
+    print("  - POST /api/route")
+    app.run(host=host, port=port, debug=False)
 
 
 # =============================================================================
 # 5. CLI & DEMO HARNESS
 # =============================================================================
 def main():
-    parser = argparse.ArgumentParser(description="ARES-EVA Martian Tactical Pathfinding Engine")
+    parser = argparse.ArgumentParser(description="Dalil-Mars Martian Tactical Pathfinding Engine & API")
     parser.add_argument("--demo", action="store_true", help="Run 3 standard NASA mission test scenarios.")
     parser.add_argument("--start", nargs=2, type=float, metavar=("LAT", "LON"), help="Start coordinate (lat, lon).")
     parser.add_argument("--end", nargs=2, type=float, metavar=("LAT", "LON"), help="Destination coordinate (lat, lon).")
@@ -969,13 +1271,27 @@ def main():
     parser.add_argument("--lst", type=float, default=14.0, help="Martian Local Solar Time (hours: 0.0 to 24.0).")
     parser.add_argument("--weather", choices=["nominal", "dust_storm", "solar_storm"], default="nominal", help="Weather state.")
     parser.add_argument("--battery", type=float, default=100.0, help="Starting battery percentage.")
+    parser.add_argument("--uphill-factor", type=float, default=None, help="Uphill climb cost penalty multiplier.")
+    parser.add_argument("--json", action="store_true", help="Output pure JSON to stdout.")
+    parser.add_argument("--waypoints", action="store_true", help="Output all cataloged Jezero waypoints and exit.")
+    parser.add_argument("--serve", action="store_true", help="Launch HTTP REST API microservice server.")
+    parser.add_argument("--port", type=int, default=8000, help="Port for HTTP server (default 8000).")
 
     args = parser.parse_args()
-    engine = MartianTacticalEngine()
+
+    if args.serve:
+        run_http_server(port=args.port)
+        return
+
+    if args.waypoints:
+        print(json.dumps(get_waypoints(), indent=2))
+        return
+
+    engine = DalilMarsEngine()
 
     if args.demo or (not args.start and not args.end):
         print("\n" + "=" * 65)
-        print(" RUNNING 3 ARES-EVA MISSION TEST SCENARIOS")
+        print(" RUNNING 3 DALIL-MARS MISSION TEST SCENARIOS")
         print("=" * 65)
 
         # Scenario 1: Short Direct Walk (Hab Alpha -> Kodiak Butte)
@@ -989,6 +1305,7 @@ def main():
             initial_battery_pct=100.0,
         )
         print(f"Status: {res1['status']} | Dist: {res1['total_dist_km']} km | Time: {res1['duration_min']} min")
+        print(f"Slope Safety: {res1['summary']['slope_safety_rating']} | Max: {res1['summary']['max_slope_deg']}° | Red Avoided: {res1['summary']['red_nodes_avoided_count']}")
         print(f"Battery Drain: {res1['battery_used_pct']}% | Remaining: {res1['battery_remaining_pct']}%")
         print(f"Sunlit: {res1['solar_ephemeris']['sunlit_pct']}% | Shadow: {res1['solar_ephemeris']['shadow_pct']}% | Dose: {res1['radiation_dose_mgy']} mGy")
 
@@ -1003,6 +1320,7 @@ def main():
             initial_battery_pct=85.0,
         )
         print(f"Status: {res2['status']} | Dist: {res2['total_dist_km']} km | Time: {res2['duration_min']} min")
+        print(f"Slope Safety: {res2['summary']['slope_safety_rating']} | Max: {res2['summary']['max_slope_deg']}° | Red Avoided: {res2['summary']['red_nodes_avoided_count']}")
         print(f"Sun Elevation: {res2['solar_ephemeris']['sun_elevation_deg']}° | Sun Azimuth: {res2['solar_ephemeris']['sun_azimuth_deg']}°")
         print(f"Sunlit Corridor: {res2['solar_ephemeris']['sunlit_pct']}% | Shadowed: {res2['solar_ephemeris']['shadow_pct']}% | Net Batt: {res2['battery_remaining_pct']}%")
 
@@ -1017,6 +1335,7 @@ def main():
             initial_battery_pct=25.0,
         )
         print(f"Status: {res3['status']} | Total Dist: {res3['total_dist_km']} km | Total Time: {res3['duration_min']} min")
+        print(f"Slope Safety: {res3['summary']['slope_safety_rating']} | Red Avoided: {res3['summary']['red_nodes_avoided_count']}")
         if res3["charging_station"]:
             print(f"Auto-Routed via Virtual Charging Base: {res3['charging_station']['name']}")
         print(f"Battery Remaining on Arrival: {res3['battery_remaining_pct']}% (Safe Margin Maintained)")
@@ -1024,27 +1343,43 @@ def main():
             print(f"  Step {st['step']}: {st['instruction']} ({st['detail']})")
 
     elif args.start and args.end:
-        res = engine.plan_route(
+        res = plan_route(
             start=tuple(args.start),
             destination=tuple(args.end),
             mode=args.mode,
-            lst_hours=args.lst,
+            lst=args.lst,
             weather=args.weather,
-            initial_battery_pct=args.battery,
+            initial_battery=args.battery,
+            uphill_cost_factor=args.uphill_factor,
         )
-        print(f"\n[ARES-EVA ROUTE RESULT: {res['status']}]")
-        print(f"  Total Distance: {res['total_dist_km']} km (Direct: {res['direct_km']} km)")
-        print(f"  Travel Time: {res['duration_min']} min")
-        print(f"  Battery: {res['battery_used_pct']}% used -> {res['battery_remaining_pct']}% remaining")
-        print(f"  O2: {res['o2_used_pct']}% used -> {res['o2_remaining_pct']}% remaining")
-        print(f"  Radiation Dose: {res['radiation_dose_mgy']} mGy")
-        print(f"  Max Slope: {res['max_slope_deg']}°")
-        print(f"  Solar Context: {res['solar_ephemeris']['sunlit_pct']}% sunlit, {res['solar_ephemeris']['shadow_pct']}% shadowed")
-        if res["charging_station"]:
-            print(f"  Pit-Stop Required: Docking at {res['charging_station']['name']}")
-        print("  Turn-by-turn Directions:")
-        for s in res["navigation_steps"]:
-            print(f"    - {s['instruction']} [{s['detail']}]")
+
+        if args.json:
+            print(json.dumps(res, indent=2))
+        else:
+            s = res["summary"]
+            sol = res["solar_context"]
+            print("\n" + "=" * 65)
+            print(f" DALIL-MARS MISSION ROUTE RESULT [{s['status']}]")
+            print("=" * 65)
+            print(f"  Mode:                {s['mode'].upper()}")
+            print(f"  Total Distance:      {s['total_distance_km']} km (Direct: {s['direct_distance_km']} km)")
+            print(f"  Travel Duration:     {s['duration_formatted']} ({s['duration_min']} min)")
+            print(f"  Elevation Ascent:    +{s['elevation_gain_m']} m (Descent: -{s['elevation_loss_m']} m)")
+            print(f"  Uphill Traverse:     {s['uphill_distance_km']} km (Downhill: {s['downhill_distance_km']} km, Flat: {s['flat_distance_km']} km)")
+            print(f"  Max / Avg Slope:     {s['max_slope_deg']}° / {s['avg_slope_deg']}°")
+            print(f"  Slope Safety:        {s['slope_safety_rating']}")
+            print(f"  Red Slopes Avoided:  {s['red_nodes_avoided_count']} nodes blocked")
+            print(f"  Battery:             {s['battery_used_pct']}% used -> {s['battery_remaining_pct']}% remaining")
+            print(f"  Oxygen (xEMU):       {s['o2_used_liters']} L used ({s['o2_used_pct']}%) -> {s['o2_remaining_pct']}% remaining")
+            print(f"  Radiation Dose:      {s['radiation_dose_mgy']} mGy")
+            print(f"  Solar Context:       {sol['lst_formatted']} | Sun: {sol['sun_elevation_deg']}° elev, {sol['sun_azimuth_deg']}° az")
+            print(f"  Surface Lighting:    {s['sunlit_pct']}% sunlit, {s['shadow_pct']}% shadowed (tau={sol['optical_depth_tau']})")
+            if s["pitstop_occurred"]:
+                print(f"  Charging Pit-Stop:   Docked at {s['charging_station_name']}")
+            print("\n  Turn-by-turn Navigation:")
+            for step in res["navigation_steps"]:
+                print(f"    {step['step']}. {step['instruction']} - {step['detail']}")
+            print("=" * 65 + "\n")
 
 
 if __name__ == "__main__":

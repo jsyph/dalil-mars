@@ -11,7 +11,7 @@
     "fine_dust_low_thermal_inertia": 1.5
   },
   "hazard_counts": {
-    "dune_nodes_affected": 0,
-    "boulder_nodes_affected": 0
+    "dune_nodes_affected": 774080,
+    "boulder_nodes_affected": 774080
   }
 }

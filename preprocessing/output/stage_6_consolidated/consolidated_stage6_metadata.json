@@ -11,7 +11,7 @@
     46
   ],
   "macro_cells_count": 4692,
-  "traversable_cells_count": 3525,
+  "traversable_cells_count": 3247,
   "macro_cell_resolution_m": 1293.05,
   "all_pairs_matrix_shape": [
     102,
@@ -20,6 +20,6 @@
     46
   ],
   "matrix_ram_mb": 83.98,
-  "npz_disk_mb": 2.99,
-  "total_precompute_time_s": 22.19
+  "npz_disk_mb": 35.9,
+  "total_precompute_time_s": 22.98
 }
