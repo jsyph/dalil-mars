@@ -68,6 +68,13 @@ import {
   SUIT_O2_CAPACITY_LITERS,
   WEATHER_CONDITIONS,
 } from './utils/pathfinder';
+import {
+  adaptEngineRouteToGui,
+  findOptimalDepartureApi,
+  planEmergencyAbortApi,
+  planRouteApi,
+  predictTelemetryApi,
+} from './utils/engineApi';
 import { publishVisorState, subscribeVisorCommands } from './utils/visorSync';
 
 function formatLst(totalMinutes) {
@@ -482,9 +489,13 @@ export default function App() {
     });
   };
 
-  // Compute A* Safe Route (including custom operator-drawn exclusion polygons)
-  const routeResult = useMemo(() => {
-    return computeMarswalkRoute({
+  // Dalil-Mars Tactical Engine state & route computation (with offline client-side fallback)
+  const [engineOnline, setEngineOnline] = useState(null);
+  const [engineLoading, setEngineLoading] = useState(false);
+  const [livePrediction, setLivePrediction] = useState(null);
+  const [optimalDepartureResult, setOptimalDepartureResult] = useState(null);
+  const [routeResult, setRouteResult] = useState(() =>
+    computeMarswalkRoute({
       start: startPOI,
       end: endPOI,
       hazardZones,
@@ -496,7 +507,75 @@ export default function App() {
       startO2Pct,
       useChargingStop: autoChargingStop ? 'auto' : false,
       customExclusionZones: drawnZones,
-    });
+    })
+  );
+
+  useEffect(() => {
+    const controller = new AbortController();
+    const lstHours = ((startLstMinutes % 1440) + 1440) % 1440 / 60;
+    const engineMode = loadoutKey === 'rover' ? 'rover' : 'on_foot';
+
+    const timer = setTimeout(async () => {
+      setEngineLoading(true);
+      try {
+        const res = await planRouteApi(
+          {
+            start: [startPOI.lat, startPOI.lon],
+            destination: [endPOI.lat, endPOI.lon],
+            mode: engineMode,
+            loadout_key: loadoutKey,
+            departure_lst: lstHours,
+            weather: weatherKey,
+            radiation_spe: weatherKey === 'solar_storm',
+            initial_battery_pct: startBatteryPct,
+            initial_o2_pct: startO2Pct,
+            allow_charging_pitstop: autoChargingStop,
+            custom_exclusion_zones: drawnZones,
+          },
+          controller.signal
+        );
+        if (!controller.signal.aborted) {
+          setRouteResult(
+            adaptEngineRouteToGui(res, {
+              start: startPOI,
+              end: endPOI,
+              loadoutKey,
+              weatherKey,
+              startBatteryPct,
+              startO2Pct,
+            })
+          );
+          setEngineOnline(true);
+        }
+      } catch (err) {
+        if (err.name === 'AbortError') return;
+        setEngineOnline(false);
+        setRouteResult(
+          computeMarswalkRoute({
+            start: startPOI,
+            end: endPOI,
+            hazardZones,
+            waypoints: waypointsData,
+            sciencePOIs,
+            loadoutKey,
+            weatherKey,
+            startBatteryPct,
+            startO2Pct,
+            useChargingStop: autoChargingStop ? 'auto' : false,
+            customExclusionZones: drawnZones,
+          })
+        );
+      } finally {
+        if (!controller.signal.aborted) {
+          setEngineLoading(false);
+        }
+      }
+    }, 120);
+
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [
     startPOI,
     endPOI,
@@ -508,7 +587,85 @@ export default function App() {
     startO2Pct,
     autoChargingStop,
     drawnZones,
+    startLstMinutes,
   ]);
+
+  // Emergency Abort Handler using engine.plan_emergency_abort()
+  const handleEmergencyAbort = async () => {
+    const activeCoord =
+      navMode === 'navigating' && routeResult?.pathCoords?.[navStepIdx]
+        ? routeResult.pathCoords[navStepIdx]
+        : [startPOI.lat, startPOI.lon];
+    const lstHours = ((startLstMinutes % 1440) + 1440) % 1440 / 60;
+    const engineMode = loadoutKey === 'rover' ? 'rover' : 'on_foot';
+    try {
+      setEngineLoading(true);
+      const res = await planEmergencyAbortApi({
+        current_location: activeCoord,
+        mode: engineMode,
+        departure_lst: lstHours,
+        initial_battery_pct: startBatteryPct,
+        initial_o2_pct: startO2Pct,
+        weather: weatherKey,
+      });
+      setRouteResult(
+        adaptEngineRouteToGui(res, {
+          start: { lat: activeCoord[0], lon: activeCoord[1], name: 'Abort Origin' },
+          end: {
+            lat: res.destination?.lat ?? startPOI.lat,
+            lon: res.destination?.lon ?? startPOI.lon,
+            name: res.target_shelter?.name || 'Nearest Shelter',
+          },
+          loadoutKey,
+          weatherKey,
+          startBatteryPct,
+          startO2Pct,
+        })
+      );
+      setEngineOnline(true);
+      showToast({
+        id: `abort-${Date.now()}`,
+        type: 'warning',
+        title: 'EMERGENCY ABORT ROUTE ACTIVE',
+        message: `Retreating to ${res.target_shelter?.name || 'nearest shelter'} (${res.total_dist_km ?? '?'} km).`,
+      });
+    } catch (err) {
+      showToast({
+        id: `abort-err-${Date.now()}`,
+        type: 'warning',
+        title: 'ABORT ENGINE UNAVAILABLE',
+        message: err.message,
+      });
+    } finally {
+      setEngineLoading(false);
+    }
+  };
+
+  // Optimal Departure Window Handler using engine.find_optimal_departure()
+  const handleFindOptimalDeparture = async () => {
+    const engineMode = loadoutKey === 'rover' ? 'rover' : 'on_foot';
+    try {
+      const res = await findOptimalDepartureApi({
+        start: [startPOI.lat, startPOI.lon],
+        destination: [endPOI.lat, endPOI.lon],
+        mode: engineMode,
+        weather: weatherKey,
+      });
+      setOptimalDepartureResult(res);
+      const best = res?.best_departure || res?.optimal_departure;
+      if (best?.lst_hours != null) {
+        setStartLstMinutes(Math.round(best.lst_hours * 60));
+        showToast({
+          id: `opt-lst-${Date.now()}`,
+          type: 'success',
+          title: `OPTIMAL DEPARTURE: ${best.departure_time || `${best.lst_hours}:00 LST`}`,
+          message: `Best solar/thermal margin selected (${best.battery_remaining_pct ?? '--'}% est. remaining).`,
+        });
+      }
+    } catch {
+      // ignore if offline
+    }
+  };
 
   // Reset live navigation simulation when traverse parameters change
   useEffect(() => {
@@ -1567,8 +1724,22 @@ export default function App() {
 
           <div className="hidden lg:flex items-center gap-3 pl-3 border-l border-[#242933] font-mono text-[11px] text-[#9da5b4]">
             <span className="inline-flex items-center gap-1.5">
-              <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
-              <span>SYS: NOMINAL</span>
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  engineLoading
+                    ? 'bg-[#f59e0b] animate-pulse'
+                    : engineOnline === true
+                      ? 'bg-[#22c55e]'
+                      : 'bg-[#ef4444]'
+                }`}
+              />
+              <span>
+                {engineLoading
+                  ? 'ENGINE: SOLVING'
+                  : engineOnline === true
+                    ? 'ENGINE: 20M DTM'
+                    : 'ENGINE: FALLBACK'}
+              </span>
             </span>
             <span className="inline-flex items-center gap-1.5">
               <span className={`w-1.5 h-1.5 rounded-full ${isNavFault ? 'bg-[#ef4444]' : 'bg-[#22c55e]'}`} />
@@ -1582,11 +1753,34 @@ export default function App() {
             <span className={curO2 < 25 ? 'text-[#ef4444] font-bold' : 'text-[#edf0f5] font-bold'}>
               O2 {curO2}%
             </span>
+            {routeResult?.rfComms && (
+              <span className="text-[#38bdf8]">
+                RF {routeResult.rfComms.total_comms_coverage_pct ?? '--'}%
+              </span>
+            )}
           </div>
         </div>
 
         {/* Weather Simulation Modes & Global Quick Tools */}
         <div className="flex items-center gap-1.5 flex-wrap">
+          <button
+            type="button"
+            onClick={handleFindOptimalDeparture}
+            title="Find optimal Martian Local Solar Time departure window"
+            className="min-h-[34px] px-2.5 py-1 rounded-[4px] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer border bg-[#0b0d11] border-[#242933] text-[#38bdf8] hover:border-[#38bdf8]"
+          >
+            <Clock className="w-3.5 h-3.5" />
+            <span>BEST LST</span>
+          </button>
+          <button
+            type="button"
+            onClick={handleEmergencyAbort}
+            title="Compute immediate emergency abort route to closest pressurized shelter"
+            className="min-h-[34px] px-2.5 py-1 rounded-[4px] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer border bg-[#ef4444]/15 border-[#ef4444] text-[#ef4444] hover:bg-[#ef4444]/25"
+          >
+            <AlertTriangle className="w-3.5 h-3.5" />
+            <span>ABORT</span>
+          </button>
           <div className="flex items-center bg-[#0b0d11] border border-[#242933] rounded-[4px] p-0.5 gap-0.5">
             {[
               { key: 'nominal', label: 'NOMINAL SOL', icon: Sun },
