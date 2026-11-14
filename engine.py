@@ -20,7 +20,6 @@ import sys
 import json
 import time
 import heapq
-import argparse
 import warnings
 import numpy as np
 
@@ -2057,20 +2056,53 @@ def get_charging_stations() -> list[dict]:
 def get_weather(sol: int | None = None) -> dict:
     """Returns Martian Environmental Dynamics Analyzer (MEDA) atmospheric conditions."""
     weather_path = os.path.join(BASE_DIR, "src", "data", "meda_weather.json")
-    if os.path.exists(weather_path):
-        try:
-            with open(weather_path, "r") as f:
-                return json.load(f)
-        except Exception:
-            pass
-    return {
-        "sol": sol if sol is not None else 1000,
+    default_weather = {
+        "sol": sol if sol is not None else 1133,
         "tau": 0.45,
         "temperature_c": -62.0,
         "pressure_pa": 612.0,
         "uv_index": 7.4,
         "dust_status": "nominal",
     }
+    if os.path.exists(weather_path):
+        try:
+            with open(weather_path, "r") as f:
+                data = json.load(f)
+                if isinstance(data, list) and len(data) > 0:
+                    matched = None
+                    if sol is not None:
+                        for entry in data:
+                            if str(entry.get("sol")) == str(sol):
+                                matched = dict(entry)
+                                break
+                    if matched is None:
+                        matched = dict(data[-1])
+
+                    if "tau" not in matched:
+                        matched["tau"] = 0.45
+                    if "dust_status" not in matched:
+                        matched["dust_status"] = "nominal"
+                    if "temperature_c" not in matched:
+                        t_max = matched.get("max_temp")
+                        t_min = matched.get("min_temp")
+                        if isinstance(t_max, (int, float)) and isinstance(t_min, (int, float)):
+                            matched["temperature_c"] = round((t_max + t_min) / 2.0, 1)
+                        else:
+                            matched["temperature_c"] = -52.0
+                    if "pressure_pa" not in matched:
+                        p = matched.get("pressure")
+                        if isinstance(p, (int, float)):
+                            matched["pressure_pa"] = float(p)
+                        else:
+                            matched["pressure_pa"] = 778.9
+                    if "uv_index" not in matched:
+                        matched["uv_index"] = 7.4
+                    return matched
+                elif isinstance(data, dict):
+                    return data
+        except Exception:
+            pass
+    return default_weather
 
 
 def get_engine_status() -> dict:
@@ -2090,454 +2122,37 @@ def get_engine_status() -> dict:
     }
 
 
-def run_http_server(port: int = 8000, host: str = "0.0.0.0"):
-    """Launches a lightweight REST API server for web clients and frontends."""
-    from flask import Flask, request, jsonify
-
-    app = Flask("dalil_mars_api")
-    sys.stderr.write("Pre-warming Dalil-Mars Tactical Engine for REST API...\n")
-    get_engine()
-
-    @app.route("/api/health", methods=["GET"])
-    def health():
-        return jsonify(get_engine_status())
-
-    @app.route("/api/waypoints", methods=["GET"])
-    def waypoints():
-        return jsonify({"waypoints": get_waypoints()})
-
-    @app.route("/api/weather", methods=["GET"])
-    def weather():
-        return jsonify(get_weather())
-
-    @app.route("/api/route", methods=["GET", "POST"])
-    def route_endpoint():
-        try:
-            if request.method == "POST":
-                data = request.get_json(force=True)
-            else:
-                data = request.args
-
-            start_val = data.get("start")
-            end_val = data.get("destination") or data.get("end")
-
-            if isinstance(start_val, str):
-                parts = [float(x.strip()) for x in start_val.split(",")]
-                start = (parts[0], parts[1])
-            elif isinstance(start_val, (list, tuple)):
-                start = (float(start_val[0]), float(start_val[1]))
-            elif "start_lat" in data and "start_lon" in data:
-                start = (float(data["start_lat"]), float(data["start_lon"]))
-            else:
-                return jsonify({"error": "Missing 'start' parameter (lat, lon)"}), 400
-
-            if isinstance(end_val, str):
-                parts = [float(x.strip()) for x in end_val.split(",")]
-                destination = (parts[0], parts[1])
-            elif isinstance(end_val, (list, tuple)):
-                destination = (float(end_val[0]), float(end_val[1]))
-            elif "end_lat" in data and "end_lon" in data:
-                destination = (float(data["end_lat"]), float(data["end_lon"]))
-            else:
-                return jsonify({"error": "Missing 'destination' parameter (lat, lon)"}), 400
-
-            mode = data.get("mode", "on_foot")
-            lst_val = float(data.get("lst", data.get("lst_hours", 12.0)))
-            weather_val = data.get("weather", "nominal")
-            batt_val = float(data.get("battery", data.get("initial_battery", 100.0)))
-            o2_val = float(data.get("o2", data.get("initial_o2", 100.0)))
-            climb_val = float(data["uphill_factor"]) if "uphill_factor" in data else None
-
-            res = plan_route(
-                start=start,
-                destination=destination,
-                mode=mode,
-                lst=lst_val,
-                weather=weather_val,
-                initial_battery=batt_val,
-                initial_o2=o2_val,
-                uphill_cost_factor=climb_val,
-            )
-            return jsonify(res)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-
-    @app.route("/api/tour", methods=["GET", "POST"])
-    def tour_endpoint():
-        try:
-            if request.method == "POST":
-                data = request.get_json(force=True)
-            else:
-                data = request.args
-
-            base_val = data.get("base") or data.get("base_location")
-            targets_val = data.get("targets") or data.get("target_landmarks")
-            mode = data.get("mode", "rover")
-            max_h = float(data.get("max_hours", data.get("max_duration_hours", 6.0)))
-            dwell_m = float(data.get("dwell_min", data.get("stay_duration_min", 25.0)))
-            lst_val = float(data.get("lst", data.get("lst_hours", 9.0)))
-            weather_val = data.get("weather", "nominal")
-            batt_val = float(data.get("battery", data.get("initial_battery", 100.0)))
-            o2_val = float(data.get("o2", data.get("initial_o2", 100.0)))
-
-            res = plan_science_tour(
-                base_location=base_val,
-                targets=targets_val,
-                max_duration_hours=max_h,
-                stay_duration_min=dwell_m,
-                mode=mode,
-                lst=lst_val,
-                weather=weather_val,
-                initial_battery=batt_val,
-                initial_o2=o2_val,
-            )
-            return jsonify(res)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-
-    @app.route("/api/departure", methods=["GET", "POST"])
-    def departure_endpoint():
-        try:
-            if request.method == "POST":
-                data = request.get_json(force=True)
-            else:
-                data = request.args
-
-            start_val = data.get("start")
-            end_val = data.get("destination") or data.get("end")
-
-            if isinstance(start_val, str) and "," in start_val:
-                parts = [float(x.strip()) for x in start_val.split(",")]
-                start = (parts[0], parts[1])
-            elif isinstance(start_val, (list, tuple)):
-                start = (float(start_val[0]), float(start_val[1]))
-            elif "start_lat" in data and "start_lon" in data:
-                start = (float(data["start_lat"]), float(data["start_lon"]))
-            else:
-                return jsonify({"error": "Missing 'start' parameter"}), 400
-
-            if isinstance(end_val, str) and "," in end_val:
-                parts = [float(x.strip()) for x in end_val.split(",")]
-                destination = (parts[0], parts[1])
-            elif isinstance(end_val, (list, tuple)):
-                destination = (float(end_val[0]), float(end_val[1]))
-            elif "end_lat" in data and "end_lon" in data:
-                destination = (float(data["end_lat"]), float(data["end_lon"]))
-            else:
-                return jsonify({"error": "Missing 'destination' parameter"}), 400
-
-            mode = data.get("mode", "rover")
-            weather_val = data.get("weather", "nominal")
-            batt_val = float(data.get("battery", data.get("initial_battery", 100.0)))
-            o2_val = float(data.get("o2", data.get("initial_o2", 100.0)))
-
-            res = find_optimal_departure(
-                start=start,
-                destination=destination,
-                mode=mode,
-                weather=weather_val,
-                initial_battery=batt_val,
-                initial_o2=o2_val,
-            )
-            return jsonify(res)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-
-    @app.route("/api/comms", methods=["GET", "POST"])
-    def comms_endpoint():
-        try:
-            if request.method == "POST":
-                data = request.get_json(force=True)
-            else:
-                data = request.args
-
-            loc = data.get("location") or data.get("coords")
-            if not loc:
-                lat = float(data.get("lat", 0.0))
-                lon = float(data.get("lon", 0.0))
-                loc = (lat, lon)
-            mode = data.get("mode", "rover")
-
-            res = evaluate_rf_comms(loc, mode=mode)
-            return jsonify(res)
-        except Exception as e:
-            return jsonify({"error": str(e)}), 500
-
-    print(f"Dalil-Mars REST API Server listening on http://{host}:{port}")
-    print("Endpoints:")
-    print("  - GET  /api/health")
-    print("  - GET  /api/waypoints")
-    print("  - GET  /api/weather")
-    print("  - POST /api/route")
-    print("  - POST /api/tour")
-    print("  - POST /api/departure")
-    print("  - POST /api/comms")
-    app.run(host=host, port=port, debug=False)
-
-
-# =============================================================================
-# 5. CLI & DEMO HARNESS
-# =============================================================================
-def main():
-    parser = argparse.ArgumentParser(description="Dalil-Mars Martian Tactical Pathfinding Engine & API")
-    parser.add_argument("--demo", action="store_true", help="Run 3 standard NASA mission test scenarios.")
-    parser.add_argument("--start", nargs=2, type=float, metavar=("LAT", "LON"), help="Start coordinate (lat, lon).")
-    parser.add_argument("--end", nargs=2, type=float, metavar=("LAT", "LON"), help="Destination coordinate (lat, lon).")
-    parser.add_argument("--abort", nargs=2, type=float, metavar=("LAT", "LON"), help="Emergency retreat coordinates: LAT LON (Apollo/Artemis Rule #1).")
-    parser.add_argument("--tour", action="store_true", help="Plan optimal multi-stop science exploration tour.")
-    parser.add_argument("--targets", nargs="+", help="Specific landmark names or coordinates to include in science tour.")
-    parser.add_argument("--max-hours", type=float, default=6.0, help="Max mission time budget in hours for science tour (default 6.0).")
-    parser.add_argument("--dwell-min", type=float, default=25.0, help="Dwell/science time in minutes per stop (default 25.0).")
-    parser.add_argument("--find-departure", action="store_true", help="Analyze diurnal solar conditions to find optimal departure window.")
-    parser.add_argument("--comms", nargs=2, type=float, metavar=("LAT", "LON"), help="Evaluate RF line-of-sight and comms link from coordinates: LAT LON.")
-    parser.add_argument("--mode", choices=["on_foot", "rover"], default="on_foot", help="Transportation mode.")
-    parser.add_argument("--lst", type=float, default=14.0, help="Martian Local Solar Time (hours: 0.0 to 24.0).")
-    parser.add_argument("--weather", choices=["nominal", "dust_storm", "solar_storm"], default="nominal", help="Weather state.")
-    parser.add_argument("--battery", type=float, default=100.0, help="Starting battery percentage.")
-    parser.add_argument("--uphill-factor", type=float, default=None, help="Uphill climb cost penalty multiplier.")
-    parser.add_argument("--json", action="store_true", help="Output pure JSON to stdout.")
-    parser.add_argument("--waypoints", action="store_true", help="Output all cataloged Jezero waypoints and exit.")
-    parser.add_argument("--serve", action="store_true", help="Launch HTTP REST API microservice server.")
-    parser.add_argument("--port", type=int, default=8000, help="Port for HTTP server (default 8000).")
-
-    args = parser.parse_args()
-
-    if args.serve:
-        run_http_server(port=args.port)
-        return
-
-    if args.waypoints:
-        print(json.dumps(get_waypoints(), indent=2))
-        return
-
-    engine = get_engine()
-
-    if args.demo or (not args.start and not args.end and not args.abort and not args.tour and not args.find_departure and not args.comms):
-        print("\n" + "=" * 65)
-        print(" RUNNING 3 DALIL-MARS MISSION TEST SCENARIOS")
-        print("=" * 65)
-
-        # Scenario 1: Short Direct Walk (Hab Alpha -> Kodiak Butte)
-        print("\n[SCENARIO 1: Nominal EVA Walk - Hab Alpha -> Kodiak Butte]")
-        res1 = engine.plan_route(
-            start=(18.4447, 77.4508),
-            destination=(18.4520, 77.4410),
-            mode="on_foot",
-            lst_hours=13.5,
-            weather="nominal",
-            initial_battery_pct=100.0,
-        )
-        print(f"Status: {res1['status']} | Dist: {res1['total_dist_km']} km | Time: {res1['duration_min']} min")
-        print(f"Slope Safety: {res1['summary']['slope_safety_rating']} | Max: {res1['summary']['max_slope_deg']}° | Red Avoided: {res1['summary']['red_nodes_avoided_count']}")
-        print(f"Battery Drain: {res1['battery_used_pct']}% | Remaining: {res1['battery_remaining_pct']}%")
-        print(f"Sunlit: {res1['solar_ephemeris']['sunlit_pct']}% | Shadow: {res1['solar_ephemeris']['shadow_pct']}% | Dose: {res1['radiation_dose_mgy']} mGy")
-
-        # Scenario 2: Solar Rover in Canyon at Low Sun (16:30 LST)
-        print("\n[SCENARIO 2: Solar-Powered Rover Trek at Late Afternoon (LST 16.5)]")
-        res2 = engine.plan_route(
-            start=(18.4580, 77.4320),
-            destination=(18.4850, 77.3880),
-            mode="rover",
-            lst_hours=16.5,
-            weather="nominal",
-            initial_battery_pct=85.0,
-        )
-        print(f"Status: {res2['status']} | Dist: {res2['total_dist_km']} km | Time: {res2['duration_min']} min")
-        print(f"Slope Safety: {res2['summary']['slope_safety_rating']} | Max: {res2['summary']['max_slope_deg']}° | Red Avoided: {res2['summary']['red_nodes_avoided_count']}")
-        print(f"Sun Elevation: {res2['solar_ephemeris']['sun_elevation_deg']}° | Sun Azimuth: {res2['solar_ephemeris']['sun_azimuth_deg']}°")
-        print(f"Sunlit Corridor: {res2['solar_ephemeris']['sunlit_pct']}% | Shadowed: {res2['solar_ephemeris']['shadow_pct']}% | Net Batt: {res2['battery_remaining_pct']}%")
-
-        # Scenario 3: Cross-Crater Low Battery Pit-Stop (Hab Alpha -> Neretva Vallis at 25% battery in dust storm)
-        print("\n[SCENARIO 3: Long Cross-Crater Trek with 25% Battery in Dust Storm (Auto Pit-Stop)]")
-        res3 = engine.plan_route(
-            start=(18.4447, 77.4508),
-            destination=(18.4875, 77.3190),
-            mode="rover",
-            lst_hours=17.0,
-            weather="dust_storm",
-            initial_battery_pct=25.0,
-        )
-        print(f"Status: {res3['status']} | Total Dist: {res3['total_dist_km']} km | Total Time: {res3['duration_min']} min")
-        print(f"Slope Safety: {res3['summary']['slope_safety_rating']} | Red Avoided: {res3['summary']['red_nodes_avoided_count']}")
-        if res3["charging_station"]:
-            print(f"Auto-Routed via Virtual Charging Base: {res3['charging_station']['name']}")
-        print(f"Battery Remaining on Arrival: {res3['battery_remaining_pct']}% (Safe Margin Maintained)")
-        for st in res3["navigation_steps"]:
-            print(f"  Step {st['step']}: {st['instruction']} ({st['detail']})")
-
-    elif args.find_departure:
-        if not args.start or not args.end:
-            print("Error: --find-departure requires both --start LAT LON and --end LAT LON.")
-            return
-
-        res = find_optimal_departure(
-            start=tuple(args.start),
-            destination=tuple(args.end),
-            mode=args.mode,
-            weather=args.weather,
-            initial_battery_pct=args.battery,
-            uphill_penalty=args.uphill_factor,
-        )
-
-        if args.json:
-            print(json.dumps(res, indent=2))
-        else:
-            w = res["recommended_window"]
-            b = res["best_departure"]
-            print("\n" + "=" * 65)
-            print(" DALIL-MARS DIURNAL DEPARTURE WINDOW OPTIMIZER")
-            print("=" * 65)
-            print(f"  Mode:                {res['mode'].upper()}")
-            print(f"  Traverse Distance:   {res['total_distance_km']} km ({res['duration_formatted']})")
-            print(f"  Recommended Window:  {w['start_time']} to {w['end_time']} ({w['window_duration_hours']} hours duration)")
-            print(f"  Peak Departure:      {b['departure_time']} (Arrival: {b['arrival_time']})")
-            print(f"  Arrival Battery:     {b['battery_remaining_pct']}% (Harvests +{b['solar_energy_harvested_pct']}% solar)")
-            print(f"  Sun Elevation:       Depart: {b['departure_sun_elevation_deg']}° | Arrive: {b['arrival_sun_elevation_deg']}°")
-            print(f"  Mean Solar Flux:     {b['average_solar_flux_wm2']} W/m²")
-            print("\n  Diurnal Timeline Analysis:")
-            print("  " + "-" * 67)
-            print(f"  {'Departure':<12} {'Arrival':<12} {'Dep Sun':<9} {'Arr Sun':<9} {'Batt %':<8} {'Status'}")
-            print("  " + "-" * 67)
-            for sl in res["departure_timeline"]:
-                print(f"  {sl['departure_time']:<12} {sl['arrival_time']:<12} {sl['departure_sun_elevation_deg']:>6.1f}°  {sl['arrival_sun_elevation_deg']:>6.1f}°  {sl['battery_remaining_pct']:>5.1f}%  {sl['status']}")
-            print("  " + "-" * 67)
-            print("=" * 65 + "\n")
-
-    elif args.start and args.end:
-        res = plan_route(
-            start=tuple(args.start),
-            destination=tuple(args.end),
-            mode=args.mode,
-            lst=args.lst,
-            weather=args.weather,
-            initial_battery=args.battery,
-            uphill_cost_factor=args.uphill_factor,
-        )
-
-        if args.json:
-            print(json.dumps(res, indent=2))
-        else:
-            s = res["summary"]
-            sol = res["solar_context"]
-            print("\n" + "=" * 65)
-            print(f" DALIL-MARS MISSION ROUTE RESULT [{s['status']}]")
-            print("=" * 65)
-            print(f"  Mode:                {s['mode'].upper()}")
-            print(f"  Total Distance:      {s['total_distance_km']} km (Direct: {s['direct_distance_km']} km)")
-            print(f"  Travel Duration:     {s['duration_formatted']} ({s['duration_min']} min)")
-            print(f"  Elevation Ascent:    +{s['elevation_gain_m']} m (Descent: -{s['elevation_loss_m']} m)")
-            print(f"  Uphill Traverse:     {s['uphill_distance_km']} km (Downhill: {s['downhill_distance_km']} km, Flat: {s['flat_distance_km']} km)")
-            print(f"  Max / Avg Slope:     {s['max_slope_deg']}° / {s['avg_slope_deg']}°")
-            print(f"  Slope Safety:        {s['slope_safety_rating']}")
-            print(f"  Red Slopes Avoided:  {s['red_nodes_avoided_count']} nodes blocked")
-            print(f"  Battery:             {s['battery_used_pct']}% used -> {s['battery_remaining_pct']}% remaining")
-            print(f"  Oxygen (xEMU):       {s['o2_used_liters']} L used ({s['o2_used_pct']}%) -> {s['o2_remaining_pct']}% remaining")
-            print(f"  Radiation Dose:      {s['radiation_dose_mgy']} mGy")
-            print(f"  Solar Context:       {sol['lst_formatted']} | Sun: {sol['sun_elevation_deg']}° elev, {sol['sun_azimuth_deg']}° az")
-            print(f"  Surface Lighting:    {s['sunlit_pct']}% sunlit, {s['shadow_pct']}% shadowed (tau={sol['optical_depth_tau']})")
-            if s["pitstop_occurred"]:
-                print(f"  Charging Pit-Stop:   Docked at {s['charging_station_name']}")
-            if "walkback_horizon" in s:
-                wb = s["walkback_horizon"]
-                print(f"  Walkback Horizon:    {wb['status']} (Min Batt Margin: {wb['minimum_walkback_battery_margin_pct']}%, Min O2 Margin: {wb['minimum_walkback_o2_margin_pct']}%)")
-                if wb.get("primary_abort_shelter"):
-                    print(f"  Abort Shelter:       {wb['primary_abort_shelter']}")
-            if "rf_comms" in s:
-                rf = s["rf_comms"]
-                print(f"  RF Line-of-Sight:    {rf['status']} ({rf['total_comms_coverage_pct']}% coverage, Direct Hab: {rf['direct_hab_coverage_pct']}%, Relay: {rf['relay_coverage_pct']}%)")
-                if rf["blackout_distance_km"] > 0:
-                    print(f"  RF Blackout Shadow:  {rf['blackout_distance_km']} km in terrain shadow (Longest: {rf['longest_continuous_blackout_km']} km)")
-            print("\n  Turn-by-turn Navigation:")
-            for step in res["navigation_steps"]:
-                print(f"    {step['step']}. {step['instruction']} - {step['detail']}")
-            print("=" * 65 + "\n")
-
-    elif args.abort:
-        res = plan_emergency_abort(
-            current_location=tuple(args.abort),
-            mode=args.mode,
-            lst_hours=args.lst,
-            weather=args.weather,
-            initial_battery_pct=args.battery,
-        )
-
-        if args.json:
-            print(json.dumps(res, indent=2))
-        else:
-            target = res.get("abort_target_shelter", {})
-            s = res["summary"]
-            print("\n" + "=" * 65)
-            print(" [EMERGENCY ABORT PROTOCOL ACTIVATED - APOLLO/ARTEMIS EVA RULE #1]")
-            print("=" * 65)
-            print(f"  Target Shelter:      {target.get('name', 'Nearest Shelter')}")
-            print(f"  Shelter Location:    {target.get('lat', 0.0):.6f}° N, {target.get('lon', 0.0):.6f}° E")
-            print(f"  Retreat Distance:    {s['total_distance_km']} km")
-            print(f"  Estimated Ingress:   {s['duration_formatted']} ({s['duration_min']} min)")
-            print(f"  Battery on Arrival:  {s['battery_remaining_pct']}% (Consumes {s['battery_used_pct']}%)")
-            print(f"  Oxygen on Arrival:   {s['o2_remaining_pct']}% (Consumes {s['o2_used_pct']}%)")
-            print(f"  Max Slope on Route:  {s['max_slope_deg']}° (Rating: {s['slope_safety_rating']})")
-            print("\n  Emergency Navigation Vector:")
-            for step in res["navigation_steps"]:
-                print(f"    {step['step']}. {step['instruction']} - {step['detail']}")
-            print("=" * 65 + "\n")
-
-    elif args.tour:
-        base_loc = tuple(args.start) if args.start else None
-        res = plan_science_tour(
-            base_location=base_loc,
-            targets=args.targets,
-            max_duration_hours=args.max_hours,
-            stay_duration_min=args.dwell_min,
-            mode=args.mode,
-            lst_hours=args.lst,
-            weather=args.weather,
-            initial_battery_pct=args.battery,
-            uphill_penalty=args.uphill_factor,
-        )
-
-        if args.json:
-            print(json.dumps(res, indent=2))
-        else:
-            s = res["summary"]
-            print("\n" + "=" * 65)
-            print(f" DALIL-MARS MULTI-STOP SCIENCE TOUR [{s['status']}]")
-            print("=" * 65)
-            print(f"  Mode:                {s['mode'].upper()}")
-            print(f"  Base Camp:           {res['base_camp']['name']}")
-            print(f"  Targets Visited:     {res['targets_visited_count']} science stops ({res['total_stops_count']} total legs)")
-            print(f"  Total Expedition:    {s['total_mission_duration_formatted']} ({s['total_mission_duration_hours']} h)")
-            print(f"  Traverse Time:       {s['travel_time_hours']} h | Science Sampling: {s['science_dwell_hours']} h")
-            print(f"  Total Distance:      {s['total_distance_km']} km")
-            print(f"  Elevation Change:    +{s['elevation_gain_m']} m / -{s['elevation_loss_m']} m (Max Slope: {s['max_slope_deg']}°)")
-            print(f"  Red Slopes Avoided:  {s['total_red_nodes_avoided']} nodes")
-            print(f"  Battery on Return:   {s['battery_remaining_pct']}% (Used: {s['battery_used_pct']}%)")
-            print(f"  Oxygen on Return:    {s['o2_remaining_pct']}% (Used: {s['o2_used_pct']}%)")
-            print(f"  Walkback Margins:    Min Batt: {s['min_walkback_battery_margin_pct']}% | Min O2: {s['min_walkback_o2_margin_pct']}% (Safe: {s['safe_abort_maintained']})")
-            print("\n  Mission Stop-by-Stop Itinerary:")
-            for st in res["ordered_stops"]:
-                dep = f" -> Depart {st['departure_lst']}" if st["departure_lst"] else ""
-                dwell = f" [{st['dwell_time_min']}m dwell]" if st["dwell_time_min"] > 0 else ""
-                print(f"    Stop {st['stop_index']}: {st['name']:<35} Arrive {st['arrival_lst']}{dep}{dwell} | Batt: {st['battery_arrival_pct']}%")
-                print(f"            {st['notes']}")
-            print("=" * 65 + "\n")
-
-    elif args.comms:
-        res = evaluate_rf_comms(tuple(args.comms), mode=args.mode)
-        if args.json:
-            print(json.dumps(res, indent=2))
-        else:
-            print("\n" + "=" * 65)
-            print(" DALIL-MARS RF LINE-OF-SIGHT & LINK BUDGET DIAGNOSTIC")
-            print("=" * 65)
-            print(f"  Location:            {args.comms[0]:.6f}° N, {args.comms[1]:.6f}° E")
-            print(f"  RF Status:           {res['status']} (Signal Quality: {res['signal_quality']})")
-            print(f"  Active Link:         {res['active_link']}")
-            print(f"  Direct Hab LOS:      {res['direct_hab_los']}")
-            print(f"  Distance to Hab:     {res['distance_to_hab_km']} km")
-            if res["path_loss_db"] is not None:
-                print(f"  Path Loss (FSPL):    {res['path_loss_db']} dB (at 437 MHz UHF)")
-            print("=" * 65 + "\n")
-
-
-if __name__ == "__main__":
-    main()
+__all__ = [
+    # Core Engine & Physics Classes
+    "DalilMarsEngine",
+    "SolarPhysics",
+    "CommsPhysics",
+    "MOBILITY_PROFILES",
+    "WEATHER_MODELS",
+    # Backward-Compatibility Class Aliases
+    "MartianTacticalEngine",
+    "DalilMarsRouter",
+    "MartianRouter",
+    # Singleton Access & Diagnostics
+    "get_engine",
+    "get_engine_status",
+    # Mission Planning Library Functions
+    "plan_route",
+    "route",
+    "plan_mission_route",
+    "plan_emergency_abort",
+    "abort",
+    "plan_science_tour",
+    "plan_tour",
+    "tour",
+    "find_optimal_departure",
+    "optimize_departure_window",
+    "departure_window",
+    "evaluate_rf_comms",
+    "evaluate_comms",
+    "comms",
+    # Environmental & Landmark Telemetry
+    "get_waypoints",
+    "get_charging_stations",
+    "get_weather",
+]

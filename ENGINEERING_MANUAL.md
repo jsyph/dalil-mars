@@ -23,9 +23,9 @@
    - [5.2 Multi-Stop Science Tour Optimizer (Budgeted Orienteering / TSP)](#52-multi-stop-science-tour-optimizer-budgeted-orienteering--tsp)
    - [5.3 Diurnal Departure Window Optimizer](#53-diurnal-departure-window-optimizer)
    - [5.4 RF Line-of-Sight Comms Shadow Mapping](#54-rf-line-of-sight-comms-shadow-mapping)
-6. [Programmatic Integration Guide (Python SDK)](#6-programmatic-integration-guide-python-sdk)
-7. [REST API Microservice Integration](#7-rest-api-microservice-integration)
-8. [CLI Tooling & Batch Scripting Reference](#8-cli-tooling--batch-scripting-reference)
+6. [Programmatic Integration Guide (Python Library)](#6-programmatic-integration-guide-python-library)
+7. [System Integration Patterns (Robotics, Autonomous Navigation & Mission Backends)](#7-system-integration-patterns-robotics-autonomous-navigation--mission-backends)
+8. [Full Python Library API & Type Signatures Reference](#8-full-python-library-api--type-signatures-reference)
 9. [Telemetry & GeoJSON Output Schemas](#9-telemetry--geojson-output-schemas)
 10. [Performance Benchmarks & Memory Footprint](#10-performance-benchmarks--memory-footprint)
 11. [Troubleshooting & Diagnostics](#11-troubleshooting--diagnostics)
@@ -57,14 +57,19 @@ Unlike generic pathfinders that treat terrain as an abstract cost grid, Dalil-Ma
 |  7. Multi-Stop Science Tour Optimizer (Branch-and-Bound Orienteering Solver)      |
 |  8. Diurnal Departure Optimizer (24-step solar insolation & thermal sweep)        |
 +-----------------------------------------------------------------------------------+
-       |                                      |                               |
-       v                                      v                               v
-[ Python API Functions ]            [ REST API Microservice ]        [ CLI Harness ]
-  plan_route()                        GET/POST /api/route              --start --end
-  plan_emergency_abort()              POST     /api/tour               --abort LAT LON
-  plan_science_tour()                 POST     /api/departure          --tour --max-hours
-  find_optimal_departure()            GET/POST /api/comms              --find-departure
-  evaluate_rf_comms()                 GET      /api/waypoints          --comms LAT LON
+                                         |
+                                         v
+                      [ Pure Python Library API: import engine ]
+    +-------------------------------------------------------------------------+
+    | • plan_route()                   • plan_emergency_abort()               |
+    | • plan_science_tour()            • find_optimal_departure()              |
+    | • evaluate_rf_comms()            • get_waypoints() / get_weather()      |
+    +-------------------------------------------------------------------------+
+                                         |
+         +-------------------------------+-------------------------------+
+         |                               |                               |
+         v                               v                               v
+[ Autonomous Rover (ROS 2 / Nav2) ] [ Mission Control Backend ] [ Science Campaign Planner ]
 ```
 
 ---
@@ -339,7 +344,7 @@ Hab Alpha Mast (40m)
 
 ---
 
-## 6. Programmatic Integration Guide (Python SDK)
+## 6. Programmatic Integration Guide (Python Library)
 
 All functions are available directly from `engine.py`.
 
@@ -449,85 +454,327 @@ print(f"Direct Hab LOS: {comms_result['direct_hab_los']}")
 
 ---
 
-## 7. REST API Microservice Integration
+## 7. System Integration Patterns (Robotics, Autonomous Navigation & Mission Backends)
 
-Launch the built-in HTTP REST server:
-```bash
-python3 engine.py --serve --port 8000
+The Dalil-Mars engine is designed as an embedded, zero-overhead algorithmic library that seamlessly integrates into onboard robotic autonomy architectures, real-time safety watchdogs, and mission control planning pipelines.
+
+### 7.1 Autonomous Surface Vehicle / Rover Integration (ROS 2 / Nav2)
+
+In an autonomous Mars rover stack (e.g. running ROS 2 Jazzy/Humble with Nav2), `engine.py` functions as the **Global Macro-Planner**. It evaluates terrain hazards, solar insolation, and battery budgets across kilometers of terrain, passing a kinematically feasible global corridor to local motion planners (e.g., TEB Local Planner, MPPI, or DWB Controller).
+
+```python
+"""
+Example ROS 2 Global Planner Action Server Integration.
+Wraps engine.plan_route to generate global Nav2 Path messages with slope awareness.
+"""
+import engine
+
+class MarsNav2GlobalPlanner:
+    def __init__(self, mode: str = "rover", default_lst: float = 11.5):
+        self.mode = mode
+        self.lst = default_lst
+        self.engine_status = engine.get_engine_status()
+        print(f"[NAV2] Dalil-Mars Global Planner Initialized: {self.engine_status['status']}")
+
+    def compute_plan(self, current_pose: tuple[float, float], goal_pose: tuple[float, float], battery_pct: float = 100.0) -> dict:
+        """
+        Calculates terrain-safe path between two geographic coordinates.
+        current_pose: (lat, lon)
+        goal_pose: (lat, lon)
+        """
+        route_plan = engine.plan_route(
+            start=current_pose,
+            destination=goal_pose,
+            mode=self.mode,
+            lst_hours=self.lst,
+            initial_battery_pct=battery_pct,
+            allow_charging_pitstop=True,
+        )
+
+        if route_plan["status"] == "FAILED":
+            raise RuntimeError(f"Global planning failed: {route_plan.get('error', 'Unknown obstacle blockage')}")
+
+        summary = route_plan["summary"]
+        features = route_plan["geojson"]["features"]
+        path_geometry = features[0]["geometry"]["coordinates"]  # [[lon, lat], ...]
+
+        # Generate waypoint list with altitude, slope, and solar exposure
+        waypoints = []
+        for lon, lat in path_geometry:
+            waypoints.append({
+                "latitude": lat,
+                "longitude": lon,
+            })
+
+        return {
+            "success": True,
+            "waypoints": waypoints,
+            "total_distance_km": summary["total_distance_km"],
+            "expected_duration_min": summary["duration_min"],
+            "max_slope_deg": summary["max_slope_deg"],
+            "battery_arrival_pct": summary["battery_remaining_pct"],
+            "walkback_safe": summary["walkback_horizon"]["safe_horizon_maintained"],
+        }
 ```
 
-### Endpoints Overview
+### 7.2 Surface Mission Control & Crew Safety Watchdog Loop
 
-| Method | Endpoint | Description | Request Body / Query Params |
-| :--- | :--- | :--- | :--- |
-| `GET` | `/api/health` | Engine metadata and status | None |
-| `GET` | `/api/waypoints` | Catalog of Jezero POIs and Shelters | None |
-| `GET` | `/api/weather` | Current MEDA atmospheric telemetry | None |
-| `POST` | `/api/route` | Compute point-to-point route | `{"start": [lat, lon], "destination": [lat, lon], "mode": "rover", "lst": 14.0}` |
-| `POST` | `/api/tour` | Plan multi-stop science tour | `{"base": [lat, lon], "targets": [...], "max_hours": 6.0, "dwell_min": 25.0}` |
-| `POST` | `/api/departure` | Find optimal departure window | `{"start": [lat, lon], "destination": [lat, lon], "mode": "rover"}` |
-| `GET` | `/api/comms` | RF line-of-sight diagnostic | `?lat=18.4520&lon=77.4410&mode=rover` |
+For human EVA operations or remote rover operations, a safety watchdog monitors telemetry in real-time. If life-support or battery reserves breach the Apollo/Artemis Rule #1 walkback boundary, or if an impending dust storm threatens power equilibrium, the system automatically triggers `engine.plan_emergency_abort()`:
 
-### cURL Examples
+```python
+"""
+Example Telemetry Watchdog Loop with Instantaneous Emergency Abort Trigger.
+"""
+import engine
 
-#### Route Query
-```bash
-curl -X POST http://localhost:8000/api/route \
-  -H "Content-Type: application/json" \
-  -d '{
-    "start": [18.4447, 77.4508],
-    "destination": [18.4520, 77.4410],
-    "mode": "rover",
-    "lst": 13.5
-  }'
+class EvaSafetyWatchdog:
+    def __init__(self, crew_callsign: str = "EVA-1"):
+        self.crew_callsign = crew_callsign
+        self.abort_triggered = False
+
+    def evaluate_telemetry_tick(self, telemetry: dict) -> dict:
+        """
+        telemetry: {
+            "lat": 18.4580,
+            "lon": 77.4320,
+            "mode": "on_foot",
+            "battery_pct": 34.0,
+            "o2_pct": 38.0,
+            "lst_hours": 15.2,
+            "weather": "dust_storm"
+        }
+        """
+        loc = (telemetry["lat"], telemetry["lon"])
+        mode = telemetry.get("mode", "on_foot")
+        batt = telemetry["battery_pct"]
+        o2 = telemetry["o2_pct"]
+
+        # Check RF comms link status
+        comms = engine.evaluate_rf_comms(loc, mode=mode)
+
+        # Check abort threshold (e.g. O2 < 35% or battery < 30% or storm alert)
+        if o2 < 35.0 or batt < 30.0 or telemetry["weather"] == "dust_storm":
+            print(f"[ALERT] Critical threshold reached for {self.crew_callsign}! Computing emergency abort...")
+            abort_plan = engine.plan_emergency_abort(
+                current_location=loc,
+                mode=mode,
+                initial_battery_pct=batt,
+                initial_o2_pct=o2,
+                weather=telemetry["weather"],
+                lst_hours=telemetry["lst_hours"],
+            )
+            target = abort_plan["abort_target_shelter"]
+            summary = abort_plan["summary"]
+            return {
+                "action": "EXECUTE_EMERGENCY_ABORT",
+                "shelter": target["name"],
+                "shelter_coords": (target["lat"], target["lon"]),
+                "distance_km": summary["total_distance_km"],
+                "eta_minutes": summary["duration_min"],
+                "battery_on_ingress_pct": summary["battery_remaining_pct"],
+                "o2_on_ingress_pct": summary["o2_remaining_pct"],
+                "comms_status": comms["status"],
+                "path_geojson": abort_plan["geojson"],
+            }
+
+        return {
+            "action": "PROCEED",
+            "comms_status": comms["status"],
+            "comms_active_link": comms["active_link"],
+        }
 ```
 
-#### Multi-Stop Science Tour Query
-```bash
-curl -X POST http://localhost:8000/api/tour \
-  -H "Content-Type: application/json" \
-  -d '{
-    "base": [18.444627, 77.450886],
-    "max_hours": 6.0,
-    "dwell_min": 25.0,
-    "mode": "rover"
-  }'
+### 7.3 Multi-Target Science Campaign Scheduler & Batch Geospatial Pipeline
+
+For mission science teams, Dalil-Mars can schedule multi-day exploration campaigns or run batch Monte-Carlo traverses across hundreds of coordinates:
+
+```python
+"""
+Example Batch Science Tour & Monte-Carlo Exploration Pipeline.
+"""
+import json
+import engine
+
+def run_science_campaign(max_sol_hours: float = 6.5):
+    # Retrieve all cataloged Jezero science landmarks
+    all_pois = engine.get_waypoints()
+    science_targets = [poi["name"] for poi in all_pois if not poi.get("isChargingStation")][:5]
+    hab_alpha = (18.444627, 77.450886)
+
+    print(f"Planning tour across targets: {science_targets}")
+    tour = engine.plan_science_tour(
+        base_location=hab_alpha,
+        targets=science_targets,
+        max_duration_hours=max_sol_hours,
+        stay_duration_min=20.0,
+        mode="rover",
+        lst_hours=9.5,
+    )
+
+    print(f"Tour Status: {tour['status']}")
+    print(f"Visited: {tour['targets_visited_count']} stops | Distance: {tour['total_tour_distance_km']} km")
+
+    # Export tour GeoJSON directly for GIS mapping
+    with open("jezero_campaign_plan.geojson", "w") as f:
+        json.dump(tour["geojson"], f, indent=2)
+    print("Saved campaign geometry to jezero_campaign_plan.geojson")
 ```
 
 ---
 
-## 8. CLI Tooling & Batch Scripting Reference
+## 8. Full Python Library API & Type Signatures Reference
 
-The engine includes a full CLI interface for terminal workflows, automated testing, and CI/CD pipelines:
+`engine.py` exports a clean, strongly-typed public API defined via `__all__`.
 
-```bash
-# 1. Run 3 standard NASA mission test scenarios
-python3 engine.py --demo
+### 8.1 Module Imports & Exports
 
-# 2. Point-to-point route planning with text summary
-python3 engine.py --start 18.4447 77.4508 --end 18.4875 77.3190 --mode rover --lst 14.0
+```python
+import engine
 
-# 3. Output pure GeoJSON to stdout (pipe into jq or file)
-python3 engine.py --start 18.4447 77.4508 --end 18.4520 77.4410 --json > mission_route.json
-
-# 4. Emergency abort retreat (Apollo/Artemis Rule #1)
-python3 engine.py --abort 18.4580 77.4320 --mode on_foot
-
-# 5. Multi-stop science tour optimization
-python3 engine.py --tour --max-hours 6.0 --mode rover
-
-# 6. Specific science target tour
-python3 engine.py --tour --targets "Kodiak Delta Remnant" "Belva Crater Rim" --max-hours 8.0
-
-# 7. Diurnal departure window analysis
-python3 engine.py --start 18.4447 77.4508 --end 18.4875 77.3190 --find-departure --mode rover
-
-# 8. RF line-of-sight diagnostic from coordinates
-python3 engine.py --comms 18.4875 77.3190 --mode rover
-
-# 9. Dump Jezero cataloged waypoints
-python3 engine.py --waypoints
+# Or import specific functions and classes
+from engine import (
+    plan_route,
+    plan_emergency_abort,
+    plan_science_tour,
+    find_optimal_departure,
+    evaluate_rf_comms,
+    get_waypoints,
+    get_charging_stations,
+    get_weather,
+    get_engine,
+    get_engine_status,
+    DalilMarsEngine,
+    SolarPhysics,
+    CommsPhysics,
+    MOBILITY_PROFILES,
+    WEATHER_MODELS,
+)
 ```
+
+### 8.2 Function Specifications
+
+#### `plan_route(...)`
+Computes an optimal, hazard-avoiding surface traverse between two coordinates.
+```python
+def plan_route(
+    start: tuple[float, float] | list[float] | dict | str,
+    destination: tuple[float, float] | list[float] | dict | str,
+    mode: str = "on_foot",
+    lst_hours: float = 14.0,
+    weather: str = "nominal",
+    initial_battery_pct: float = 100.0,
+    initial_o2_pct: float = 100.0,
+    allow_charging_pitstop: bool = True,
+    uphill_penalty: float | None = None,
+    sun_position: tuple[float, float] | None = None,
+    tau: float | None = None,
+    radiation_spe: bool = False,
+    **kwargs,
+) -> dict
+```
+* **Parameters:**
+  * `start`: Source coordinates `(lat, lon)`, `[lat, lon]`, `{"lat": lat, "lon": lon}`, or landmark name string (e.g. `"Hab Alpha"`).
+  * `destination`: Destination coordinates or landmark name string.
+  * `mode`: Mobility mode: `"on_foot"` (xEMU EVA suit) or `"rover"` (Perseverance-class rocker-bogie).
+  * `lst_hours`: Mars Local Solar Time (decimal hours, `0.0` to `24.0`). Default `14.0`.
+  * `weather`: Atmospheric scenario: `"nominal"`, `"dust_storm"`, or `"solar_storm"`.
+  * `initial_battery_pct`: Battery charge on departure ($0.0 - 100.0\%$).
+  * `initial_o2_pct`: Oxygen reserve on departure ($0.0 - 100.0\%$, relevant for `on_foot`).
+  * `allow_charging_pitstop`: If `True`, permits intermediate waypoint rerouting through charging shelters.
+  * `uphill_penalty`: Custom scalar multiplier for gravitational slope resistance.
+* **Returns:** `dict` containing `"status"`, `"mode"`, `"start"`, `"destination"`, `"summary"`, `"geojson"`, and `"intermediate_stops"`.
+* **Aliases:** `route(...)`, `plan_mission_route(...)`.
+
+#### `plan_emergency_abort(...)`
+Calculates an immediate, highest-priority escape route to the nearest safe habitat or storm shelter under Apollo/Artemis Rule #1.
+```python
+def plan_emergency_abort(
+    current_location: tuple[float, float] | list[float] | dict | str,
+    mode: str = "on_foot",
+    lst_hours: float = 14.0,
+    initial_battery_pct: float = 100.0,
+    initial_o2_pct: float = 100.0,
+    weather: str = "nominal",
+    **kwargs,
+) -> dict
+```
+* **Parameters:**
+  * `current_location`: Current coordinates `(lat, lon)` or landmark name.
+  * `mode`: `"on_foot"` or `"rover"`.
+  * `lst_hours`: Current Mars Local Solar Time.
+  * `initial_battery_pct`, `initial_o2_pct`: Current remaining reserves.
+  * `weather`: Atmospheric model.
+* **Returns:** `dict` containing `"status"`, `"mode"`, `"current_location"`, `"abort_target_shelter"`, `"summary"`, and `"geojson"`.
+* **Alias:** `abort(...)`.
+
+#### `plan_science_tour(...)`
+Solves a Budgeted Orienteering Problem (TSP with time and energy budget constraints) across cataloged science landmarks.
+```python
+def plan_science_tour(
+    base_location: tuple[float, float] | list[float] | dict | str = None,
+    targets: list[str] | list[tuple[float, float]] | None = None,
+    max_duration_hours: float = 6.0,
+    stay_duration_min: float = 25.0,
+    mode: str = "rover",
+    lst_hours: float = 9.0,
+    weather: str = "nominal",
+    initial_battery_pct: float = 100.0,
+    initial_o2_pct: float = 100.0,
+    allow_charging_pitstop: bool = False,
+    uphill_penalty: float | None = None,
+    **kwargs,
+) -> dict
+```
+* **Parameters:**
+  * `base_location`: Starting and ending depot (defaults to Hab Alpha).
+  * `targets`: List of landmark names or coordinate tuples to prioritize. If `None`, searches top cataloged Jezero POIs.
+  * `max_duration_hours`: Hard mission timeline constraint.
+  * `stay_duration_min`: On-site scientific sampling dwell time per visited landmark.
+  * `mode`: `"rover"` or `"on_foot"`.
+* **Returns:** `dict` containing `"status"`, `"base_location"`, `"ordered_stops"`, `"total_tour_distance_km"`, `"total_tour_duration_min"`, `"legs"`, and `"geojson"`.
+* **Aliases:** `plan_tour(...)`, `tour(...)`.
+
+#### `find_optimal_departure(...)`
+Performs diurnal solar radiation, shadow, and thermal sweeps across daylight hours to determine the highest-efficiency departure window.
+```python
+def find_optimal_departure(
+    start: tuple[float, float] | str,
+    destination: tuple[float, float] | str,
+    mode: str = "rover",
+    earliest_lst: float = 7.0,
+    latest_lst: float = 16.5,
+    step_hours: float = 0.5,
+    weather: str = "nominal",
+    initial_battery_pct: float = 100.0,
+    initial_o2_pct: float = 100.0,
+    allow_charging_pitstop: bool = True,
+    **kwargs,
+) -> dict
+```
+* **Parameters:**
+  * `earliest_lst`: First departure time to evaluate (e.g. `7.0` for 07:00 LST).
+  * `latest_lst`: Latest departure time to evaluate (e.g. `16.5` for 16:30 LST).
+  * `step_hours`: Sweep resolution in hours (e.g. `0.5` for 30-minute steps).
+* **Returns:** `dict` containing `"status"`, `"recommended_window"`, `"best_departure"`, `"evaluations"`, and `"mode"`.
+* **Aliases:** `optimize_departure_window(...)`, `departure_window(...)`.
+
+#### `evaluate_rf_comms(...)`
+Calculates UHF line-of-sight visibility, Fresnel zone clearance, and Free-Space Path Loss from any coordinate to Hab Alpha and peripheral relay masts.
+```python
+def evaluate_rf_comms(location: tuple[float, float] | str, mode: str = "rover") -> dict
+```
+* **Parameters:**
+  * `location`: `(lat, lon)` or landmark name string.
+  * `mode`: Mobility profile.
+* **Returns:** `dict` containing `"status"` (`"CONNECTED"` / `"BLACKOUT"`), `"direct_hab_los"` (`bool`), `"active_link"`, `"path_loss_db"`, `"masts_in_view"`, and `"all_links"`.
+* **Aliases:** `evaluate_comms(...)`, `comms(...)`.
+
+#### Environmental & Catalog Telemetry Functions
+* `get_waypoints() -> list[dict]`: Returns cataloged POIs, science sites, and habitats.
+* `get_charging_stations() -> list[dict]`: Returns list of shelters equipped with power/O2 refill docks.
+* `get_weather(sol: int | None = None) -> dict`: Returns active MEDA atmospheric telemetry.
+* `get_engine_status() -> dict`: Returns raster dimensions, resolution, and precomputed matrix statuses.
+* `get_engine() -> DalilMarsEngine`: Returns the shared singleton instance of `DalilMarsEngine`.
 
 ---
 
