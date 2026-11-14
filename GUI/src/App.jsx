@@ -426,8 +426,11 @@ export default function App() {
           ? 'hab-alpha'
           : target === 'seitah_dunes'
           ? 'seitah-ridge'
+          : target === 'wildcat_ridge'
+          ? 'hawksbill-gap'
           : target;
       const targetNorm = normalizeKey(aliasTarget);
+      const rawTargetNorm = normalizeKey(target);
 
       match =
         viewerArchiveList.find(
@@ -436,8 +439,11 @@ export default function App() {
             p.poiId === target ||
             p.poiId === aliasTarget ||
             normalizeKey(p.poiId) === targetNorm ||
+            normalizeKey(p.poiId) === rawTargetNorm ||
             normalizeKey(p.id) === targetNorm ||
-            p.title.toLowerCase().includes(target.toLowerCase())
+            normalizeKey(p.id) === rawTargetNorm ||
+            normalizeKey(p.title).includes(rawTargetNorm) ||
+            normalizeKey(p.locationName).includes(rawTargetNorm)
         ) || null;
 
       if (!match) {
@@ -485,7 +491,7 @@ export default function App() {
     showToast({
       id: `pano-${Date.now()}`,
       type: 'info',
-      title: match.is360 ? '360 PHOTOSPHERE LOADED' : 'SURFACE IMAGERY LOADED',
+      title: match.type === '360_sphere' ? '360 PHOTOSPHERE LOADED' : 'PANORAMIC VISTA LOADED',
       message: `${match.locationName || match.title}`,
     });
   };

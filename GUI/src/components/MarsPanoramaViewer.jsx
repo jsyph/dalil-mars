@@ -16,14 +16,21 @@ import {
   X,
   Navigation,
   RefreshCw,
+  Eye,
 } from 'lucide-react';
 
 /**
  * MarsPanoramaViewer
- * Supports:
- * 1. Three.js 360 Spherical Photosphere ONLY when panorama.is360 === true.
- * 2. 2D Surface Imagery Viewport with magnification & pan when panorama.is360 is false.
- * Strictly follows aerospace neutral dark palette, 1px borders, 4px radii, and zero emojis.
+ * High-fidelity Martian Surface & 360 Photosphere Instrument Viewer
+ * Features:
+ * 1. Interactive Three.js WebGL 3D Panoramic Viewport for ALL panoramas:
+ *    - Equirectangular spherical 360 projection with seam-free initial orientation.
+ *    - Cylindrical curved panoramic projection for ultra-wide and Mastcam-Z gigapixel vistas.
+ *    - Directional telemetry: live compass heading (HDG deg + cardinal), pitch, and FOV readout.
+ *    - Dynamic bearing markers smoothly orienting camera to landmark targets.
+ * 2. Ultra-HD 2D Surface Imagery inspection viewport with pan & magnification up to 400%.
+ * 3. Segmented HUD toggle between 3D PANORAMA and 2D ULTRA-HD modes.
+ * Strictly adheres to aerospace neutral dark palette, 1px borders, 4px radii, and zero emojis.
  */
 export default function MarsPanoramaViewer({
   panorama,
@@ -35,24 +42,25 @@ export default function MarsPanoramaViewer({
   const containerRef = useRef(null);
   const canvasRef = useRef(null);
 
-  const is360 = Boolean(panorama?.is360);
+  // View Mode: '3d' (WebGL spherical/cylindrical panorama) or '2d' (high-res inspect)
+  const [viewMode, setViewMode] = useState('3d');
 
-  // Refs shared with the live Three.js render loop so buttons never recreate the WebGL context
-  const lonRef = useRef(0);
+  // Shared live refs for WebGL animation loop
+  const lonRef = useRef(panorama?.initialLon ?? 180);
   const latRef = useRef(0);
   const fovRef = useRef(65);
   const autoRotateRef = useRef(true);
   const cameraRef = useRef(null);
-  const lastTelemetryRef = useRef({ heading: 0, pitch: 0 });
+  const lastTelemetryRef = useRef({ heading: 180, pitch: 0 });
 
-  // 360 UI readout state
+  // 3D Telemetry state
   const [autoRotate, setAutoRotate] = useState(true);
-  const [headingDeg, setHeadingDeg] = useState(0);
+  const [headingDeg, setHeadingDeg] = useState(panorama?.initialLon ?? 180);
   const [pitchDeg, setPitchDeg] = useState(0);
   const [fov, setFov] = useState(65);
   const [activeHotspot, setActiveHotspot] = useState(null);
 
-  // 2D Surface Image zoom & pan state
+  // 2D Inspection Zoom & Pan state
   const [imgZoom, setImgZoom] = useState(1);
   const [imgPan, setImgPan] = useState({ x: 0, y: 0 });
   const [isDraggingImg, setIsDraggingImg] = useState(false);
@@ -74,20 +82,21 @@ export default function MarsPanoramaViewer({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [panorama, onClose]);
 
-  // Reset telemetry, zoom, and pan when active image changes
+  // Reset telemetry, zoom, and pan when active panorama changes
   useEffect(() => {
     setImageLoaded(false);
     setLoadError(false);
     setActiveHotspot(null);
     setImgZoom(1);
     setImgPan({ x: 0, y: 0 });
-    lonRef.current = 0;
+    const initLon = Number(panorama?.initialLon ?? 180);
+    lonRef.current = initLon;
     latRef.current = 0;
     fovRef.current = 65;
     autoRotateRef.current = true;
-    lastTelemetryRef.current = { heading: 0, pitch: 0 };
+    lastTelemetryRef.current = { heading: initLon, pitch: 0 };
     setFov(65);
-    setHeadingDeg(0);
+    setHeadingDeg(initLon);
     setPitchDeg(0);
     setAutoRotate(true);
   }, [panorama]);
@@ -97,16 +106,19 @@ export default function MarsPanoramaViewer({
     autoRotateRef.current = autoRotate;
   }, [autoRotate]);
 
-  // Three.js 360 Scene setup (depends ONLY on [is360, panorama] so buttons actuate live refs smoothly)
+  // Interactive Three.js WebGL Scene (Spherical 360 + Cylindrical Wide Vista)
   useEffect(() => {
-    if (!is360 || !containerRef.current || !canvasRef.current || !panorama) return undefined;
+    if (viewMode !== '3d' || !containerRef.current || !canvasRef.current || !panorama) {
+      return undefined;
+    }
 
     let scene;
     let camera;
     let renderer;
-    let sphere;
+    let mesh;
     let textureRef = null;
     let materialRef = null;
+    let geometryRef = null;
     let isDisposed = false;
     let isUserInteracting = false;
     let onPointerDownPointerX = 0;
@@ -120,6 +132,8 @@ export default function MarsPanoramaViewer({
     const height = viewportEl.clientHeight || 500;
 
     scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x0b0d11);
+
     camera = new THREE.PerspectiveCamera(fovRef.current, width / height, 1, 1100);
     camera.target = new THREE.Vector3(0, 0, 0);
     cameraRef.current = camera;
@@ -132,9 +146,6 @@ export default function MarsPanoramaViewer({
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(width, height);
 
-    const geometry = new THREE.SphereGeometry(500, 60, 40);
-    geometry.scale(-1, 1, 1);
-
     const textureLoader = new THREE.TextureLoader();
     textureLoader.load(
       panorama.image || panorama.url,
@@ -146,15 +157,44 @@ export default function MarsPanoramaViewer({
         texture.colorSpace = THREE.SRGBColorSpace;
         texture.minFilter = THREE.LinearFilter;
         textureRef = texture;
-        materialRef = new THREE.MeshBasicMaterial({ map: texture });
-        sphere = new THREE.Mesh(geometry, materialRef);
-        scene.add(sphere);
+
+        const imgW = texture.image.width || 1920;
+        const imgH = texture.image.height || 960;
+        const aspect = imgW / imgH;
+
+        // Select geometry based on aspect ratio:
+        // Full spherical 360 for aspect around 2:1 and 360_sphere types;
+        // Curved cylindrical geometry for wide vistas to maintain natural horizon geometry without pole distortion.
+        const isSphere = panorama.type === '360_sphere' || (aspect >= 1.95 && aspect <= 2.05);
+
+        let geometry;
+        if (isSphere) {
+          geometry = new THREE.SphereGeometry(500, 64, 48);
+          geometry.scale(-1, 1, 1);
+        } else {
+          const radius = 500;
+          // Calculate horizontal arc: 360 deg for full scans or proportional for wide vistas
+          const thetaLength = aspect >= 3.0 ? Math.PI * 2 : Math.min(Math.PI * 2, Math.max(Math.PI * 1.1, aspect * 1.05));
+          const cylHeight = (radius * thetaLength) / aspect;
+          const thetaStart = aspect >= 3.0 ? 0 : -thetaLength / 2;
+          geometry = new THREE.CylinderGeometry(radius, radius, cylHeight, 64, 1, true, thetaStart, thetaLength);
+          geometry.scale(-1, 1, 1);
+        }
+
+        geometryRef = geometry;
+        materialRef = new THREE.MeshBasicMaterial({
+          map: texture,
+          side: THREE.DoubleSide,
+        });
+
+        mesh = new THREE.Mesh(geometry, materialRef);
+        scene.add(mesh);
         setImageLoaded(true);
       },
       undefined,
       (err) => {
         if (isDisposed) return;
-        console.error('Error loading Mars 360 texture:', err);
+        console.error('Error loading Mars texture:', err);
         setLoadError(true);
       }
     );
@@ -218,7 +258,8 @@ export default function MarsPanoramaViewer({
         lonRef.current += 0.08;
       }
 
-      latRef.current = Math.max(-85, Math.min(85, latRef.current));
+      // Gentle vertical pitch constraint preventing pole void distortion
+      latRef.current = Math.max(-42, Math.min(42, latRef.current));
       const phi = THREE.MathUtils.degToRad(90 - latRef.current);
       const theta = THREE.MathUtils.degToRad(lonRef.current);
 
@@ -254,12 +295,12 @@ export default function MarsPanoramaViewer({
       window.removeEventListener('resize', onResize);
       if (materialRef) materialRef.dispose();
       if (textureRef) textureRef.dispose();
-      geometry.dispose();
+      if (geometryRef) geometryRef.dispose();
       renderer.dispose();
     };
-  }, [is360, panorama]);
+  }, [viewMode, panorama]);
 
-  // Actuate camera directly to hotspot orientation
+  // Jump to specific landmark bearing hotspot
   const jumpToHotspot = (hotspot) => {
     setActiveHotspot(hotspot);
     lonRef.current = Number(hotspot.yaw) || 0;
@@ -273,7 +314,7 @@ export default function MarsPanoramaViewer({
     setPitchDeg(roundedPitch);
   };
 
-  // Pan heading manually without destroying WebGL sphere
+  // Pan heading manually with step increments
   const nudgeHeading = (delta) => {
     lonRef.current = lonRef.current + delta;
     autoRotateRef.current = false;
@@ -283,7 +324,7 @@ export default function MarsPanoramaViewer({
     setHeadingDeg(normalizedHeading);
   };
 
-  // Adjust FOV zoom directly on the active camera
+  // Adjust FOV zoom directly on active WebGL camera
   const nudgeFov = (delta) => {
     const next = Math.max(35, Math.min(90, fovRef.current + delta));
     fovRef.current = next;
@@ -294,7 +335,7 @@ export default function MarsPanoramaViewer({
     setFov(Math.round(next));
   };
 
-  // Normal 2D Image handlers
+  // 2D Inspection Zoom & Pan Handlers
   const handleNormalZoom = (delta) => {
     setImgZoom((prev) => {
       const next = Math.max(1, Math.min(4, Number((prev + delta).toFixed(2))));
@@ -354,6 +395,8 @@ export default function MarsPanoramaViewer({
 
   if (!panorama) return null;
 
+  const isFull360 = panorama.type === '360_sphere' || panorama.is360;
+
   return (
     <div className="fixed inset-0 z-[1500] flex items-center justify-center bg-[#0b0d11]/90 p-2 sm:p-4">
       <div
@@ -364,7 +407,7 @@ export default function MarsPanoramaViewer({
         <div className="flex items-center justify-between px-4 py-3 bg-[#191d24] border-b border-[#242933] text-[#edf0f5] z-20 gap-3">
           <div className="flex items-center gap-3 min-w-0">
             <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-[4px] bg-[#13161c] border border-[#353c4a] text-[#edf0f5]">
-              {is360 ? <Globe className="h-5 w-5" /> : <Camera className="h-5 w-5" />}
+              {isFull360 ? <Globe className="h-5 w-5 text-[#22c55e]" /> : <Camera className="h-5 w-5 text-[#22c55e]" />}
             </div>
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -373,12 +416,8 @@ export default function MarsPanoramaViewer({
                   {panorama.locationName || 'JEZERO CRATER'}
                 </span>
                 <span className="inline-flex items-center gap-1.5 rounded-[4px] px-2 py-0.5 text-[10px] font-mono font-bold border border-[#353c4a] bg-[#13161c] text-[#edf0f5] uppercase">
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      is360 ? 'bg-[#22c55e]' : 'bg-[#9da5b4]'
-                    }`}
-                  />
-                  {is360 ? '360 PHOTOSPHERE' : 'SURFACE IMAGE'}
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#22c55e]" />
+                  {isFull360 ? '360 PHOTOSPHERE' : 'CYLINDRICAL PANORAMA'}
                 </span>
               </div>
               <h2 className="text-sm sm:text-base font-bold tracking-tight text-[#edf0f5] truncate uppercase mt-0.5">
@@ -387,20 +426,52 @@ export default function MarsPanoramaViewer({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={onClose}
-            className="glove-btn min-h-[42px] min-w-[42px] px-3 rounded-[4px] bg-[#222731] hover:bg-[#dc2626]/20 text-[#edf0f5] hover:text-[#ef4444] border border-[#353c4a] hover:border-[#ef4444] cursor-pointer flex items-center justify-center gap-1.5 text-[11px] font-mono font-bold uppercase"
-            title="Close Viewer (ESC)"
-          >
-            <X className="h-4 w-4" />
-            <span className="hidden sm:inline">CLOSE</span>
-          </button>
+          <div className="flex items-center gap-2">
+            {/* DUAL VIEW MODE SWITCH: 3D PANORAMA VS 2D ULTRA-HD */}
+            <div className="hidden sm:flex items-center rounded-[4px] bg-[#13161c] border border-[#353c4a] p-0.5">
+              <button
+                type="button"
+                onClick={() => setViewMode('3d')}
+                className={`px-2.5 py-1.5 rounded-[2px] font-mono text-[10px] font-bold uppercase transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === '3d'
+                    ? 'bg-[#22c55e] text-[#0b0d11]'
+                    : 'text-[#9da5b4] hover:text-[#edf0f5]'
+                }`}
+                title="Interactive 3D WebGL Horizon Panorama"
+              >
+                <Globe className="h-3.5 w-3.5" />
+                <span>3D PANORAMA</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setViewMode('2d')}
+                className={`px-2.5 py-1.5 rounded-[2px] font-mono text-[10px] font-bold uppercase transition-colors cursor-pointer flex items-center gap-1.5 ${
+                  viewMode === '2d'
+                    ? 'bg-[#22c55e] text-[#0b0d11]'
+                    : 'text-[#9da5b4] hover:text-[#edf0f5]'
+                }`}
+                title="2D Ultra-HD Surface Inspection & Magnifier"
+              >
+                <Eye className="h-3.5 w-3.5" />
+                <span>2D ULTRA-HD</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={onClose}
+              className="glove-btn min-h-[42px] min-w-[42px] px-3 rounded-[4px] bg-[#222731] hover:bg-[#dc2626]/20 text-[#edf0f5] hover:text-[#ef4444] border border-[#353c4a] hover:border-[#ef4444] cursor-pointer flex items-center justify-center gap-1.5 text-[11px] font-mono font-bold uppercase"
+              title="Close Viewer (ESC)"
+            >
+              <X className="h-4 w-4" />
+              <span className="hidden sm:inline">CLOSE</span>
+            </button>
+          </div>
         </div>
 
         {/* MAIN VIEWPORT */}
         <div className="relative flex-1 bg-[#0b0d11] overflow-hidden flex items-center justify-center select-none">
-          {is360 ? (
+          {viewMode === '3d' ? (
             <canvas
               ref={canvasRef}
               className="w-full h-full cursor-grab active:cursor-grabbing touch-none"
@@ -436,8 +507,8 @@ export default function MarsPanoramaViewer({
           {/* LOADING OVERLAY */}
           {!imageLoaded && !loadError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0b0d11]/90 gap-3 z-10 text-[#9da5b4] font-mono text-xs uppercase tracking-wider">
-              <div className="h-8 w-8 border-2 border-[#edf0f5] border-t-transparent rounded-full animate-spin" />
-              <span>LOADING SURFACE IMAGERY...</span>
+              <div className="h-8 w-8 border-2 border-[#22c55e] border-t-transparent rounded-full animate-spin" />
+              <span>INITIALIZING HIGH-RESOLUTION PANORAMA...</span>
             </div>
           )}
 
@@ -445,12 +516,12 @@ export default function MarsPanoramaViewer({
           {loadError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#0b0d11]/95 gap-2 z-10 text-[#ef4444] font-mono text-xs uppercase tracking-wider">
               <X className="h-7 w-7 text-[#ef4444]" />
-              <span>IMAGERY TELEMETRY UNAVAILABLE</span>
+              <span>PANORAMA TELEMETRY UNAVAILABLE</span>
             </div>
           )}
 
-          {/* OVERLAY COMPASS & PITCH HUD (360 MODE) */}
-          {is360 && (
+          {/* OVERLAY COMPASS & PITCH HUD (3D MODE) */}
+          {viewMode === '3d' && (
             <div className="absolute top-3 left-3 z-20 flex items-center gap-2.5 rounded-[4px] bg-[#13161c]/95 border border-[#353c4a] px-3 py-2 font-mono text-[11px] text-[#9da5b4]">
               <Compass
                 className="h-4 w-4 text-[#edf0f5] transition-transform duration-150"
@@ -466,8 +537,8 @@ export default function MarsPanoramaViewer({
             </div>
           )}
 
-          {/* NORMAL IMAGE MAGNIFICATION HUD */}
-          {!is360 && (
+          {/* 2D MAGNIFICATION HUD */}
+          {viewMode === '2d' && (
             <div className="absolute top-3 left-3 z-20 flex items-center gap-2 rounded-[4px] bg-[#13161c]/95 border border-[#353c4a] px-3 py-2 font-mono text-[11px] text-[#9da5b4]">
               <span className="font-bold text-[#edf0f5]">
                 MAGNIFICATION: {Math.round(imgZoom * 100)}%
@@ -483,7 +554,7 @@ export default function MarsPanoramaViewer({
 
           {/* GLOVE-COMPATIBLE INSTRUMENT CONTROLS */}
           <div className="absolute right-3 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-1.5 p-1.5 rounded-[4px] bg-[#13161c]/95 border border-[#353c4a]">
-            {is360 ? (
+            {viewMode === '3d' ? (
               <>
                 <button
                   type="button"
@@ -582,8 +653,8 @@ export default function MarsPanoramaViewer({
             </button>
           </div>
 
-          {/* ACTIVE HOTSPOT CALLOUT (360 MODE) */}
-          {is360 && activeHotspot && (
+          {/* ACTIVE HOTSPOT CALLOUT (3D MODE) */}
+          {viewMode === '3d' && activeHotspot && (
             <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 max-w-md w-[90%] rounded-[4px] bg-[#13161c]/95 border border-[#4f5767] p-3">
               <div className="flex items-center justify-between border-b border-[#242933] pb-1.5 mb-1.5">
                 <span className="text-[11px] font-mono font-bold text-[#edf0f5] uppercase flex items-center gap-1.5">
@@ -606,8 +677,8 @@ export default function MarsPanoramaViewer({
           )}
         </div>
 
-        {/* HOTSPOT JUMP STRIP (360 MODE) */}
-        {is360 && panorama.hotspots && panorama.hotspots.length > 0 && (
+        {/* HOTSPOT JUMP STRIP (3D MODE) */}
+        {viewMode === '3d' && panorama.hotspots && panorama.hotspots.length > 0 && (
           <div className="flex items-center gap-2 px-4 py-2 bg-[#13161c] border-t border-[#242933] overflow-x-auto text-xs z-20">
             <span className="text-[10px] font-mono uppercase font-bold text-[#656d7d] whitespace-nowrap flex items-center gap-1">
               <MapPin className="h-3.5 w-3.5 text-[#9da5b4]" />
@@ -676,11 +747,11 @@ export default function MarsPanoramaViewer({
           {allPanoramas.length > 1 && (
             <div className="pt-2.5 border-t border-[#242933] flex items-center gap-2 overflow-x-auto">
               <span className="text-[10px] font-mono uppercase font-bold text-[#656d7d] whitespace-nowrap">
-                ARCHIVE VIEWS:
+                ARCHIVE PANORAMAS:
               </span>
               {allPanoramas.map((p) => {
                 const isSelected = p.id === panorama.id;
-                const pIs360 = Boolean(p.is360);
+                const pIs360 = Boolean(p.is360 || p.type === '360_sphere');
                 return (
                   <button
                     type="button"
@@ -692,9 +763,9 @@ export default function MarsPanoramaViewer({
                         : 'bg-[#13161c] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] border-[#353c4a]'
                     }`}
                   >
-                    {pIs360 ? <Globe className="h-3.5 w-3.5" /> : <Camera className="h-3.5 w-3.5" />}
+                    {pIs360 ? <Globe className="h-3.5 w-3.5 text-[#22c55e]" /> : <Camera className="h-3.5 w-3.5" />}
                     <span>
-                      {p.locationName || p.title} {pIs360 ? '[360]' : '[IMG]'}
+                      {p.locationName || p.title} {pIs360 ? '[360]' : '[VISTA]'}
                     </span>
                   </button>
                 );
