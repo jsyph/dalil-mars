@@ -1512,6 +1512,151 @@ class DalilMarsEngine:
             },
         }
 
+    def find_optimal_departure(
+        self,
+        start,
+        destination,
+        mode: str = "rover",
+        earliest_lst: float = 7.0,
+        latest_lst: float = 16.5,
+        step_hours: float = 0.5,
+        weather: str = "nominal",
+        initial_battery_pct: float = 100.0,
+        initial_o2_pct: float = 100.0,
+        allow_charging_pitstop: bool = True,
+        uphill_penalty: float | None = None,
+        **kwargs,
+    ) -> dict:
+        """Evaluates diurnal solar variation across a Martian sol to determine the optimal departure time.
+
+        Analyzes sun elevation, shadow casting, solar panel generation, thermal heater loads,
+        and sunset risk, identifying the safest departure window with peak battery reserves.
+        """
+        weather_prof = WEATHER_MODELS.get(weather, WEATHER_MODELS["nominal"])
+        opt_tau = weather_prof["tau"]
+
+        # 1. Base route at noon to establish terrain profile and duration
+        base_route = self.plan_route(
+            start=start,
+            destination=destination,
+            mode=mode,
+            lst_hours=12.0,
+            weather=weather,
+            initial_battery_pct=initial_battery_pct,
+            initial_o2_pct=initial_o2_pct,
+            allow_charging_pitstop=allow_charging_pitstop,
+            uphill_penalty=uphill_penalty,
+            **kwargs,
+        )
+
+        total_km = base_route["total_dist_km"]
+        dur_min = base_route["duration_min"]
+        dur_hours = dur_min / 60.0
+        base_drain_pct = base_route["summary"]["battery_used_pct"]
+
+        candidate_hours = np.arange(earliest_lst, latest_lst + 1e-4, step_hours)
+        timeline = []
+
+        for h in candidate_hours:
+            arr_h = h + dur_hours
+            e_dep, az_dep = SolarPhysics.calculate_sun_position(h)
+            e_arr, az_arr = SolarPhysics.calculate_sun_position(arr_h)
+            e_mid, _ = SolarPhysics.calculate_sun_position(h + dur_hours / 2.0)
+
+            avg_e = max(0.0, (e_dep + 2.0 * e_mid + e_arr) / 4.0)
+            flux = SolarPhysics.calculate_solar_flux(avg_e, opt_tau)
+
+            if mode == "rover":
+                # 2.8 m2 panel, 28% efficiency, 5 kWh battery
+                solar_gen_kwh = (flux * 2.8 * 0.28 * dur_hours) / 1000.0
+                solar_gen_pct = min(20.0, (solar_gen_kwh / 5.0) * 100.0)
+                # Heater loads when ambient sun is low (<10 deg)
+                heater_drain = (dur_hours * 2.5) if (e_dep < 10.0 or e_arr < 10.0 or avg_e < 15.0) else 0.0
+                net_batt = round(min(100.0, max(0.0, initial_battery_pct - base_drain_pct + solar_gen_pct - heater_drain)), 1)
+            else:
+                solar_gen_pct = 0.0
+                heater_drain = (dur_hours * 5.0) if (e_dep < 8.0 or e_arr < 8.0) else 0.0
+                net_batt = round(max(0.0, initial_battery_pct - base_drain_pct - heater_drain), 1)
+
+            if e_arr <= 0.0 or e_dep <= 0.0:
+                status = "NIGHT_TRAP"
+                rating = 1
+            elif e_arr < 8.0:
+                status = "TWILIGHT_RISK"
+                rating = 2
+            elif avg_e >= 25.0 and e_dep >= 15.0 and e_arr >= 15.0 and net_batt >= 88.0:
+                status = "OPTIMAL"
+                rating = 5
+            elif net_batt >= 75.0 and e_arr >= 10.0:
+                status = "ACCEPTABLE"
+                rating = 4
+            else:
+                status = "MARGINAL"
+                rating = 3
+
+            score = (rating * 1000.0) + (net_batt * 2.0) + (avg_e * 1.5) - abs(h - 11.5) * 0.5
+
+            dh, dm = int(h), int(round((h % 1) * 60))
+            ah, am = int(arr_h) % 24, int(round((arr_h % 1) * 60))
+
+            timeline.append({
+                "lst_hours": float(round(h, 2)),
+                "departure_time": f"{dh:02d}:{dm:02d} LST",
+                "arrival_time": f"{ah:02d}:{am:02d} LST",
+                "departure_sun_elevation_deg": float(round(e_dep, 1)),
+                "arrival_sun_elevation_deg": float(round(e_arr, 1)),
+                "average_solar_flux_wm2": float(round(flux, 1)),
+                "battery_remaining_pct": float(round(net_batt, 1)),
+                "solar_energy_harvested_pct": float(round(solar_gen_pct, 1)),
+                "status": status,
+                "score": float(round(score, 1)),
+            })
+
+        best_slot = max(timeline, key=lambda s: s["score"])
+        optimal_slots = [s for s in timeline if s["status"] == "OPTIMAL"]
+
+        if optimal_slots:
+            win_start = optimal_slots[0]["departure_time"]
+            win_end = optimal_slots[-1]["departure_time"]
+            win_hours = round(optimal_slots[-1]["lst_hours"] - optimal_slots[0]["lst_hours"] + step_hours, 1)
+        else:
+            win_start = best_slot["departure_time"]
+            win_end = best_slot["departure_time"]
+            win_hours = step_hours
+
+        # Compute full route for the best departure slot
+        best_route = self.plan_route(
+            start=start,
+            destination=destination,
+            mode=mode,
+            lst_hours=best_slot["lst_hours"],
+            weather=weather,
+            initial_battery_pct=initial_battery_pct,
+            initial_o2_pct=initial_o2_pct,
+            allow_charging_pitstop=allow_charging_pitstop,
+            uphill_penalty=uphill_penalty,
+            **kwargs,
+        )
+
+        return {
+            "status": "OPTIMAL_WINDOW_IDENTIFIED",
+            "mode": mode,
+            "start": base_route["start"],
+            "destination": base_route["destination"],
+            "total_distance_km": total_km,
+            "duration_formatted": base_route["summary"]["duration_formatted"],
+            "duration_min": dur_min,
+            "recommended_window": {
+                "start_time": win_start,
+                "end_time": win_end,
+                "peak_departure": best_slot["departure_time"],
+                "window_duration_hours": win_hours,
+            },
+            "best_departure": best_slot,
+            "departure_timeline": timeline,
+            "best_route": best_route,
+        }
+
     @staticmethod
     def _compass_bearing(lat1, lon1, lat2, lon2):
         dLon = np.radians(lon2 - lon1)
@@ -1664,6 +1809,46 @@ def plan_science_tour(
 
 plan_tour = plan_science_tour
 tour = plan_science_tour
+
+
+def find_optimal_departure(
+    start,
+    destination,
+    mode: str = "rover",
+    earliest_lst: float = 7.0,
+    latest_lst: float = 16.5,
+    step_hours: float = 0.5,
+    weather: str = "nominal",
+    initial_battery: float | None = None,
+    initial_battery_pct: float = 100.0,
+    initial_o2: float | None = None,
+    initial_o2_pct: float = 100.0,
+    allow_charging_pitstop: bool = True,
+    uphill_penalty: float | None = None,
+    **kwargs,
+) -> dict:
+    """Evaluates diurnal solar variation across a Martian sol to find the safest departure window."""
+    batt_val = initial_battery if initial_battery is not None else initial_battery_pct
+    o2_val = initial_o2 if initial_o2 is not None else initial_o2_pct
+
+    return get_engine().find_optimal_departure(
+        start=start,
+        destination=destination,
+        mode=mode,
+        earliest_lst=earliest_lst,
+        latest_lst=latest_lst,
+        step_hours=step_hours,
+        weather=weather,
+        initial_battery_pct=batt_val,
+        initial_o2_pct=o2_val,
+        allow_charging_pitstop=allow_charging_pitstop,
+        uphill_penalty=uphill_penalty,
+        **kwargs,
+    )
+
+
+optimize_departure_window = find_optimal_departure
+departure_window = find_optimal_departure
 
 
 def get_waypoints() -> list[dict]:
@@ -1825,6 +2010,54 @@ def run_http_server(port: int = 8000, host: str = "0.0.0.0"):
         except Exception as e:
             return jsonify({"error": str(e)}), 500
 
+    @app.route("/api/departure", methods=["GET", "POST"])
+    def departure_endpoint():
+        try:
+            if request.method == "POST":
+                data = request.get_json(force=True)
+            else:
+                data = request.args
+
+            start_val = data.get("start")
+            end_val = data.get("destination") or data.get("end")
+
+            if isinstance(start_val, str) and "," in start_val:
+                parts = [float(x.strip()) for x in start_val.split(",")]
+                start = (parts[0], parts[1])
+            elif isinstance(start_val, (list, tuple)):
+                start = (float(start_val[0]), float(start_val[1]))
+            elif "start_lat" in data and "start_lon" in data:
+                start = (float(data["start_lat"]), float(data["start_lon"]))
+            else:
+                return jsonify({"error": "Missing 'start' parameter"}), 400
+
+            if isinstance(end_val, str) and "," in end_val:
+                parts = [float(x.strip()) for x in end_val.split(",")]
+                destination = (parts[0], parts[1])
+            elif isinstance(end_val, (list, tuple)):
+                destination = (float(end_val[0]), float(end_val[1]))
+            elif "end_lat" in data and "end_lon" in data:
+                destination = (float(data["end_lat"]), float(data["end_lon"]))
+            else:
+                return jsonify({"error": "Missing 'destination' parameter"}), 400
+
+            mode = data.get("mode", "rover")
+            weather_val = data.get("weather", "nominal")
+            batt_val = float(data.get("battery", data.get("initial_battery", 100.0)))
+            o2_val = float(data.get("o2", data.get("initial_o2", 100.0)))
+
+            res = find_optimal_departure(
+                start=start,
+                destination=destination,
+                mode=mode,
+                weather=weather_val,
+                initial_battery=batt_val,
+                initial_o2=o2_val,
+            )
+            return jsonify(res)
+        except Exception as e:
+            return jsonify({"error": str(e)}), 500
+
     print(f"Dalil-Mars REST API Server listening on http://{host}:{port}")
     print("Endpoints:")
     print("  - GET  /api/health")
@@ -1832,6 +2065,7 @@ def run_http_server(port: int = 8000, host: str = "0.0.0.0"):
     print("  - GET  /api/weather")
     print("  - POST /api/route")
     print("  - POST /api/tour")
+    print("  - POST /api/departure")
     app.run(host=host, port=port, debug=False)
 
 
@@ -1848,6 +2082,7 @@ def main():
     parser.add_argument("--targets", nargs="+", help="Specific landmark names or coordinates to include in science tour.")
     parser.add_argument("--max-hours", type=float, default=6.0, help="Max mission time budget in hours for science tour (default 6.0).")
     parser.add_argument("--dwell-min", type=float, default=25.0, help="Dwell/science time in minutes per stop (default 25.0).")
+    parser.add_argument("--find-departure", action="store_true", help="Analyze diurnal solar conditions to find optimal departure window.")
     parser.add_argument("--mode", choices=["on_foot", "rover"], default="on_foot", help="Transportation mode.")
     parser.add_argument("--lst", type=float, default=14.0, help="Martian Local Solar Time (hours: 0.0 to 24.0).")
     parser.add_argument("--weather", choices=["nominal", "dust_storm", "solar_storm"], default="nominal", help="Weather state.")
@@ -1870,7 +2105,7 @@ def main():
 
     engine = get_engine()
 
-    if args.demo or (not args.start and not args.end and not args.abort and not args.tour):
+    if args.demo or (not args.start and not args.end and not args.abort and not args.tour and not args.find_departure):
         print("\n" + "=" * 65)
         print(" RUNNING 3 DALIL-MARS MISSION TEST SCENARIOS")
         print("=" * 65)
@@ -1922,6 +2157,44 @@ def main():
         print(f"Battery Remaining on Arrival: {res3['battery_remaining_pct']}% (Safe Margin Maintained)")
         for st in res3["navigation_steps"]:
             print(f"  Step {st['step']}: {st['instruction']} ({st['detail']})")
+
+    elif args.find_departure:
+        if not args.start or not args.end:
+            print("Error: --find-departure requires both --start LAT LON and --end LAT LON.")
+            return
+
+        res = find_optimal_departure(
+            start=tuple(args.start),
+            destination=tuple(args.end),
+            mode=args.mode,
+            weather=args.weather,
+            initial_battery_pct=args.battery,
+            uphill_penalty=args.uphill_factor,
+        )
+
+        if args.json:
+            print(json.dumps(res, indent=2))
+        else:
+            w = res["recommended_window"]
+            b = res["best_departure"]
+            print("\n" + "=" * 65)
+            print(" DALIL-MARS DIURNAL DEPARTURE WINDOW OPTIMIZER")
+            print("=" * 65)
+            print(f"  Mode:                {res['mode'].upper()}")
+            print(f"  Traverse Distance:   {res['total_distance_km']} km ({res['duration_formatted']})")
+            print(f"  Recommended Window:  {w['start_time']} to {w['end_time']} ({w['window_duration_hours']} hours duration)")
+            print(f"  Peak Departure:      {b['departure_time']} (Arrival: {b['arrival_time']})")
+            print(f"  Arrival Battery:     {b['battery_remaining_pct']}% (Harvests +{b['solar_energy_harvested_pct']}% solar)")
+            print(f"  Sun Elevation:       Depart: {b['departure_sun_elevation_deg']}° | Arrive: {b['arrival_sun_elevation_deg']}°")
+            print(f"  Mean Solar Flux:     {b['average_solar_flux_wm2']} W/m²")
+            print("\n  Diurnal Timeline Analysis:")
+            print("  " + "-" * 67)
+            print(f"  {'Departure':<12} {'Arrival':<12} {'Dep Sun':<9} {'Arr Sun':<9} {'Batt %':<8} {'Status'}")
+            print("  " + "-" * 67)
+            for sl in res["departure_timeline"]:
+                print(f"  {sl['departure_time']:<12} {sl['arrival_time']:<12} {sl['departure_sun_elevation_deg']:>6.1f}°  {sl['arrival_sun_elevation_deg']:>6.1f}°  {sl['battery_remaining_pct']:>5.1f}%  {sl['status']}")
+            print("  " + "-" * 67)
+            print("=" * 65 + "\n")
 
     elif args.start and args.end:
         res = plan_route(
