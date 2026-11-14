@@ -809,6 +809,7 @@ class DalilMarsEngine:
         initial_o2_pct: float = 100.0,
         allow_charging_pitstop: bool = True,
         uphill_penalty: float | None = None,
+        **kwargs,
     ) -> dict:
         """Computes safe, terrain-aware Martian route from start to destination.
 
@@ -817,6 +818,7 @@ class DalilMarsEngine:
         r1, c1, start_lat, start_lon = self._resolve_coords(start)
         r2, c2, goal_lat, goal_lon = self._resolve_coords(destination)
 
+        mode = mode.replace("-", "_")
         mode_prof = MOBILITY_PROFILES.get(mode, MOBILITY_PROFILES["on_foot"])
         weather_key = "solar_storm" if radiation_spe else weather
         weather_prof = WEATHER_MODELS.get(weather_key, WEATHER_MODELS["nominal"])
@@ -1196,17 +1198,38 @@ class DalilMarsEngine:
             "charging_station": charging_station,
             "alert": weather_prof.get("alert"),
             "path_coords": full_coords,
+            "path_coordinates": full_coords,
             "legs": final_legs,
             # Direct scalar summary properties:
             "direct_km": round(leg1["direct_km"], 2),
             "total_dist_km": round(total_dist_km, 2),
+            "total_distance_km": round(total_dist_km, 2),
             "duration_min": total_duration_min,
+            "estimated_duration_min": total_duration_min,
             "elevation_gain_m": round(total_elev_gain, 1),
             "elevation_loss_m": round(total_elev_loss, 1),
+            "battery_initial_pct": initial_battery_pct,
             "battery_used_pct": total_batt_used,
             "battery_remaining_pct": final_battery_pct,
             "o2_used_pct": total_o2_used,
             "o2_remaining_pct": final_o2_pct,
+            "o2_consumed_kg": round((total_o2_used / 100.0) * (SUIT_O2_CAPACITY_L * 0.001429), 3),
+            "water_consumed_l": round((total_duration_min / 60.0) * 0.35, 2),
+            "direct_energy_wh": round((total_batt_used / 100.0) * (16000.0 if mode == "rover" else 1200.0), 1),
+            "net_energy_wh": round((total_batt_used / 100.0) * (16000.0 if mode == "rover" else 1200.0), 1),
+            "solar_energy_wh": round(sum(l.get("solar_energy_wh", 0.0) for l in final_legs), 1) if mode == "rover" else 0.0,
+            "comms_loss_quality": summary["rf_comms"]["status"],
+            "charging_pitstop": {
+                "inserted": charging_station is not None,
+                "name": charging_station["name"] if charging_station else None,
+                "id": charging_station.get("id") if charging_station else None,
+                "battery_recharged_pct": float(round(100.0 - (initial_battery_pct - final_legs[0]["battery_used_pct"]), 1)) if charging_station and len(final_legs) > 1 else 0.0,
+                "recharge_duration_min": 15 if charging_station else 0,
+            },
+            "advisories": {
+                "radiation_storm": bool(radiation_spe or weather_key == "solar_storm"),
+                "weather_alert": weather_prof.get("alert"),
+            },
             "radiation_dose_mgy": round(total_radiation, 3),
             "max_slope_deg": round(max_slope, 1),
         }
@@ -1358,6 +1381,7 @@ class DalilMarsEngine:
         """
         import itertools
 
+        mode = mode.replace("-", "_")
         mode_prof = MOBILITY_PROFILES.get(mode, MOBILITY_PROFILES["rover"])
         speed_kmh = mode_prof["speedKmh"]
 
@@ -1621,11 +1645,14 @@ class DalilMarsEngine:
             "status": tour_status,
             "mode": mode,
             "base_camp": base_poi,
+            "base_location": base_poi,
             "targets_visited_count": len(best_tour_indices) - 2,
             "total_stops_count": len(best_tour_indices),
             "ordered_stops": stops_telemetry,
             "legs": legs,
             "geojson": consolidated_geojson,
+            "total_distance_km": round(total_dist_km, 2),
+            "total_duration_min": int(round(total_mission_hours * 60.0)),
             "summary": {
                 "status": tour_status,
                 "mode": mode,
@@ -1738,11 +1765,14 @@ class DalilMarsEngine:
             timeline.append({
                 "lst_hours": float(round(h, 2)),
                 "departure_time": f"{dh:02d}:{dm:02d} LST",
+                "departure_lst": f"{dh:02d}:{dm:02d} LST",
                 "arrival_time": f"{ah:02d}:{am:02d} LST",
                 "departure_sun_elevation_deg": float(round(e_dep, 1)),
                 "arrival_sun_elevation_deg": float(round(e_arr, 1)),
                 "average_solar_flux_wm2": float(round(flux, 1)),
                 "battery_remaining_pct": float(round(net_batt, 1)),
+                "net_energy_wh": float(round(((100.0 - net_batt) / 100.0) * (16000.0 if mode == "rover" else 1200.0), 1)),
+                "solar_energy_wh": float(round((solar_gen_pct / 100.0) * (16000.0 if mode == "rover" else 1200.0), 1)),
                 "solar_energy_harvested_pct": float(round(solar_gen_pct, 1)),
                 "status": status,
                 "score": float(round(score, 1)),
@@ -1775,7 +1805,8 @@ class DalilMarsEngine:
         )
 
         return {
-            "status": "OPTIMAL_WINDOW_IDENTIFIED",
+            "status": "OK",
+            "search_status": "OPTIMAL_WINDOW_IDENTIFIED",
             "mode": mode,
             "start": base_route["start"],
             "destination": base_route["destination"],
@@ -1789,7 +1820,9 @@ class DalilMarsEngine:
                 "window_duration_hours": win_hours,
             },
             "best_departure": best_slot,
+            "optimal_departure": best_slot,
             "departure_timeline": timeline,
+            "evaluations": timeline,
             "best_route": best_route,
         }
 
@@ -1829,14 +1862,22 @@ class DalilMarsEngine:
             min_path_loss = None
 
         dist_to_hab_km = round((np.hypot(self.comms_towers[0]["grid_r"] - pr, self.comms_towers[0]["grid_c"] - pc) * self.pixel_res) / 1000.0, 2)
+        los_state = "CLEAR_LOS" if direct_hab_los else ("OBSTRUCTED" if status == "RF_BLACKOUT" else "RELAY_CONNECTED")
+        fspl = float(round(min_path_loss, 2)) if min_path_loss is not None else 160.0
+        rx_pow = float(round(30.0 - min_path_loss, 2)) if min_path_loss is not None else -130.0
 
         return {
             "status": status,
+            "los_state": los_state,
             "active_link": active_link,
             "signal_quality": sig_quality,
+            "link_quality": sig_quality,
             "direct_hab_los": bool(direct_hab_los),
             "path_loss_db": float(round(min_path_loss, 1)) if min_path_loss is not None else None,
+            "fspl_db": fspl,
+            "rx_power_dbm": rx_pow,
             "distance_to_hab_km": dist_to_hab_km,
+            "distance_km": dist_to_hab_km,
         }
 
     @staticmethod
@@ -1873,6 +1914,7 @@ class DalilMarsEngine:
         elev_m = float(round(float(self.elev_matrix[r, c]), 1)) if self.elev_matrix is not None else -2500.0
         slope_deg = float(round(float(self.slope_matrix[r, c]), 1)) if self.slope_matrix is not None else 2.0
 
+        mode = mode.replace("-", "_")
         mode_prof = MOBILITY_PROFILES.get(mode, MOBILITY_PROFILES["on_foot"])
         crit_slope = mode_prof.get("criticalSlopeDeg", 18.0)
         caut_slope = mode_prof.get("cautionSlopeDeg", 10.0)
@@ -2076,20 +2118,39 @@ class DalilMarsEngine:
                 if alert_level in ("CRITICAL_BREACH_POINT_OF_NO_RETURN", "WARNING_APPROACHING_WALKBACK_LIMIT")
                 else "EMERGENCY_ABORT_STANDBY"
             )
+            emergency_abort["destination"] = str(best_shelter["name"])
+            emergency_abort["destination_name"] = str(best_shelter["name"])
+            emergency_abort["total_distance_km"] = emergency_abort.get("total_dist_km", abort_dist_km)
+            emergency_abort["estimated_duration_min"] = emergency_abort.get("duration_min", abort_time_min)
         except Exception as e:
             emergency_abort = {
                 "status": "ABORT_PLANNING_ERROR",
                 "error": f"Abort route calculation failed: {str(e)}",
+                "destination": str(best_shelter["name"]) if best_shelter else "Nearest Shelter",
                 "abort_target_shelter": best_shelter,
+                "total_distance_km": abort_dist_km,
+                "estimated_duration_min": abort_time_min,
+                "navigation_steps": [],
             }
 
         h_int = int(lst_hours)
         m_int = int((lst_hours - h_int) * 60.0)
 
+        o2_burn_pct_hr = round((o2_rate_lpm * 60.0 / SUIT_O2_CAPACITY_L) * 100.0, 2)
+        batt_burn_pct_hr = round((p_electrical / (1200.0 if mode == "on_foot" else 16000.0)) * 100.0, 2)
+        margin_mins = int(round((min_margin / 100.0) * (tte_o2_min if mode == "on_foot" else tte_batt_min)))
+
         return {
             "status": status,
             "alert_level": alert_level,
             "action": action,
+            "mission_feasible": bool(dest_projection["destination_reachable"]) if dest_projection is not None else bool(min_margin >= 0.0),
+            "walkback_margin_min": margin_mins,
+            "warnings": [alert_level] if alert_level != "NOMINAL" else [],
+            "burn_rates": {
+                "o2_percent_per_hr": o2_burn_pct_hr,
+                "battery_percent_per_hr": batt_burn_pct_hr,
+            },
             "timestamp_lst": f"{h_int:02d}:{m_int:02d} LST",
             "mode": mode,
             "tactical_recommendation": recommendation,
@@ -2147,16 +2208,40 @@ def get_engine() -> DalilMarsEngine:
     return _DEFAULT_ENGINE
 
 
+def _parse_lst_val(val, default: float = 14.0) -> float:
+    """Helper to convert LST representation (float, int, or 'HH:MM' string) to float hours."""
+    if val is None:
+        return default
+    if isinstance(val, (int, float)):
+        return float(val)
+    if isinstance(val, str):
+        cleaned = val.strip().replace("LST", "").replace("lst", "").strip()
+        if ":" in cleaned:
+            parts = cleaned.split(":")
+            try:
+                return float(parts[0]) + float(parts[1]) / 60.0
+            except (ValueError, IndexError):
+                return default
+        try:
+            return float(cleaned)
+        except ValueError:
+            return default
+    return default
+
+
 def plan_route(
     start,
-    destination,
+    destination=None,
     mode: str = "on_foot",
-    lst: float | None = None,
+    target=None,
+    departure_lst: float | str | None = None,
+    lst: float | str | None = None,
     lst_hours: float = 14.0,
     sun_position: tuple[float, float] | None = None,
     weather: str = "nominal",
     tau: float | None = None,
     radiation_spe: bool = False,
+    radiation_storm: bool = False,
     initial_battery: float | None = None,
     initial_battery_pct: float = 100.0,
     initial_o2: float | None = None,
@@ -2173,7 +2258,16 @@ def plan_route(
     Designed for portable astronaut field computers: accepts measured life-support telemetry
     (battery_pct, o2_pct) directly from spacesuit or rover sensors.
     """
-    lst_val = lst if lst is not None else lst_hours
+    if destination is None:
+        destination = target if target is not None else kwargs.pop("target", None)
+    if destination is None:
+        raise ValueError("plan_route requires a destination (or target)")
+
+    raw_lst = departure_lst if departure_lst is not None else (lst if lst is not None else kwargs.pop("departure_lst", None))
+    lst_val = _parse_lst_val(raw_lst, default=lst_hours)
+
+    spe_val = bool(radiation_spe or radiation_storm or kwargs.pop("radiation_storm", False))
+
     batt_in = kwargs.pop("battery_pct", None)
     if batt_in is None:
         batt_in = kwargs.pop("battery", None)
@@ -2195,7 +2289,7 @@ def plan_route(
         sun_position=sun_position,
         weather=weather,
         tau=tau,
-        radiation_spe=radiation_spe,
+        radiation_spe=spe_val,
         initial_battery_pct=batt_val,
         initial_o2_pct=o2_val,
         allow_charging_pitstop=pitstop_val,
@@ -2207,7 +2301,8 @@ def plan_route(
 def plan_emergency_abort(
     current_location,
     mode: str = "on_foot",
-    lst: float | None = None,
+    departure_lst: float | str | None = None,
+    lst: float | str | None = None,
     lst_hours: float = 14.0,
     initial_battery: float | None = None,
     initial_battery_pct: float = 100.0,
@@ -2217,7 +2312,9 @@ def plan_emergency_abort(
     **kwargs,
 ) -> dict:
     """Calculates immediate, highest-priority emergency retreat route to the closest habitat or storm shelter."""
-    lst_val = lst if lst is not None else lst_hours
+    raw_lst = departure_lst if departure_lst is not None else (lst if lst is not None else kwargs.pop("departure_lst", None))
+    lst_val = _parse_lst_val(raw_lst, default=lst_hours)
+
     batt_in = kwargs.pop("battery_pct", None)
     if batt_in is None:
         batt_in = kwargs.pop("battery", None)
@@ -2243,10 +2340,13 @@ def plan_science_tour(
     base_location=None,
     targets=None,
     target_landmarks=None,
+    base=None,
     max_duration_hours: float = 6.0,
     stay_duration_min: float = 25.0,
+    station_stop_min: float | None = None,
     mode: str = "rover",
-    lst: float | None = None,
+    departure_lst: float | str | None = None,
+    lst: float | str | None = None,
     lst_hours: float = 9.0,
     weather: str = "nominal",
     initial_battery: float | None = None,
@@ -2258,8 +2358,15 @@ def plan_science_tour(
     **kwargs,
 ) -> dict:
     """Plans an optimal multi-stop science exploration tour visiting cataloged Jezero targets."""
-    target_list = target_landmarks if target_landmarks is not None else targets
-    lst_val = lst if lst is not None else lst_hours
+    if base_location is None:
+        base_location = base if base is not None else kwargs.pop("base", None)
+    target_list = target_landmarks if target_landmarks is not None else (targets if targets is not None else kwargs.pop("targets", None))
+
+    stay_min = station_stop_min if station_stop_min is not None else stay_duration_min
+
+    raw_lst = departure_lst if departure_lst is not None else (lst if lst is not None else kwargs.pop("departure_lst", None))
+    lst_val = _parse_lst_val(raw_lst, default=lst_hours)
+
     batt_in = kwargs.pop("battery_pct", None)
     if batt_in is None:
         batt_in = kwargs.pop("battery", None)
@@ -2274,7 +2381,7 @@ def plan_science_tour(
         base_location=base_location,
         target_landmarks=target_list,
         max_duration_hours=max_duration_hours,
-        stay_duration_min=stay_duration_min,
+        stay_duration_min=stay_min,
         mode=mode,
         lst_hours=lst_val,
         weather=weather,
@@ -2288,11 +2395,13 @@ def plan_science_tour(
 
 def find_optimal_departure(
     start,
-    destination,
+    destination=None,
+    target=None,
     mode: str = "rover",
-    earliest_lst: float = 7.0,
-    latest_lst: float = 16.5,
+    earliest_lst: float | str = 7.0,
+    latest_lst: float | str = 16.5,
     step_hours: float = 0.5,
+    step_minutes: float | None = None,
     weather: str = "nominal",
     initial_battery: float | None = None,
     initial_battery_pct: float = 100.0,
@@ -2303,6 +2412,15 @@ def find_optimal_departure(
     **kwargs,
 ) -> dict:
     """Evaluates diurnal solar variation across a Martian sol to find the safest departure window."""
+    if destination is None:
+        destination = target if target is not None else kwargs.pop("target", None)
+    if destination is None:
+        raise ValueError("find_optimal_departure requires destination (or target)")
+
+    e_lst = _parse_lst_val(earliest_lst, default=7.0)
+    l_lst = _parse_lst_val(latest_lst, default=16.5)
+    s_hours = (step_minutes / 60.0) if step_minutes is not None else step_hours
+
     batt_val = initial_battery if initial_battery is not None else initial_battery_pct
     o2_val = initial_o2 if initial_o2 is not None else initial_o2_pct
 
@@ -2310,9 +2428,9 @@ def find_optimal_departure(
         start=start,
         destination=destination,
         mode=mode,
-        earliest_lst=earliest_lst,
-        latest_lst=latest_lst,
-        step_hours=step_hours,
+        earliest_lst=e_lst,
+        latest_lst=l_lst,
+        step_hours=s_hours,
         weather=weather,
         initial_battery_pct=batt_val,
         initial_o2_pct=o2_val,
@@ -2322,11 +2440,19 @@ def find_optimal_departure(
     )
 
 
-def evaluate_rf_comms(location, mode: str = "rover") -> dict:
+def evaluate_rf_comms(location=None, lon=None, mode: str = "rover", observer_coords=None, target_coords=None, **kwargs) -> dict:
     """Evaluates RF line-of-sight connectivity and link budget from coordinates or POI to Hab Alpha and relay masts."""
     eng = get_engine()
-    _, _, lat, lon = eng._resolve_coords(location)
-    return eng.evaluate_rf_comms(lat, lon, mode=mode)
+    if target_coords is not None:
+        target = target_coords
+    elif location is not None:
+        target = (location, lon) if lon is not None else location
+    elif "coords" in kwargs:
+        target = kwargs.pop("coords")
+    else:
+        raise ValueError("evaluate_rf_comms requires location coordinates or landmark name")
+    _, _, lat, lon_deg = eng._resolve_coords(target)
+    return eng.evaluate_rf_comms(lat, lon_deg, mode=mode)
 
 
 def predict(
@@ -2337,7 +2463,8 @@ def predict(
     o2: float | None = None,
     destination=None,
     mode: str = "on_foot",
-    lst: float | None = None,
+    current_lst: float | str | None = None,
+    lst: float | str | None = None,
     lst_hours: float = 14.0,
     metabolic_rate_watts: float | None = None,
     heart_rate_bpm: float | None = None,
@@ -2365,7 +2492,8 @@ def predict(
         o2_in = kwargs.pop("initial_o2", None)
     o2_val = o2_pct if o2_pct is not None else (o2 if o2 is not None else (o2_in if o2_in is not None else 100.0))
 
-    lst_val = lst if lst is not None else lst_hours
+    raw_lst = current_lst if current_lst is not None else (lst if lst is not None else kwargs.pop("current_lst", None))
+    lst_val = _parse_lst_val(raw_lst, default=lst_hours)
 
     return get_engine().predict(
         current_location=current_location,
@@ -2459,10 +2587,13 @@ def get_engine_status() -> dict:
     return {
         "engine": "Dalil-Mars Tactical Pathfinding Engine",
         "status": "ONLINE",
+        "engine_state": "OPERATIONAL",
         "fine_grid_resolution_m": eng.pixel_res,
+        "grid_resolution_m": round(eng.pixel_res, 2),
         "fine_grid_dimensions": {"rows": H, "cols": W, "total_nodes": H * W},
         "macro_grid_dimensions": {"rows": eng.cH, "cols": eng.cW, "macro_cells": eng.cH * eng.cW},
         "all_pairs_matrix_loaded": eng.all_pairs_4d is not None,
+        "all_pairs_matrix_shape": eng.all_pairs_4d.shape if eng.all_pairs_4d is not None else None,
         "charging_stations_count": len(eng.charging_stations),
         "available_modes": list(MOBILITY_PROFILES.keys()),
         "weather_models": list(WEATHER_MODELS.keys()),
