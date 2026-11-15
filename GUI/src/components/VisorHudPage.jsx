@@ -38,6 +38,7 @@ import {
   sendVisorCommand,
   subscribeVisorState,
 } from '../utils/visorSync';
+import { planRouteApi } from '../utils/engineApi';
 import Visor3DTerrain, { VISOR_VERTICAL_FOV } from './Visor3DTerrain';
 
 const VISOR_FOV_DEG = 110; // ±55° horizontal field of view
@@ -212,6 +213,10 @@ export default function VisorHudPage() {
     loadout = FALLBACK_SNAPSHOT.loadout,
     latestMeda = FALLBACK_SNAPSHOT.latestMeda,
     routePathCoords = [],
+    livePrediction = null,
+    rfComms = null,
+    walkbackHorizon = null,
+    engineLoading = false,
   } = snapshot;
 
   const bodyHeading = liveNavState?.heading ?? 0;
@@ -252,6 +257,61 @@ export default function VisorHudPage() {
   const lowReserve =
     (liveNavState?.currentBattery ?? 100) <= SAFE_RESERVE_PCT ||
     (liveNavState?.currentO2 ?? 100) <= SAFE_RESERVE_PCT;
+
+  // Direct standalone engine route recalculation when running independent of tablet GUI
+  const handleStandaloneRecalculate = useCallback(async () => {
+    const lat = moveStateRef.current?.curLat ?? curLat;
+    const lon = moveStateRef.current?.curLon ?? curLon;
+    const target = endPOI || { lat: 18.4565, lon: 77.4035 };
+    try {
+      setSnapshot((prev) => ({ ...prev, engineLoading: true }));
+      const res = await planRouteApi({
+        start: [lat, lon],
+        destination: [target.lat, target.lon],
+        mode: loadout?.id === 'rover' ? 'rover' : 'on_foot',
+        loadout_key: loadout?.id || 'light',
+        weather: weatherKey || 'nominal',
+      });
+      if (res?.path_coords && res.path_coords.length > 0) {
+        setSnapshot((prev) => ({
+          ...prev,
+          routePathCoords: res.path_coords,
+          engineLoading: false,
+          liveNavState: {
+            ...prev.liveNavState,
+            distRemainingKm: Number((res.total_dist_km ?? 0).toFixed(2)),
+            estTimeRemainingMin: Math.round(res.est_time_minutes ?? 0),
+            routeDeviation: {
+              isOffRoute: false,
+              severity: 'nominal',
+              distMeters: 0,
+              returnBearing: prev.liveNavState?.heading ?? 0,
+              isManual: false,
+            },
+          },
+        }));
+      }
+    } catch (err) {
+      console.warn('Standalone visor recalculate error:', err);
+    } finally {
+      setSnapshot((prev) => ({ ...prev, engineLoading: false }));
+    }
+  }, [curLat, curLon, endPOI, loadout, weatherKey]);
+
+  const debouncedRecalcTimerRef = useRef(null);
+  const triggerVisorRecalc = useCallback(() => {
+    if (debouncedRecalcTimerRef.current) clearTimeout(debouncedRecalcTimerRef.current);
+    debouncedRecalcTimerRef.current = setTimeout(() => {
+      if (linkLive) {
+        sendVisorCommand('RECALCULATE_ROUTE');
+      } else {
+        handleStandaloneRecalculate();
+      }
+    }, 450);
+  }, [linkLive, handleStandaloneRecalculate]);
+
+  const triggerVisorRecalcRef = useRef(triggerVisorRecalc);
+  triggerVisorRecalcRef.current = triggerVisorRecalc;
 
   // Move astronaut manually & sync to tablet map (preserve bodyHeading so lookYawOffset never compounds)
   const moveAstronaut = useCallback(
@@ -806,6 +866,13 @@ export default function VisorHudPage() {
               <span className="font-bold tracking-wider">
                 ARES-EVA VISOR {linkLive ? '• LINK ACTIVE' : '• STANDBY'}
               </span>
+              <span className="flex items-center gap-1 text-[10px] text-emerald-300 border-l border-cyan-500/30 pl-2">
+                <span className="relative flex h-2 w-2">
+                  <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                  <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
+                </span>
+                LIVE RE-ROUTE: AUTO
+              </span>
               {(isDusty || isLowLight) && (
                 <span className="rounded bg-cyan-500/20 px-1.5 py-0.5 text-[9px] text-cyan-200">
                   CONTOUR BOOST
@@ -825,7 +892,21 @@ export default function VisorHudPage() {
                 className="flex items-center gap-1 rounded-full border border-emerald-500/50 bg-emerald-950/80 px-2.5 py-1 text-[11px] font-bold text-emerald-200 hover:bg-emerald-900/80 cursor-pointer backdrop-blur-md"
               >
                 {navPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
-                {navPlaying ? 'Pause' : 'Walk'}
+                {navPlaying ? 'Pause' : (isOffRoute ? 'Re-Route & Walk' : 'Walk')}
+              </button>
+              <button
+                onClick={() => {
+                  if (linkLive) {
+                    sendVisorCommand('RECALCULATE_ROUTE');
+                  } else {
+                    handleStandaloneRecalculate();
+                  }
+                }}
+                className="flex items-center gap-1 rounded-full border border-cyan-400/60 bg-cyan-950/90 px-3 py-1 text-[11px] font-bold text-cyan-200 hover:bg-cyan-900 cursor-pointer backdrop-blur-md shadow-[0_0_10px_rgba(6,182,212,0.3)]"
+                title="Recalculate A* corridor from current coordinates to target"
+              >
+                <Compass className="h-3.5 w-3.5 text-cyan-300" />
+                <span>RE-ROUTE GPS</span>
               </button>
               <button
                 onClick={() =>
@@ -907,6 +988,14 @@ export default function VisorHudPage() {
             )}
           </div>
 
+          {/* Active Live Re-Route Computing Overlay */}
+          {engineLoading && (
+            <div className="pointer-events-none flex items-center gap-2 rounded-full border border-cyan-400/80 bg-slate-950/95 px-4 py-1.5 text-xs font-mono font-bold text-cyan-200 shadow-2xl backdrop-blur-md animate-pulse">
+              <Compass className="h-4 w-4 animate-spin text-cyan-400" />
+              <span>LIVE RE-ROUTING: COMPUTING A* CORRIDOR...</span>
+            </div>
+          )}
+
           {/* Off-Route Deviation Banner (Subtle pill for minor drift, full alert only when critical >180m) */}
           {isOffRoute &&
             (deviation?.severity === 'critical' ? (
@@ -918,15 +1007,21 @@ export default function VisorHudPage() {
                       Off-Route: {deviation.distMeters} m from A* Corridor
                     </div>
                     <div className="text-[11px] text-red-200 truncate">
-                      Turn to {deviation.returnBearing}° to rejoin safe path
+                      Turn to {deviation.returnBearing}° or re-route directly to target
                     </div>
                   </div>
                 </div>
                 <button
-                  onClick={() => sendVisorCommand('SNAP_TO_ROUTE')}
+                  onClick={() => {
+                    if (linkLive) {
+                      sendVisorCommand('RECALCULATE_ROUTE');
+                    } else {
+                      handleStandaloneRecalculate();
+                    }
+                  }}
                   className="shrink-0 rounded-lg border border-red-300/70 bg-red-500/25 px-2.5 py-1 text-[11px] font-bold uppercase hover:bg-red-500/40 cursor-pointer"
                 >
-                  Snap to Route
+                  Re-Route to Target
                 </button>
               </div>
             ) : (
@@ -936,13 +1031,42 @@ export default function VisorHudPage() {
                   Off-path {deviation.distMeters}m • {deviation.returnBearing}°
                 </span>
                 <button
-                  onClick={() => sendVisorCommand('SNAP_TO_ROUTE')}
+                  onClick={() => {
+                    if (linkLive) {
+                      sendVisorCommand('RECALCULATE_ROUTE');
+                    } else {
+                      handleStandaloneRecalculate();
+                    }
+                  }}
                   className="rounded-full border border-amber-400/50 bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold uppercase hover:bg-amber-500/35 cursor-pointer"
                 >
-                  Snap
+                  Re-Route
                 </button>
               </div>
             ))}
+
+          {/* Rule #1 Walkback Point-of-No-Return Alert Banner */}
+          {livePrediction?.alert_level === 'CRITICAL_BREACH_POINT_OF_NO_RETURN' && (
+            <div className="pointer-events-auto flex w-full max-w-xl items-center justify-between gap-3 rounded-xl border-2 border-red-500 bg-red-950/95 px-3.5 py-2 text-red-100 shadow-2xl backdrop-blur-md animate-pulse">
+              <div className="flex items-center gap-2 min-w-0">
+                <ShieldAlert className="h-5 w-5 shrink-0 text-red-400 animate-spin" />
+                <div className="min-w-0">
+                  <div className="text-xs font-black uppercase tracking-wider text-red-300">
+                    RULE #1 ALERT: POINT OF NO RETURN BREACHED
+                  </div>
+                  <div className="text-[10.5px] text-red-100 truncate">
+                    {livePrediction?.tactical_recommendation || 'Immediately retreat to nearest pressurized habitat.'}
+                  </div>
+                </div>
+              </div>
+              <button
+                onClick={() => sendVisorCommand('SHELTER_DIVERT')}
+                className="shrink-0 rounded-lg border border-white bg-red-600 px-3 py-1 text-[11px] font-extrabold uppercase hover:bg-red-500 cursor-pointer text-white"
+              >
+                ABORT NOW
+              </button>
+            </div>
+          )}
 
           {/* Slim Turn-by-Turn / Emergency Pill */}
           <div
@@ -988,7 +1112,7 @@ export default function VisorHudPage() {
         {/* BOTTOM ROW: MINIMAL PLSS STRIP | STEP PAD | MINIMAL MEDA STRIP */}
         <div className="flex items-end justify-between gap-3">
           {/* LEFT: COMPACT PLSS STRIP */}
-          <div className="flex items-center gap-3 rounded-full border border-cyan-500/30 bg-slate-950/60 px-3.5 py-1.5 font-mono text-[11px] backdrop-blur-md">
+          <div className="flex items-center gap-2.5 rounded-full border border-cyan-500/30 bg-slate-950/60 px-3.5 py-1.5 font-mono text-[11px] backdrop-blur-md">
             <span className={`flex items-center gap-1 font-bold ${liveNavState?.isRecharging ? 'text-amber-300' : lowReserve ? 'text-red-400' : 'text-cyan-200'}`}>
               {liveNavState?.isRecharging ? (
                 <BatteryCharging className="h-3.5 w-3.5 text-amber-300 animate-pulse" />
@@ -1004,6 +1128,31 @@ export default function VisorHudPage() {
             {liveNavState?.isRecharging && (
               <span className="rounded-full bg-amber-500/20 border border-amber-400/40 px-2 py-0.5 text-[9px] font-bold text-amber-200 animate-pulse">
                 CHARGING
+              </span>
+            )}
+            {/* Apollo/Artemis Rule #1 Walkback Horizon Buffer */}
+            {livePrediction?.walkback_margin_min !== undefined && (
+              <span
+                className={`flex items-center gap-1 rounded px-1.5 py-0.5 text-[9.5px] font-bold ${
+                  livePrediction.alert_level === 'CRITICAL_BREACH_POINT_OF_NO_RETURN'
+                    ? 'bg-red-500/30 text-red-300 border border-red-400/70 animate-pulse'
+                    : livePrediction.alert_level === 'WARNING_APPROACHING_WALKBACK_LIMIT'
+                      ? 'bg-amber-500/20 text-amber-300 border border-amber-400/50'
+                      : 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                }`}
+                title={`Rule #1 Walkback Point-of-No-Return: ${livePrediction.tactical_recommendation || ''}`}
+              >
+                WB: {livePrediction.walkback_margin_min}m
+              </span>
+            )}
+            {livePrediction?.dynamic_consumption_rates?.o2_consumption_rate_lpm && (
+              <span className="hidden sm:inline text-cyan-300/80 text-[10px]" title="Dynamic PLSS O2 Burn Rate">
+                {livePrediction.dynamic_consumption_rates.o2_consumption_rate_lpm.toFixed(2)} L/m
+              </span>
+            )}
+            {livePrediction?.dynamic_consumption_rates?.battery_discharge_rate_watts && (
+              <span className="hidden md:inline text-amber-300/80 text-[10px]" title="Dynamic Electrical Load">
+                {Math.round(livePrediction.dynamic_consumption_rates.battery_discharge_rate_watts)}W
               </span>
             )}
             <span className="hidden sm:flex items-center gap-1 text-rose-200">

@@ -33,7 +33,9 @@ import {
   Pause,
   Play,
   Plus,
+  Radio,
   RotateCcw,
+  Route,
   Search,
   ShieldAlert,
   Sliders,
@@ -54,6 +56,7 @@ import APP_THEME from './theme';
 import JezeroTacticalMap from './components/JezeroTacticalMap';
 import MarsPanoramaViewer from './components/MarsPanoramaViewer';
 import LandmarkDrawer from './components/LandmarkDrawer';
+import ScienceTourModal from './components/ScienceTourModal';
 import waypointsData from './data/jezero_waypoints.json';
 import medaWeatherData from './data/meda_weather.json';
 import jezeroPanoramas from './data/jezero_panoramas.json';
@@ -63,6 +66,7 @@ import {
   calculateBearingDegrees,
   computeMarswalkRoute,
   estimateElev,
+  loadDepthHazardRegions,
   LOADOUT_PROFILES,
   marsDistanceMeters,
   SUIT_O2_CAPACITY_LITERS,
@@ -70,9 +74,11 @@ import {
 } from './utils/pathfinder';
 import {
   adaptEngineRouteToGui,
+  evaluateRfCommsApi,
   findOptimalDepartureApi,
   planEmergencyAbortApi,
   planRouteApi,
+  planScienceTourApi,
   predictTelemetryApi,
 } from './utils/engineApi';
 import { publishVisorState, subscribeVisorCommands } from './utils/visorSync';
@@ -117,17 +123,19 @@ const OVERLAY_ITEMS = [
   { key: 'landmarks', label: '11 Regional Science Landmarks' },
 ];
 
+const LATEST_MEDA = medaWeatherData[medaWeatherData.length - 1] || {
+  sol: '1133',
+  min_temp: -79.3,
+  max_temp: -24.7,
+  pressure: 778.9,
+  sunrise: '06:18:07',
+  sunset: '17:13:51',
+  season: 'late autumn',
+};
+
 export default function App() {
   const { sciencePOIs, hazardZones } = scienceHazardsData;
-  const latestMeda = medaWeatherData[medaWeatherData.length - 1] || {
-    sol: '1133',
-    min_temp: -79.3,
-    max_temp: -24.7,
-    pressure: 778.9,
-    sunrise: '06:18:07',
-    sunset: '17:13:51',
-    season: 'late autumn',
-  };
+  const latestMeda = LATEST_MEDA;
 
   // Terminal Dual-Mode UX ('astronaut' = Glove-first Google Maps Tablet UI | 'developer' = Ground Control Terminal)
   const [uiMode, setUiMode] = useState('astronaut');
@@ -200,6 +208,7 @@ export default function App() {
   const [showDirectComparison, setShowDirectComparison] = useState(false);
   const [manualPosOverride, setManualPosOverride] = useState(null);
   const [visorViewHeading, setVisorViewHeading] = useState(null);
+  const [autoLiveReroute, setAutoLiveReroute] = useState(true);
 
   // Martian Sol & LST Time Engine
   const [selectedMissionSol] = useState(Number(latestMeda.sol) || 1133);
@@ -500,6 +509,79 @@ export default function App() {
   const [engineLoading, setEngineLoading] = useState(false);
   const [livePrediction, setLivePrediction] = useState(null);
   const [optimalDepartureResult, setOptimalDepartureResult] = useState(null);
+  const [showScienceTourModal, setShowScienceTourModal] = useState(false);
+  const [scienceTourResult, setScienceTourResult] = useState(null);
+  const [rfProbeActive, setRfProbeActive] = useState(false);
+  const [rfProbeResult, setRfProbeResult] = useState(null);
+  const [rfProbeLoading, setRfProbeLoading] = useState(false);
+
+  // RF Comms Point Inspector Probe Handler
+  const handleProbeRfComms = async (coord) => {
+    setRfProbeLoading(true);
+    try {
+      const mode = loadoutKey === 'rover' ? 'rover' : 'on_foot';
+      const res = await evaluateRfCommsApi({ location: coord, mode });
+      setRfProbeResult({
+        ...res,
+        location: coord,
+      });
+      showToast({
+        id: `rf-probe-${Date.now()}`,
+        type: res.status === 'RF_BLACKOUT' ? 'warning' : 'info',
+        title: `RF COMMS: ${res.signal_quality || res.status}`,
+        message: `${res.active_link} • FSPL ${res.fspl_db ?? res.path_loss_db ?? '--'} dB • RX ${res.rx_power_dbm ?? '--'} dBm`,
+      });
+    } catch (err) {
+      showToast({
+        id: `rf-probe-err-${Date.now()}`,
+        type: 'warning',
+        title: 'RF PROBE FAILED',
+        message: err.message,
+      });
+    } finally {
+      setRfProbeLoading(false);
+    }
+  };
+
+  // Apply Solved Science Tour to Route State & Tactical Simulation
+  const handleApplyScienceTour = (tour) => {
+    setScienceTourResult(tour);
+    if (tour.legs?.length > 0) {
+      const allCoords = [];
+      tour.legs.forEach((l) => {
+        const legPts = (l.path_coords || []).map((pt) => [pt[1], pt[0]]);
+        allCoords.push(...legPts);
+      });
+      if (allCoords.length > 0) {
+        setRouteResult((prev) => ({
+          ...prev,
+          source: 'dalil_engine_tour',
+          pathCoords: allCoords,
+          distKm: Number((tour.total_distance_km ?? 0).toFixed(2)),
+          durationMin: Math.round(tour.total_duration_min ?? 0),
+          navigationSteps: tour.legs.flatMap((l) => l.navigation_steps || []),
+        }));
+        setNavStepIdx(0);
+        setNavMode('navigating');
+        setNavPlaying(true);
+        setFollowAstronaut(true);
+        showToast({
+          id: `tour-loaded-${Date.now()}`,
+          type: 'success',
+          title: 'SCIENCE TOUR ACTIVE',
+          message: `${tour.legs.length} legs (${tour.total_distance_km} km) loaded. Beginning expedition.`,
+        });
+      }
+    }
+  };
+  const [depthHazardsReady, setDepthHazardsReady] = useState(false);
+
+  useEffect(() => {
+    loadDepthHazardRegions().then((geojson) => {
+      if (geojson) setDepthHazardsReady(true);
+    });
+  }, []);
+
   const [routeResult, setRouteResult] = useState(() =>
     computeMarswalkRoute({
       start: startPOI,
@@ -521,8 +603,8 @@ export default function App() {
     const lstHours = ((startLstMinutes % 1440) + 1440) % 1440 / 60;
     const engineMode = loadoutKey === 'rover' ? 'rover' : 'on_foot';
 
+    setEngineLoading(true);
     const timer = setTimeout(async () => {
-      setEngineLoading(true);
       try {
         const res = await planRouteApi(
           {
@@ -541,16 +623,33 @@ export default function App() {
           controller.signal
         );
         if (!controller.signal.aborted) {
-          setRouteResult(
-            adaptEngineRouteToGui(res, {
-              start: startPOI,
-              end: endPOI,
-              loadoutKey,
-              weatherKey,
-              startBatteryPct,
-              startO2Pct,
-            })
-          );
+          const adapted = adaptEngineRouteToGui(res, {
+            start: startPOI,
+            end: endPOI,
+            loadoutKey,
+            weatherKey,
+            startBatteryPct,
+            startO2Pct,
+          });
+          if (adapted.pathCoords.length > 2 || adapted.directDistKm <= 0.35) {
+            setRouteResult(adapted);
+          } else {
+            setRouteResult(
+              computeMarswalkRoute({
+                start: startPOI,
+                end: endPOI,
+                hazardZones,
+                waypoints: waypointsData,
+                sciencePOIs,
+                loadoutKey,
+                weatherKey,
+                startBatteryPct,
+                startO2Pct,
+                useChargingStop: autoChargingStop ? 'auto' : false,
+                customExclusionZones: drawnZones,
+              })
+            );
+          }
           setEngineOnline(true);
         }
       } catch (err) {
@@ -594,6 +693,7 @@ export default function App() {
     autoChargingStop,
     drawnZones,
     startLstMinutes,
+    depthHazardsReady,
   ]);
 
   // Emergency Abort Handler using engine.plan_emergency_abort()
@@ -673,8 +773,122 @@ export default function App() {
     }
   };
 
+  const autoResumeAfterRecalcRef = useRef(false);
+  const isRecalculatingRef = useRef(false);
+
+  // Dynamic Route Recalculation from Astronaut's Current Coordinates
+  const handleRecalculateFromCurrentPosition = async ({ resumeNav = true, isAutoLive = false } = {}) => {
+    if (isRecalculatingRef.current) return;
+    isRecalculatingRef.current = true;
+
+    const curPos = manualPosOverride
+      ? [manualPosOverride.lat, manualPosOverride.lon]
+      : liveNavState?.currentLatLon ?? [startPOI.lat, startPOI.lon];
+
+    const curBat = manualPosOverride?.batteryPct ?? liveNavState?.currentBattery ?? startBatteryPct;
+    const curO2 = manualPosOverride?.o2Pct ?? liveNavState?.currentO2 ?? startO2Pct;
+
+    autoResumeAfterRecalcRef.current = resumeNav;
+    setEngineLoading(true);
+    const lstHours = ((startLstMinutes % 1440) + 1440) % 1440 / 60;
+    const engineMode = loadoutKey === 'rover' ? 'rover' : 'on_foot';
+
+    try {
+      const res = await planRouteApi({
+        start: curPos,
+        destination: [endPOI.lat, endPOI.lon],
+        mode: engineMode,
+        loadout_key: loadoutKey,
+        departure_lst: lstHours,
+        weather: weatherKey,
+        radiation_spe: weatherKey === 'solar_storm',
+        initial_battery_pct: curBat,
+        initial_o2_pct: curO2,
+        allow_charging_pitstop: autoChargingStop,
+        custom_exclusion_zones: drawnZones,
+      });
+      const adapted = adaptEngineRouteToGui(res, {
+        start: { lat: curPos[0], lon: curPos[1], name: 'Current Location', id: 'custom-origin' },
+        end: endPOI,
+        loadoutKey,
+        weatherKey,
+        startBatteryPct: curBat,
+        startO2Pct: curO2,
+      });
+
+      setCustomOriginCoord([...curPos]);
+      setStartId('custom-origin');
+      setStartBatteryPct(curBat);
+      setStartO2Pct(curO2);
+      setRouteResult(adapted);
+      setEngineOnline(true);
+      setNavStepIdx(0);
+      setRechargeTicksRemaining(0);
+      setHasCompletedPitStop(false);
+      setManualPosOverride(null);
+      setVisorViewHeading(null);
+
+      if (resumeNav) {
+        setNavMode('navigating');
+        setNavPlaying(true);
+        setFollowAstronaut(true);
+      }
+      showToast({
+        id: `recalc-${Date.now()}`,
+        type: 'info',
+        title: isAutoLive ? 'AUTO LIVE RE-ROUTE COMPLETE' : 'A* CORRIDOR RECALCULATED',
+        message: `Course replotted from current position to ${endPOI.name} (${Number((res.total_dist_km ?? 0).toFixed(2))} km).`,
+        duration: isAutoLive ? 3000 : 5000,
+      });
+    } catch (err) {
+      console.warn('Backend route replan failed, falling back to local pathfinder', err);
+      setEngineOnline(false);
+      const fallback = computeMarswalkRoute({
+        start: { lat: curPos[0], lon: curPos[1], name: 'Current Location', id: 'custom-origin' },
+        end: endPOI,
+        hazardZones,
+        waypoints: waypointsData,
+        sciencePOIs,
+        loadoutKey,
+        weatherKey,
+        startBatteryPct: curBat,
+        startO2Pct: curO2,
+        useChargingStop: autoChargingStop ? 'auto' : false,
+        customExclusionZones: drawnZones,
+      });
+      setCustomOriginCoord([...curPos]);
+      setStartId('custom-origin');
+      setStartBatteryPct(curBat);
+      setStartO2Pct(curO2);
+      setRouteResult(fallback);
+      setNavStepIdx(0);
+      setRechargeTicksRemaining(0);
+      setHasCompletedPitStop(false);
+      setManualPosOverride(null);
+      setVisorViewHeading(null);
+
+      if (resumeNav) {
+        setNavMode('navigating');
+        setNavPlaying(true);
+        setFollowAstronaut(true);
+      }
+    } finally {
+      setEngineLoading(false);
+      isRecalculatingRef.current = false;
+    }
+  };
+
   // Reset live navigation simulation when traverse parameters change
   useEffect(() => {
+    if (autoResumeAfterRecalcRef.current) {
+      autoResumeAfterRecalcRef.current = false;
+      setNavStepIdx(0);
+      setRechargeTicksRemaining(0);
+      setHasCompletedPitStop(false);
+      setNavMode('navigating');
+      setNavPlaying(true);
+      return;
+    }
     setNavPlaying(false);
     setNavStepIdx(0);
     setRechargeTicksRemaining(0);
@@ -1309,6 +1523,84 @@ export default function App() {
     });
   };
 
+  // Dynamic Real-Time Astronaut Telemetry & Rule #1 Prediction Engine Call
+  const lastPredictionCallRef = useRef(0);
+  useEffect(() => {
+    if (!liveNavState?.active || !liveNavState?.currentLatLon) return;
+    const now = performance.now();
+    if (now - lastPredictionCallRef.current < 1600) return;
+    lastPredictionCallRef.current = now;
+
+    const controller = new AbortController();
+    const [curLat, curLon] = liveNavState.currentLatLon;
+    const lstHours = ((startLstMinutes % 1440) + 1440) % 1440 / 60;
+    const engineMode = loadoutKey === 'rover' ? 'rover' : 'on_foot';
+
+    predictTelemetryApi(
+      {
+        current_location: [curLat, curLon],
+        destination: [endPOI.lat, endPOI.lon],
+        battery_pct: liveNavState.currentBattery,
+        o2_pct: liveNavState.currentO2,
+        mode: engineMode,
+        current_lst: lstHours,
+        heart_rate_bpm: liveNavState.heartRateBpm,
+        speed_kmh: liveNavState.speedKmh,
+        weather: weatherKey,
+      },
+      controller.signal
+    )
+      .then((pred) => {
+        setLivePrediction(pred);
+      })
+      .catch(() => {
+        // offline or aborted
+      });
+
+    return () => controller.abort();
+  }, [
+    liveNavState?.currentLatLon?.[0],
+    liveNavState?.currentLatLon?.[1],
+    liveNavState?.active,
+    liveNavState?.currentBattery,
+    liveNavState?.currentO2,
+    liveNavState?.speedKmh,
+    loadoutKey,
+    weatherKey,
+    startLstMinutes,
+    endPOI,
+  ]);
+
+  // Automatic Live Re-Routing:
+  // When active navigation deviates significantly off-route (>50m),
+  // debounced continuous recalculation triggers via engine.py
+  const liveRerouteTimerRef = useRef(null);
+  useEffect(() => {
+    if (!autoLiveReroute || !navPlaying) return;
+    const isDeviation = Boolean(
+      liveNavState?.routeDeviation?.isOffRoute &&
+      (liveNavState?.routeDeviation?.distMeters || 0) > 50
+    );
+    if (!isDeviation) return;
+
+    if (liveRerouteTimerRef.current) clearTimeout(liveRerouteTimerRef.current);
+    liveRerouteTimerRef.current = setTimeout(() => {
+      handleRecalculateFromCurrentPosition({
+        resumeNav: true,
+        isAutoLive: true,
+      });
+    }, 1500);
+
+    return () => {
+      if (liveRerouteTimerRef.current) clearTimeout(liveRerouteTimerRef.current);
+    };
+  }, [
+    liveNavState?.routeDeviation?.isOffRoute,
+    liveNavState?.routeDeviation?.distMeters,
+    autoLiveReroute,
+    navPlaying,
+  ]);
+
   // Broadcast live EVA state to standalone Visor HUD (?mode=visor)
   useEffect(() => {
     const weatherCondition = WEATHER_CONDITIONS[weatherKey] || WEATHER_CONDITIONS.nominal;
@@ -1317,6 +1609,7 @@ export default function App() {
       navSpeed,
       weatherKey,
       liveNavState,
+      livePrediction,
       martianEnv,
       currentManeuver,
       weatherCondition: weather,
@@ -1326,12 +1619,16 @@ export default function App() {
       loadout,
       latestMeda,
       routePathCoords: routeResult?.pathCoords || [],
+      rfComms: routeResult?.rfComms,
+      walkbackHorizon: routeResult?.walkbackHorizon,
+      engineLoading,
     });
   }, [
     navPlaying,
     navSpeed,
     weatherKey,
     liveNavState,
+    livePrediction,
     martianEnv,
     currentManeuver,
     dustFrontState,
@@ -1340,6 +1637,9 @@ export default function App() {
     loadout,
     latestMeda,
     routeResult?.pathCoords,
+    routeResult?.rfComms,
+    routeResult?.walkbackHorizon,
+    engineLoading,
   ]);
 
   const visorCmdCtxRef = useRef({});
@@ -1350,8 +1650,11 @@ export default function App() {
     currentBattery: liveNavState?.currentBattery ?? startBatteryPct,
     currentO2: liveNavState?.currentO2 ?? startO2Pct,
     distCoveredKm: liveNavState?.distCoveredKm ?? 0,
+    isManualMoveActive: Boolean(manualPosOverride),
+    isOffRoute: Boolean(liveNavState?.routeDeviation?.isOffRoute),
     showToast,
     triggerShelterDivert,
+    triggerRecalculate: handleRecalculateFromCurrentPosition,
   };
 
   useEffect(() => {
@@ -1359,15 +1662,21 @@ export default function App() {
       if (command === 'SHELTER_DIVERT') {
         visorCmdCtxRef.current.triggerShelterDivert?.();
       } else if (command === 'TOGGLE_PLAY') {
-        setNavPlaying((prev) => {
-          const next = !prev;
-          if (next) {
-            setNavMode('navigating');
-            setManualPosOverride(null);
-            setVisorViewHeading(null);
-          }
-          return next;
-        });
+        const ctx = visorCmdCtxRef.current;
+        if (ctx.isManualMoveActive || ctx.isOffRoute) {
+          ctx.triggerRecalculate?.({ resumeNav: true });
+        } else {
+          setNavPlaying((prev) => {
+            const next = !prev;
+            if (next) {
+              setNavMode('navigating');
+              setVisorViewHeading(null);
+            }
+            return next;
+          });
+        }
+      } else if (command === 'RECALCULATE_ROUTE' || command === 'SNAP_TO_ROUTE') {
+        visorCmdCtxRef.current.triggerRecalculate?.({ resumeNav: true });
       } else if (command === 'SET_SPEED' && data?.speed) {
         setNavSpeed(data.speed);
       } else if (command === 'SET_WEATHER' && data?.weatherKey) {
@@ -1442,9 +1751,6 @@ export default function App() {
             message: 'Battery & PLSS O2 recharged to 100%.',
           });
         }
-      } else if (command === 'SNAP_TO_ROUTE') {
-        setManualPosOverride(null);
-        setVisorViewHeading(null);
       }
     });
   }, []);
@@ -1916,6 +2222,53 @@ export default function App() {
             <AlertTriangle className="w-3.5 h-3.5" />
             <span>ABORT</span>
           </button>
+          <button
+            type="button"
+            onClick={() => setAutoLiveReroute((prev) => !prev)}
+            title="Toggle Automatic A* Dynamic Re-routing when deviating or moving in AR Visor/GPS"
+            className={`min-h-[34px] px-2.5 py-1 rounded-[4px] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer border ${
+              autoLiveReroute
+                ? 'bg-[#22c55e]/15 border-[#22c55e] text-[#22c55e]'
+                : 'bg-[#0b0d11] border-[#242933] text-[#6b7280]'
+            }`}
+          >
+            <Compass className={`w-3.5 h-3.5 ${autoLiveReroute ? 'animate-pulse text-[#22c55e]' : ''}`} />
+            <span>LIVE RE-ROUTE: {autoLiveReroute ? 'AUTO [ON]' : 'OFF'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleRecalculateFromCurrentPosition({ resumeNav: navPlaying })}
+            title="Force Instant Route Recalculation from Astronaut Current Position"
+            className="min-h-[34px] px-2.5 py-1 rounded-[4px] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer border bg-[#0b0d11] border-cyan-500/50 text-cyan-300 hover:bg-cyan-500/20"
+          >
+            <RotateCcw className="w-3.5 h-3.5 text-cyan-400" />
+            <span className="hidden sm:inline">RE-ROUTE NOW</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => setShowScienceTourModal(true)}
+            title="Open Martian Orienteering Multi-Stop Science Tour Planner"
+            className="min-h-[34px] px-2.5 py-1 rounded-[4px] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer border bg-[#0b0d11] border-[#38bdf8]/60 text-[#38bdf8] hover:bg-[#38bdf8]/15"
+          >
+            <Route className="w-3.5 h-3.5 text-[#38bdf8]" />
+            <span>SCIENCE TOUR</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setRfProbeActive((p) => !p);
+              if (rfProbeActive) setRfProbeResult(null);
+            }}
+            title="Toggle 3D RF Comms Line-of-Sight Probe Tool (Click anywhere on Map)"
+            className={`min-h-[34px] px-2.5 py-1 rounded-[4px] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer border ${
+              rfProbeActive
+                ? 'bg-[#38bdf8]/20 border-[#38bdf8] text-[#38bdf8] animate-pulse'
+                : 'bg-[#0b0d11] border-[#242933] text-[#9da5b4] hover:text-[#edf0f5]'
+            }`}
+          >
+            <Radio className="w-3.5 h-3.5" />
+            <span>{rfProbeActive ? 'PROBE ACTIVE' : 'RF PROBE'}</span>
+          </button>
           <div className="flex items-center bg-[#0b0d11] border border-[#242933] rounded-[4px] p-0.5 gap-0.5">
             {[
               { key: 'nominal', label: 'NOMINAL SOL', icon: Sun },
@@ -2034,6 +2387,61 @@ export default function App() {
       <div className="flex-1 flex flex-col lg:flex-row relative overflow-hidden">
         {/* LEFT/CENTER: PRIMARY PERSISTENT MAP VIEWPORT */}
         <main className="relative flex-1 min-h-[340px] bg-[#0b0d11] overflow-hidden">
+          <div className="pointer-events-none fixed top-3 left-3 z-[1200] flex flex-col gap-2 w-[90vw] max-w-sm">
+            {engineLoading && (
+              <div className="flex items-center gap-2.5 rounded-[4px] border border-[#38bdf8]/60 bg-[#13161c]/95 px-3.5 py-2 shadow-lg backdrop-blur-sm">
+                <span className="h-3.5 w-3.5 shrink-0 rounded-full border-2 border-[#38bdf8] border-t-transparent animate-spin" />
+                <div className="min-w-0">
+                  <div className="font-mono text-[11px] font-bold tracking-wider text-[#edf0f5] uppercase">
+                    COMPUTING SAFE A* ROUTE...
+                  </div>
+                  <div className="font-mono text-[10px] text-[#9da5b4] truncate">
+                    {startPOI?.name?.split('(')[0].trim()} &rarr; {endPOI?.name?.split('(')[0].trim()}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {activeToast && (
+              <div
+                className={`pointer-events-auto flex items-start justify-between gap-2.5 rounded-[4px] border px-3 py-2 bg-[#13161c]/95 shadow-lg backdrop-blur-sm ${
+                  activeToast.type === 'warning'
+                    ? 'border-[#ef4444]'
+                    : activeToast.type === 'charge' || activeToast.type === 'success'
+                    ? 'border-[#22c55e]'
+                    : 'border-[#353c4a]'
+                }`}
+              >
+                <div className="flex items-start gap-2.5 min-w-0">
+                  <span
+                    className={`mt-1 w-2 h-2 rounded-full shrink-0 ${
+                      activeToast.type === 'warning'
+                        ? 'bg-[#ef4444]'
+                        : activeToast.type === 'charge' || activeToast.type === 'success'
+                        ? 'bg-[#22c55e]'
+                        : 'bg-[#38bdf8]'
+                    }`}
+                  />
+                  <div className="min-w-0 font-mono">
+                    <div className="text-[10.5px] font-bold text-[#edf0f5] uppercase truncate">
+                      {activeToast.title}
+                    </div>
+                    <div className="text-[10px] text-[#9da5b4] leading-snug">
+                      {activeToast.message}
+                    </div>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveToast(null)}
+                  className="text-[#9da5b4] hover:text-[#edf0f5] p-1 cursor-pointer shrink-0"
+                  aria-label="Dismiss Notification"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
           <JezeroTacticalMap
             waypoints={waypointsData}
             sciencePOIs={sciencePOIs}
@@ -2066,6 +2474,10 @@ export default function App() {
             onSetArbitraryDestination={handleSetArbitraryDestination}
             activePickMode={activePickMode}
             onClearPickMode={() => setActivePickMode(null)}
+            rfProbeActive={rfProbeActive}
+            onProbeRfComms={handleProbeRfComms}
+            rfProbeResult={rfProbeResult}
+            scienceTourResult={scienceTourResult}
             onSelectLandmark={(lm) => {
               if (typeof lm === 'string') {
                 const found = landmarksData.find((l) => l.id === lm);
@@ -2098,6 +2510,108 @@ export default function App() {
               >
                 CANCEL
               </button>
+            </div>
+          )}
+
+          {/* ACTIVE RF LINE-OF-SIGHT PROBE BANNER */}
+          {rfProbeActive && (
+            <div className="absolute top-14 left-1/2 -translate-x-1/2 z-[470] bg-[#13161c]/95 border-2 border-[#38bdf8] rounded-[4px] px-3.5 py-2 shadow-2xl flex items-center gap-3 backdrop-blur font-mono animate-pulse">
+              <Radio className="h-4 w-4 text-[#38bdf8] shrink-0" />
+              <div>
+                <div className="text-[11px] font-bold text-[#edf0f5] uppercase tracking-wider">
+                  3D RF COMMS PROBE TOOL ACTIVE
+                </div>
+                <div className="text-[9.5px] text-[#38bdf8]">
+                  CLICK ANYWHERE ON JEZERO CRATER TO TEST 3D RAYMARCHED LINE-OF-SIGHT TO ALL 7 COMMS MASTS
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setRfProbeActive(false);
+                  setRfProbeResult(null);
+                }}
+                className="ml-2 px-2 py-1 rounded-[3px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#ef4444] text-[9.5px] font-bold uppercase cursor-pointer"
+              >
+                EXIT PROBE
+              </button>
+            </div>
+          )}
+
+          {/* FLOATING RF COMMS INSPECTOR CARD */}
+          {rfProbeResult && (
+            <div className="absolute bottom-16 right-4 z-[480] w-[340px] bg-[#11141a]/95 border-2 border-[#38bdf8] rounded-lg p-3.5 shadow-2xl backdrop-blur-md font-mono text-[#edf0f5]">
+              <div className="flex items-center justify-between border-b border-[#242933] pb-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <Radio className="h-4 w-4 text-[#38bdf8]" />
+                  <span className="text-xs font-bold uppercase tracking-wider">RF COMMS INSPECTOR</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setRfProbeResult(null)}
+                  className="p-1 rounded text-[#9da5b4] hover:text-white cursor-pointer"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="space-y-2 text-xs">
+                <div className="flex items-center justify-between">
+                  <span className="text-[#9da5b4]">Probe Location:</span>
+                  <span className="font-bold text-[#38bdf8]">
+                    {rfProbeResult.location?.[0]?.toFixed(4)}°N, {rfProbeResult.location?.[1]?.toFixed(4)}°E
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[#9da5b4]">Primary Link:</span>
+                  <span className="font-bold text-white truncate max-w-[190px]">
+                    {rfProbeResult.active_link}
+                  </span>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <span className="text-[#9da5b4]">Signal Quality:</span>
+                  <span className={`px-2 py-0.5 rounded text-[10px] font-bold ${
+                    rfProbeResult.signal_quality === 'OPTIMAL'
+                      ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
+                      : rfProbeResult.signal_quality === 'GOOD'
+                        ? 'bg-cyan-500/20 text-cyan-300 border border-cyan-500/40'
+                        : rfProbeResult.signal_quality === 'MARGINAL'
+                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
+                          : 'bg-red-500/20 text-red-300 border border-red-500/40'
+                  }`}>
+                    {rfProbeResult.signal_quality}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-1">
+                  <div className="p-2 bg-[#191d24] border border-[#242933] rounded">
+                    <div className="text-[9.5px] text-[#656d7d]">FREE SPACE LOSS</div>
+                    <div className="font-bold text-amber-300">{rfProbeResult.fspl_db ?? '--'} dB</div>
+                  </div>
+                  <div className="p-2 bg-[#191d24] border border-[#242933] rounded">
+                    <div className="text-[9.5px] text-[#656d7d]">RX POWER</div>
+                    <div className="font-bold text-cyan-300">{rfProbeResult.rx_power_dbm ?? '--'} dBm</div>
+                  </div>
+                </div>
+
+                <div className="pt-2 border-t border-[#242933]">
+                  <div className="text-[10px] font-bold text-[#9da5b4] uppercase mb-1">
+                    7-Mast Line of Sight Status
+                  </div>
+                  <div className="space-y-1 max-h-[120px] overflow-y-auto aerospace-scroll pr-1 text-[11px]">
+                    {(rfProbeResult.towers || []).map((t, idx) => (
+                      <div key={idx} className="flex items-center justify-between py-0.5">
+                        <span className="truncate max-w-[190px] text-[#9da5b4]">{t.name}</span>
+                        <span className={`text-[10px] font-bold ${t.has_los ? 'text-[#22c55e]' : 'text-[#ef4444]'}`}>
+                          {t.has_los ? `LOS CLEAR (${t.distance_km}km)` : 'OCCLUDED'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
             </div>
           )}
 
@@ -2422,81 +2936,12 @@ export default function App() {
             )}
           </div>
 
-          {/* LIVE NON-INTRUSIVE TELEMETRY TOAST */}
-          {activeToast && (
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-[490] w-[92%] max-w-md bg-[#13161c]/95 border border-[#353c4a] rounded-[4px] px-3 py-2 flex items-center justify-between gap-2">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span
-                  className={`w-2 h-2 rounded-full shrink-0 ${
-                    activeToast.type === 'warning' ? 'bg-[#ef4444]' : 'bg-[#22c55e]'
-                  }`}
-                />
-                <div className="min-w-0 font-mono">
-                  <div className="text-[10.5px] font-bold text-[#edf0f5] uppercase truncate">
-                    {activeToast.title}
-                  </div>
-                  <div className="text-[10px] text-[#9da5b4] truncate">{activeToast.message}</div>
-                </div>
-              </div>
-              <button
-                type="button"
-                onClick={() => setActiveToast(null)}
-                className="text-[#9da5b4] hover:text-[#edf0f5] p-1 cursor-pointer shrink-0"
-                aria-label="Dismiss Notification"
-              >
-                <X className="h-3.5 w-3.5" />
-              </button>
-            </div>
-          )}
             </>
           )}
 
           {/* SIMPLIFIED ASTRONAUT TABLET GUI (DEFAULT GLOVE-FIRST VIEW) */}
           {uiMode === 'astronaut' && (
             <>
-              {/* A1. TOP-CENTER HEADS-UP NOTIFICATION POPUP */}
-              {activeToast && (
-                <div className="android-toast-slide absolute top-[74px] sm:top-[78px] left-1/2 z-[1000] w-[92%] max-w-md -translate-x-1/2">
-                  <div
-                    className={`flex items-start justify-between gap-3 rounded-[6px] border p-3 bg-[#13161c]/95 ${
-                      activeToast.type === 'warning'
-                        ? 'border-[#ef4444] text-[#edf0f5]'
-                        : activeToast.type === 'charge' || activeToast.type === 'success'
-                        ? 'border-[#22c55e] text-[#edf0f5]'
-                        : 'border-[#353c4a] text-[#edf0f5]'
-                    }`}
-                  >
-                    <div className="flex items-start gap-2.5">
-                      <div className="mt-0.5 rounded-[4px] bg-[#191d24] border border-[#242933] p-2 shrink-0">
-                        {activeToast.type === 'warning' ? (
-                          <AlertTriangle className="h-4 w-4 text-[#ef4444]" />
-                        ) : activeToast.type === 'charge' ? (
-                          <Zap className="h-4 w-4 text-[#22c55e]" />
-                        ) : (
-                          <CheckCircle2 className="h-4 w-4 text-[#22c55e]" />
-                        )}
-                      </div>
-                      <div className="min-w-0">
-                        <div className="font-mono text-[11px] font-bold uppercase tracking-wider text-[#edf0f5]">
-                          {activeToast.title}
-                        </div>
-                        <div className="text-[11px] text-[#9da5b4] leading-snug mt-0.5">
-                          {activeToast.message}
-                        </div>
-                      </div>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setActiveToast(null)}
-                      className="p-1.5 rounded-[4px] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] cursor-pointer shrink-0"
-                      aria-label="Dismiss Notification"
-                    >
-                      <X className="h-4 w-4" />
-                    </button>
-                  </div>
-                </div>
-              )}
-
               {/* A2. FLOATING GPS LOCK TAG */}
               {showLocationPinTag && (
                 <div className="location-tag-popup absolute bottom-[270px] sm:bottom-[230px] left-1/2 -translate-x-1/2 z-[490] flex items-center gap-2 rounded-[4px] bg-[#13161c]/95 border border-[#22c55e] px-3.5 py-2 text-[11px] font-mono font-bold text-[#edf0f5]">
@@ -3723,10 +4168,42 @@ export default function App() {
                         </div>
                       </div>
 
+                      {/* Dynamic Live Re-Routing Status Bar */}
+                      <div className="flex items-center justify-between p-2 rounded-[4px] bg-[#0b0d11] border border-cyan-500/40 text-cyan-200">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <Compass className={`h-4 w-4 shrink-0 ${autoLiveReroute ? 'text-emerald-400 animate-pulse' : 'text-cyan-400'}`} />
+                          <div className="flex flex-col min-w-0">
+                            <span className="text-[10px] font-bold font-mono tracking-wide text-emerald-400">
+                              LIVE RE-ROUTING: {autoLiveReroute ? 'CONTINUOUS AUTO' : 'MANUAL'}
+                            </span>
+                            <span className="text-[9px] text-[#9da5b4] truncate">
+                              {manualPosOverride
+                                ? 'GPS position overridden by AR Visor'
+                                : liveNavState?.routeDeviation?.isOffRoute
+                                ? `Off-route drift (${liveNavState?.routeDeviation?.distMeters || 0}m)`
+                                : 'Corridor locked to destination'}
+                            </span>
+                          </div>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRecalculateFromCurrentPosition({ resumeNav: navPlaying })}
+                          className="shrink-0 px-2 py-1 text-[9.5px] font-bold font-mono uppercase rounded bg-cyan-500/20 border border-cyan-400/60 text-cyan-200 hover:bg-cyan-500/35 cursor-pointer ml-2"
+                        >
+                          Re-Route Live
+                        </button>
+                      </div>
+
                       <div className="grid grid-cols-4 gap-2 pt-1">
                         <button
                           type="button"
-                          onClick={() => setNavPlaying((p) => !p)}
+                          onClick={() => {
+                            if (!navPlaying && (manualPosOverride || liveNavState?.routeDeviation?.isOffRoute)) {
+                              handleRecalculateFromCurrentPosition({ resumeNav: true });
+                            } else {
+                              setNavPlaying((p) => !p);
+                            }
+                          }}
                           className={`glove-btn col-span-2 min-h-[52px] rounded-[4px] font-mono font-bold text-xs uppercase flex items-center justify-center gap-2 border cursor-pointer ${
                             navPlaying
                               ? 'bg-[#2c323f] hover:bg-[#353c4a] text-[#edf0f5] border-[#4f5767]'
@@ -3734,7 +4211,13 @@ export default function App() {
                           }`}
                         >
                           {navPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
-                          <span>{navPlaying ? (loadoutKey === 'rover' ? 'Pause Drive' : 'Pause Walk') : (loadoutKey === 'rover' ? 'Resume Drive' : 'Resume Walk')}</span>
+                          <span>
+                            {navPlaying
+                              ? (loadoutKey === 'rover' ? 'Pause Drive' : 'Pause Walk')
+                              : (manualPosOverride || liveNavState?.routeDeviation?.isOffRoute
+                                ? (loadoutKey === 'rover' ? 'Re-Route & Drive' : 'Re-Route & Walk')
+                                : (loadoutKey === 'rover' ? 'Resume Drive' : 'Resume Walk'))}
+                          </span>
                         </button>
 
                         <button
@@ -4699,6 +5182,18 @@ export default function App() {
                     {routeResult.finalArrivalBattery}% // {routeResult.finalArrivalO2}%
                   </div>
                 </div>
+                <div className="bg-[#191d24] border border-[#242933] rounded-[4px] p-2">
+                  <div className="text-[#656d7d] text-[9px]">PLSS EXPENDITURE</div>
+                  <div className="text-[#edf0f5] font-bold">
+                    {routeResult.o2ConsumedKg ?? 0.05} kg O2 // {routeResult.waterConsumedL ?? 0.8} L H2O
+                  </div>
+                </div>
+                <div className="bg-[#191d24] border border-[#242933] rounded-[4px] p-2">
+                  <div className="text-[#656d7d] text-[9px]">SOLAR HARVEST / WB</div>
+                  <div className="text-[#edf0f5] font-bold">
+                    {routeResult.solarEnergyWh > 0 ? `+${routeResult.solarEnergyWh} Wh` : '0 Wh (Foot)'} // +{routeResult.walkbackHorizon?.minimum_walkback_battery_margin_pct ?? 100}% WB
+                  </div>
+                </div>
               </div>
 
               <div className="border border-[#242933] rounded-[4px] overflow-hidden bg-[#0b0d11]">
@@ -5040,6 +5535,21 @@ export default function App() {
           onNavigateToLocation={(p) => handleNavigateToPOI(p.poiId || p.id)}
         />
       )}
+
+      {/* MARTIAN ORIENTEERING MULTI-STOP SCIENCE TOUR PLANNER MODAL */}
+      <ScienceTourModal
+        isOpen={showScienceTourModal}
+        onClose={() => setShowScienceTourModal(false)}
+        sciencePOIs={sciencePOIs}
+        shelters={sciencePOIs.filter((p) => p.isShelter || p.isChargingStation)}
+        currentMode={loadoutKey === 'rover' ? 'rover' : 'on_foot'}
+        currentWeather={weatherKey}
+        startBattery={startBatteryPct}
+        startO2={startO2Pct}
+        startLstMinutes={startLstMinutes}
+        onApplyTourToMap={handleApplyScienceTour}
+        showToast={showToast}
+      />
     </div>
   );
 }
