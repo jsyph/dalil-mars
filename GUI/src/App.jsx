@@ -188,6 +188,7 @@ export default function App() {
   const [originLonInput, setOriginLonInput] = useState('77.4509');
   const [destLatInput, setDestLatInput] = useState('18.5284');
   const [destLonInput, setDestLonInput] = useState('77.4042');
+  const [activePickMode, setActivePickMode] = useState(null); // 'origin' | 'dest' | null
 
   // Astronaut Current Field Position & Suit Parameters
   const [astronautLocId, setAstronautLocId] = useState('hab-alpha');
@@ -251,23 +252,27 @@ export default function App() {
   const findPOIOrLandmark = (id) => {
     if (!id) return null;
     if (id === 'custom-origin' && customOriginCoord) {
+      const lat = Number(customOriginCoord[0]);
+      const lon = Number(customOriginCoord[1]);
       return {
         id: 'custom-origin',
-        name: 'Custom Origin Vector',
-        lat: customOriginCoord[0],
-        lon: customOriginCoord[1],
-        elev: estimateElev(customOriginCoord[0], customOriginCoord[1]),
+        name: `Custom Origin (${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E)`,
+        lat,
+        lon,
+        elev: estimateElev(lat, lon),
         sol: 0,
         type: 'custom',
       };
     }
     if (id === 'custom-dest' && customDestCoord) {
+      const lat = Number(customDestCoord[0]);
+      const lon = Number(customDestCoord[1]);
       return {
         id: 'custom-dest',
-        name: 'Custom Target Vector',
-        lat: customDestCoord[0],
-        lon: customDestCoord[1],
-        elev: estimateElev(customDestCoord[0], customDestCoord[1]),
+        name: `Custom Target (${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E)`,
+        lat,
+        lon,
+        elev: estimateElev(lat, lon),
         sol: 0,
         type: 'custom',
       };
@@ -1475,8 +1480,8 @@ export default function App() {
     if (!targetPOI) return;
 
     if (
-      targetPOI.id === astronautLocId ||
-      (astronautLocId === 'hab-alpha' && targetPOI.id === 'landing_site')
+      (targetPOI.id === startPOI?.id && !customOriginCoord) ||
+      (targetPOI.lat === startPOI?.lat && targetPOI.lon === startPOI?.lon)
     ) {
       showToast({
         id: 'already-here',
@@ -1487,9 +1492,7 @@ export default function App() {
       return;
     }
 
-    setCustomOriginCoord(null);
     setCustomDestCoord(null);
-    setStartId(astronautLocId);
     setEndId(targetPOI.id);
     setNavMode('browse');
     setNavStepIdx(0);
@@ -1499,7 +1502,7 @@ export default function App() {
       id: 'route-set',
       type: 'info',
       title: 'TRAVERSE LEG PLOTTED',
-      message: `${findPOIOrLandmark(astronautLocId)?.name || 'Origin'} -> ${targetPOI.name}`,
+      message: `${startPOI?.name || 'Origin'} -> ${targetPOI.name}`,
     });
   };
 
@@ -1521,6 +1524,77 @@ export default function App() {
       title: 'ORIGIN BASE UPDATED',
       message: `Origin locked to ${target?.name || resolvedId}.`,
     });
+  };
+
+  const handleSetArbitraryOrigin = (coords) => {
+    if (!coords || coords.length < 2) return;
+    const lat = Number(coords[0]);
+    const lon = Number(coords[1]);
+    setCustomOriginCoord([lat, lon]);
+    setStartId('custom-origin');
+    setOriginLatInput(lat.toFixed(4));
+    setOriginLonInput(lon.toFixed(4));
+    setAstronautLocId('custom-origin');
+    setNavStepIdx(0);
+    setNavPlaying(false);
+    setNavMode('browse');
+    setActivePickMode(null);
+    showToast({
+      id: `origin-set-${Date.now()}`,
+      type: 'info',
+      title: 'ORIGIN VECTOR LOCKED',
+      message: `${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E (${estimateElev(lat, lon)} m)`,
+    });
+  };
+
+  const handleSetArbitraryDestination = (coords) => {
+    if (!coords || coords.length < 2) return;
+    const lat = Number(coords[0]);
+    const lon = Number(coords[1]);
+    setCustomDestCoord([lat, lon]);
+    setEndId('custom-dest');
+    setDestLatInput(lat.toFixed(4));
+    setDestLonInput(lon.toFixed(4));
+    setNavStepIdx(0);
+    setNavPlaying(false);
+    setNavMode('browse');
+    setActivePickMode(null);
+    showToast({
+      id: `dest-set-${Date.now()}`,
+      type: 'info',
+      title: 'TARGET VECTOR LOCKED',
+      message: `${lat.toFixed(4)}°N, ${lon.toFixed(4)}°E (${estimateElev(lat, lon)} m)`,
+    });
+  };
+
+  const handleApplyOriginCoords = () => {
+    const oLat = parseFloat(originLatInput);
+    const oLon = parseFloat(originLonInput);
+    if (Number.isNaN(oLat) || Number.isNaN(oLon)) {
+      showToast({
+        id: 'coord-orig-err',
+        type: 'warning',
+        title: 'COORDINATE PARSE FAULT',
+        message: 'Enter valid decimal degrees for origin.',
+      });
+      return;
+    }
+    handleSetArbitraryOrigin([oLat, oLon]);
+  };
+
+  const handleApplyDestCoords = () => {
+    const dLat = parseFloat(destLatInput);
+    const dLon = parseFloat(destLonInput);
+    if (Number.isNaN(dLat) || Number.isNaN(dLon)) {
+      showToast({
+        id: 'coord-dest-err',
+        type: 'warning',
+        title: 'COORDINATE PARSE FAULT',
+        message: 'Enter valid decimal degrees for target.',
+      });
+      return;
+    }
+    handleSetArbitraryDestination([dLat, dLon]);
   };
 
   const handleSwapEndpoints = () => {
@@ -1553,26 +1627,42 @@ export default function App() {
     const oLon = parseFloat(originLonInput);
     const dLat = parseFloat(destLatInput);
     const dLon = parseFloat(destLonInput);
-    if ([oLat, oLon, dLat, dLon].some((n) => Number.isNaN(n))) {
+    const origValid = !Number.isNaN(oLat) && !Number.isNaN(oLon);
+    const destValid = !Number.isNaN(dLat) && !Number.isNaN(dLon);
+
+    if (!origValid && !destValid) {
       showToast({
         id: 'coord-err',
         type: 'warning',
         title: 'COORDINATE PARSE FAULT',
-        message: 'Enter valid decimal degrees for origin and target.',
+        message: 'Enter valid decimal degrees for origin or target.',
       });
       return;
     }
-    setCustomOriginCoord([oLat, oLon]);
-    setCustomDestCoord([dLat, dLon]);
-    setStartId('custom-origin');
-    setEndId('custom-dest');
-    setAstronautLocId('custom-origin');
-    setFlyToTarget({ latLon: [(oLat + dLat) / 2, (oLon + dLon) / 2], zoom: 12.5, timestamp: Date.now() });
+    if (origValid) {
+      setCustomOriginCoord([oLat, oLon]);
+      setStartId('custom-origin');
+      setAstronautLocId('custom-origin');
+    }
+    if (destValid) {
+      setCustomDestCoord([dLat, dLon]);
+      setEndId('custom-dest');
+    }
+    setNavStepIdx(0);
+    setNavPlaying(false);
+    setNavMode('browse');
+    if (origValid && destValid) {
+      setFlyToTarget({ latLon: [(oLat + dLat) / 2, (oLon + dLon) / 2], zoom: 12.5, timestamp: Date.now() });
+    } else if (origValid) {
+      setFlyToTarget({ latLon: [oLat, oLon], zoom: 13.5, timestamp: Date.now() });
+    } else if (destValid) {
+      setFlyToTarget({ latLon: [dLat, dLon], zoom: 13.5, timestamp: Date.now() });
+    }
     showToast({
       id: 'coord-applied',
       type: 'info',
-      title: 'CUSTOM COORDINATE TRAVERSE',
-      message: `${oLat.toFixed(4)}, ${oLon.toFixed(4)} -> ${dLat.toFixed(4)}, ${dLon.toFixed(4)}`,
+      title: 'COORDINATE VECTOR TRAVERSE',
+      message: `${origValid ? `${oLat.toFixed(4)}, ${oLon.toFixed(4)}` : startPOI?.name} -> ${destValid ? `${dLat.toFixed(4)}, ${dLon.toFixed(4)}` : endPOI?.name}`,
     });
   };
 
@@ -1972,6 +2062,10 @@ export default function App() {
             onOpenLandmarkVista={(id) => openPanoramaModal(id)}
             onNavigateToPOI={(id) => handleNavigateToPOI(id)}
             onSetOrigin={(id) => handleSetOrigin(id)}
+            onSetArbitraryOrigin={handleSetArbitraryOrigin}
+            onSetArbitraryDestination={handleSetArbitraryDestination}
+            activePickMode={activePickMode}
+            onClearPickMode={() => setActivePickMode(null)}
             onSelectLandmark={(lm) => {
               if (typeof lm === 'string') {
                 const found = landmarksData.find((l) => l.id === lm);
@@ -1984,6 +2078,28 @@ export default function App() {
             onDeleteZone={handleDeleteZone}
             onCursorMove={setCursorTelemetry}
           />
+
+          {/* ACTIVE MAP PICK MODE PROMPT BANNER */}
+          {activePickMode && (
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[470] bg-[#13161c]/95 border-2 border-[#38bdf8] rounded-[4px] px-3.5 py-2 shadow-2xl flex items-center gap-3 backdrop-blur font-mono animate-pulse">
+              <Crosshair className="h-4 w-4 text-[#38bdf8] shrink-0" />
+              <div>
+                <div className="text-[11px] font-bold text-[#edf0f5] uppercase tracking-wider">
+                  TACTICAL VECTOR PICKER ACTIVE
+                </div>
+                <div className="text-[9.5px] text-[#38bdf8]">
+                  CLICK ANYWHERE ON JEZERO CRATER TO SET {activePickMode === 'origin' ? 'ORIGIN (START)' : 'TARGET (DESTINATION)'}
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setActivePickMode(null)}
+                className="ml-2 px-2 py-1 rounded-[3px] bg-[#191d24] hover:bg-[#222731] border border-[#353c4a] text-[#ef4444] text-[9.5px] font-bold uppercase cursor-pointer"
+              >
+                CANCEL
+              </button>
+            </div>
+          )}
 
           {uiMode === 'developer' && (
             <>
@@ -3143,18 +3259,19 @@ export default function App() {
 
                     {/* Filter Tabs (44px min-h for glove compatibility) */}
                     <div className="px-3.5 pt-3 pb-2 border-b border-[#242933] space-y-2.5 shrink-0 bg-[#0b0d11]">
-                      <div className="grid grid-cols-4 gap-1.5">
+                      <div className="grid grid-cols-5 gap-1">
                         {[
                           { id: 'all', label: 'ALL', count: locationPickerCounts.all },
                           { id: 'science', label: 'SCIENCE', count: locationPickerCounts.science },
                           { id: 'charging', label: 'CHARGING', count: locationPickerCounts.charging },
                           { id: 'landmark', label: 'LANDMARKS', count: locationPickerCounts.landmark },
+                          { id: 'custom', label: 'MAP/GPS', count: 'VEC' },
                         ].map((tab) => (
                           <button
                             type="button"
                             key={tab.id}
                             onClick={() => setLocationPickerFilter(tab.id)}
-                            className={`glove-btn min-h-[44px] px-1 py-1 rounded-[4px] border text-[11px] font-mono font-bold uppercase flex flex-col items-center justify-center cursor-pointer transition-colors ${
+                            className={`glove-btn min-h-[44px] px-1 py-1 rounded-[4px] border text-[10.5px] font-mono font-bold uppercase flex flex-col items-center justify-center cursor-pointer transition-colors ${
                               locationPickerFilter === tab.id
                                 ? 'bg-[#22c55e] text-[#0b0d11] border-[#22c55e]'
                                 : 'bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] border-[#353c4a]'
@@ -3162,7 +3279,7 @@ export default function App() {
                           >
                             <span>{tab.label}</span>
                             <span
-                              className={`text-[9.5px] ${
+                              className={`text-[9px] ${
                                 locationPickerFilter === tab.id ? 'text-[#0b0d11]/80' : 'text-[#656d7d]'
                               }`}
                             >
@@ -3173,66 +3290,213 @@ export default function App() {
                       </div>
 
                       {/* Search & Filter Input */}
-                      <div className="relative">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9da5b4] pointer-events-none" />
-                        <input
-                          type="text"
-                          value={locationSearchQuery}
-                          onChange={(e) => setLocationSearchQuery(e.target.value)}
-                          placeholder="Search 21 Jezero Crater sites or elevation..."
-                          className="w-full min-h-[44px] rounded-[4px] bg-[#13161c] border border-[#353c4a] pl-9 pr-8 text-xs font-mono text-[#edf0f5] placeholder:text-[#656d7d] focus:border-[#22c55e] outline-none"
-                        />
-                        {locationSearchQuery && (
-                          <button
-                            type="button"
-                            onClick={() => setLocationSearchQuery('')}
-                            className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#9da5b4] hover:text-[#edf0f5] cursor-pointer"
-                          >
-                            <X className="h-3.5 w-3.5" />
-                          </button>
-                        )}
-                      </div>
+                      {locationPickerFilter !== 'custom' && (
+                        <div className="relative">
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-[#9da5b4] pointer-events-none" />
+                          <input
+                            type="text"
+                            value={locationSearchQuery}
+                            onChange={(e) => setLocationSearchQuery(e.target.value)}
+                            placeholder="Search 21 Jezero Crater sites or elevation..."
+                            className="w-full min-h-[44px] rounded-[4px] bg-[#13161c] border border-[#353c4a] pl-9 pr-8 text-xs font-mono text-[#edf0f5] placeholder:text-[#656d7d] focus:border-[#22c55e] outline-none"
+                          />
+                          {locationSearchQuery && (
+                            <button
+                              type="button"
+                              onClick={() => setLocationSearchQuery('')}
+                              className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-[#9da5b4] hover:text-[#edf0f5] cursor-pointer"
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          )}
+                        </div>
+                      )}
                     </div>
 
                     {/* Scrollable Location List */}
                     <div className="flex-1 overflow-y-auto aerospace-scroll p-3 space-y-2">
-                      {/* Top Action for Origin: Use Current Field / GPS Position */}
-                      {activeLocationPicker === 'origin' && !locationSearchQuery && locationPickerFilter === 'all' && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setCustomOriginCoord(null);
-                            setAstronautLocId('hab-alpha');
-                            setStartId('hab-alpha');
-                            setActiveLocationPicker(null);
-                          }}
-                          className={`glove-btn w-full min-h-[54px] p-2.5 rounded-[4px] border text-left flex items-center justify-between cursor-pointer transition-colors ${
-                            startId === 'hab-alpha' && !customOriginCoord
-                              ? 'bg-[#22c55e]/15 border-[#22c55e]'
-                              : 'bg-[#191d24] hover:bg-[#222731] border-[#353c4a]'
-                          }`}
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0">
-                            <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] bg-[#13161c] border border-[#353c4a] text-[#22c55e]">
+                      {locationPickerFilter === 'custom' ? (
+                        <div className="space-y-3 py-1">
+                          <div className="bg-[#191d24] border border-[#353c4a] rounded-[4px] p-3 space-y-3">
+                            <div className="flex items-center gap-2 text-xs font-bold text-[#38bdf8] font-mono uppercase">
+                              <Crosshair className="h-4 w-4 shrink-0" />
+                              <span>ARBITRARY POINT SELECTION</span>
+                            </div>
+                            <p className="text-[11px] text-[#9da5b4] leading-relaxed">
+                              Select any coordinate on Mars by clicking directly anywhere on the Jezero Crater tactical map or by entering exact latitude and longitude degrees below.
+                            </p>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const mode = activeLocationPicker === 'origin' ? 'origin' : 'dest';
+                                setActivePickMode(mode);
+                                setActiveLocationPicker(null);
+                                showToast({
+                                  id: 'pick-mode-act',
+                                  type: 'info',
+                                  title: 'TACTICAL PICK MODE ENGAGED',
+                                  message: `Click anywhere on the map to set ${mode === 'origin' ? 'Origin Base' : 'Target Destination'}.`,
+                                });
+                              }}
+                              className="w-full min-h-[48px] rounded-[4px] bg-[#38bdf8]/15 hover:bg-[#38bdf8]/25 border border-[#38bdf8] text-[#38bdf8] font-mono text-xs font-bold uppercase flex items-center justify-center gap-2 cursor-pointer transition-colors"
+                            >
                               <Crosshair className="h-4 w-4" />
-                            </span>
-                            <div className="min-w-0">
-                              <div className="text-xs font-bold text-[#edf0f5] flex items-center gap-1.5">
-                                <span>Current Field Position</span>
-                                <span className="rounded-[3px] bg-[#22c55e]/20 text-[#22c55e] text-[9px] font-mono px-1.5 py-0.2">
-                                  GPS FIX
-                                </span>
+                              <span>CLICK ON MAP TO PLACE {activeLocationPicker === 'origin' ? 'ORIGIN' : 'TARGET'}</span>
+                            </button>
+                          </div>
+
+                          <div className="bg-[#191d24] border border-[#242933] rounded-[4px] p-3 space-y-2.5">
+                            <div className="font-mono text-[10px] text-[#656d7d] uppercase font-bold">
+                              EXACT COORDINATE DEGREE INPUT
+                            </div>
+                            <div className="grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[9.5px] font-mono text-[#9da5b4] mb-1">LATITUDE (°N)</label>
+                                <input
+                                  type="text"
+                                  value={activeLocationPicker === 'origin' ? originLatInput : destLatInput}
+                                  onChange={(e) =>
+                                    activeLocationPicker === 'origin'
+                                      ? setOriginLatInput(e.target.value)
+                                      : setDestLatInput(e.target.value)
+                                  }
+                                  className="w-full min-h-[38px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2.5 font-mono text-xs text-[#edf0f5] focus:border-[#38bdf8] outline-none"
+                                  placeholder="18.4446"
+                                />
                               </div>
-                              <div className="text-[10px] font-mono text-[#9da5b4] truncate mt-0.5">
-                                Live Coordinates: 18.4447°N, 77.4508°E
+                              <div>
+                                <label className="block text-[9.5px] font-mono text-[#9da5b4] mb-1">LONGITUDE (°E)</label>
+                                <input
+                                  type="text"
+                                  value={activeLocationPicker === 'origin' ? originLonInput : destLonInput}
+                                  onChange={(e) =>
+                                    activeLocationPicker === 'origin'
+                                      ? setOriginLonInput(e.target.value)
+                                      : setDestLonInput(e.target.value)
+                                  }
+                                  className="w-full min-h-[38px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2.5 font-mono text-xs text-[#edf0f5] focus:border-[#38bdf8] outline-none"
+                                  placeholder="77.4509"
+                                />
                               </div>
                             </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (activeLocationPicker === 'origin') {
+                                  handleApplyOriginCoords();
+                                } else {
+                                  handleApplyDestCoords();
+                                }
+                                setActiveLocationPicker(null);
+                              }}
+                              className="w-full min-h-[42px] rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#4f5767] font-mono text-[11px] font-bold text-[#edf0f5] uppercase cursor-pointer"
+                            >
+                              APPLY COORDINATE VECTOR
+                            </button>
                           </div>
-                          <div className="shrink-0 text-right font-mono">
-                            <span className="text-[10px] font-bold text-[#22c55e]">0.0 km</span>
-                          </div>
-                        </button>
-                      )}
+                        </div>
+                      ) : (
+                        <>
+                          {/* Quick Map Pick Action Banner */}
+                          {!locationSearchQuery && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const mode = activeLocationPicker === 'origin' ? 'origin' : 'dest';
+                                setActivePickMode(mode);
+                                setActiveLocationPicker(null);
+                                showToast({
+                                  id: 'pick-mode-act',
+                                  type: 'info',
+                                  title: 'TACTICAL PICK MODE ENGAGED',
+                                  message: `Click anywhere on the map to set ${mode === 'origin' ? 'Origin Base' : 'Target Destination'}.`,
+                                });
+                              }}
+                              className="glove-btn w-full min-h-[50px] p-2.5 rounded-[4px] border border-dashed border-[#38bdf8]/60 bg-[#38bdf8]/5 hover:bg-[#38bdf8]/15 text-left flex items-center justify-between cursor-pointer transition-colors"
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] bg-[#13161c] border border-[#38bdf8]/60 text-[#38bdf8]">
+                                  <Crosshair className="h-4 w-4" />
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-bold text-[#38bdf8] flex items-center gap-1.5">
+                                    <span>Pick Arbitrary Point on Map</span>
+                                    <span className="rounded-[3px] bg-[#38bdf8]/20 text-[#38bdf8] text-[9px] font-mono px-1.5 py-0.2">
+                                      MAP CLICK
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] font-mono text-[#9da5b4] truncate mt-0.5">
+                                    Drop vector anywhere across Jezero Crater
+                                  </div>
+                                </div>
+                              </div>
+                            </button>
+                          )}
+
+                          {/* Active Custom Vector Tile if set */}
+                          {((activeLocationPicker === 'origin' && customOriginCoord) ||
+                            (activeLocationPicker === 'dest' && customDestCoord)) && !locationSearchQuery && (
+                            <div className="glove-btn w-full min-h-[50px] p-2.5 rounded-[4px] border border-[#38bdf8] bg-[#38bdf8]/10 text-left flex items-center justify-between">
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] bg-[#13161c] border border-[#38bdf8] text-[#38bdf8]">
+                                  <Crosshair className="h-4 w-4" />
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-bold text-[#edf0f5] flex items-center gap-1.5">
+                                    <span>Active Custom Vector</span>
+                                    <span className="rounded-[3px] bg-[#38bdf8]/20 text-[#38bdf8] text-[9px] font-mono px-1.5 py-0.2">
+                                      ACTIVE
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] font-mono text-[#9da5b4] truncate mt-0.5">
+                                    {activeLocationPicker === 'origin'
+                                      ? `${customOriginCoord[0].toFixed(4)}°N, ${customOriginCoord[1].toFixed(4)}°E`
+                                      : `${customDestCoord[0].toFixed(4)}°N, ${customDestCoord[1].toFixed(4)}°E`}
+                                  </div>
+                                </div>
+                              </div>
+                              <span className="text-[10px] font-mono font-bold text-[#38bdf8]">LOCKED</span>
+                            </div>
+                          )}
+
+                          {/* Top Action for Origin: Use Current Field / GPS Position */}
+                          {activeLocationPicker === 'origin' && !locationSearchQuery && locationPickerFilter === 'all' && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setCustomOriginCoord(null);
+                                setAstronautLocId('hab-alpha');
+                                setStartId('hab-alpha');
+                                setActiveLocationPicker(null);
+                              }}
+                              className={`glove-btn w-full min-h-[54px] p-2.5 rounded-[4px] border text-left flex items-center justify-between cursor-pointer transition-colors ${
+                                startId === 'hab-alpha' && !customOriginCoord
+                                  ? 'bg-[#22c55e]/15 border-[#22c55e]'
+                                  : 'bg-[#191d24] hover:bg-[#222731] border-[#353c4a]'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5 min-w-0">
+                                <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-[4px] bg-[#13161c] border border-[#353c4a] text-[#22c55e]">
+                                  <Crosshair className="h-4 w-4" />
+                                </span>
+                                <div className="min-w-0">
+                                  <div className="text-xs font-bold text-[#edf0f5] flex items-center gap-1.5">
+                                    <span>Current Field Position</span>
+                                    <span className="rounded-[3px] bg-[#22c55e]/20 text-[#22c55e] text-[9px] font-mono px-1.5 py-0.2">
+                                      GPS FIX
+                                    </span>
+                                  </div>
+                                  <div className="text-[10px] font-mono text-[#9da5b4] truncate mt-0.5">
+                                    Live Coordinates: 18.4447°N, 77.4508°E
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="shrink-0 text-right font-mono">
+                                <span className="text-[10px] font-bold text-[#22c55e]">0.0 km</span>
+                              </div>
+                            </button>
+                          )}
 
                       {filteredSiteOptions.length === 0 ? (
                         <div className="text-center py-8 text-xs font-mono text-[#656d7d]">
@@ -3324,6 +3588,8 @@ export default function App() {
                           );
                         })
                       )}
+                      </>
+                    )}
                     </div>
 
                     {/* Picker Footer */}
@@ -4042,11 +4308,21 @@ export default function App() {
                     ORIGIN BASE
                   </label>
                   <select
-                    value={startId === 'custom-origin' ? '' : startId}
-                    onChange={(e) => e.target.value && handleSetOrigin(e.target.value)}
+                    value={startId}
+                    onChange={(e) => {
+                      if (e.target.value === 'custom-origin') {
+                        // Keep current custom origin
+                      } else if (e.target.value) {
+                        handleSetOrigin(e.target.value);
+                      }
+                    }}
                     className="w-full min-h-[38px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-xs text-[#edf0f5] outline-none focus:border-[#edf0f5]"
                   >
-                    {startId === 'custom-origin' && <option value="">CUSTOM VECTOR</option>}
+                    {startId === 'custom-origin' && (
+                      <option value="custom-origin">
+                        {startPOI?.name || 'CUSTOM ORIGIN VECTOR'}
+                      </option>
+                    )}
                     {allSiteOptions.map((s) => (
                       <option key={`orig-${s.id}`} value={s.id}>
                         {s.name}
@@ -4060,11 +4336,21 @@ export default function App() {
                     TARGET WAYPOINT
                   </label>
                   <select
-                    value={endId === 'custom-dest' ? '' : endId}
-                    onChange={(e) => e.target.value && handleNavigateToPOI(e.target.value)}
+                    value={endId}
+                    onChange={(e) => {
+                      if (e.target.value === 'custom-dest') {
+                        // Keep current custom target
+                      } else if (e.target.value) {
+                        handleNavigateToPOI(e.target.value);
+                      }
+                    }}
                     className="w-full min-h-[38px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-xs text-[#edf0f5] outline-none focus:border-[#edf0f5]"
                   >
-                    {endId === 'custom-dest' && <option value="">CUSTOM VECTOR</option>}
+                    {endId === 'custom-dest' && (
+                      <option value="custom-dest">
+                        {endPOI?.name || 'CUSTOM TARGET VECTOR'}
+                      </option>
+                    )}
                     {allSiteOptions.map((s) => (
                       <option key={`dest-${s.id}`} value={s.id}>
                         {s.name}
@@ -4075,47 +4361,105 @@ export default function App() {
               </div>
 
               {/* Raw Coordinate Input Vector Solver (Ground Control Feature) */}
-              <div className="bg-[#191d24] border border-[#242933] rounded-[4px] p-2 space-y-1.5">
-                <div className="font-mono text-[9.5px] text-[#656d7d] uppercase">
-                  COORDINATE VECTOR INPUTS (LAT / LON DEG)
+              <div className="bg-[#191d24] border border-[#242933] rounded-[4px] p-2 space-y-2">
+                <div className="flex items-center justify-between font-mono text-[9.5px] uppercase">
+                  <span className="text-[#656d7d]">COORDINATE VECTOR INPUTS</span>
+                  <span className="text-[#38bdf8] font-bold">ANY-POINT ROUTING</span>
                 </div>
-                <div className="grid grid-cols-2 gap-1.5">
-                  <input
-                    type="text"
-                    value={originLatInput}
-                    onChange={(e) => setOriginLatInput(e.target.value)}
-                    className="min-h-[34px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-[11px] text-[#edf0f5]"
-                    aria-label="Origin Latitude"
-                  />
-                  <input
-                    type="text"
-                    value={originLonInput}
-                    onChange={(e) => setOriginLonInput(e.target.value)}
-                    className="min-h-[34px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-[11px] text-[#edf0f5]"
-                    aria-label="Origin Longitude"
-                  />
-                  <input
-                    type="text"
-                    value={destLatInput}
-                    onChange={(e) => setDestLatInput(e.target.value)}
-                    className="min-h-[34px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-[11px] text-[#edf0f5]"
-                    aria-label="Target Latitude"
-                  />
-                  <input
-                    type="text"
-                    value={destLonInput}
-                    onChange={(e) => setDestLonInput(e.target.value)}
-                    className="min-h-[34px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-[11px] text-[#edf0f5]"
-                    aria-label="Target Longitude"
-                  />
+
+                {/* Origin Inputs */}
+                <div>
+                  <div className="flex items-center justify-between font-mono text-[8.5px] text-[#9da5b4] uppercase mb-1">
+                    <span>ORIGIN DEG (LAT / LON)</span>
+                    <button
+                      type="button"
+                      onClick={() => setActivePickMode('origin')}
+                      className="text-[#38bdf8] hover:underline flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Crosshair className="h-2.5 w-2.5" />
+                      <span>PICK ON MAP</span>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <input
+                      type="text"
+                      value={originLatInput}
+                      onChange={(e) => setOriginLatInput(e.target.value)}
+                      placeholder="Origin Lat"
+                      className="min-h-[32px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-[11px] text-[#edf0f5]"
+                      aria-label="Origin Latitude"
+                    />
+                    <input
+                      type="text"
+                      value={originLonInput}
+                      onChange={(e) => setOriginLonInput(e.target.value)}
+                      placeholder="Origin Lon"
+                      className="min-h-[32px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-[11px] text-[#edf0f5]"
+                      aria-label="Origin Longitude"
+                    />
+                  </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={handleApplyCoordinateVectors}
-                  className="w-full min-h-[36px] rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#4f5767] font-mono text-[10.5px] font-bold text-[#edf0f5] uppercase cursor-pointer"
-                >
-                  CALC VECTOR TRAVERSE
-                </button>
+
+                {/* Target Inputs */}
+                <div>
+                  <div className="flex items-center justify-between font-mono text-[8.5px] text-[#9da5b4] uppercase mb-1">
+                    <span>TARGET DEG (LAT / LON)</span>
+                    <button
+                      type="button"
+                      onClick={() => setActivePickMode('dest')}
+                      className="text-[#22c55e] hover:underline flex items-center gap-0.5 cursor-pointer"
+                    >
+                      <Crosshair className="h-2.5 w-2.5" />
+                      <span>PICK ON MAP</span>
+                    </button>
+                  </div>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <input
+                      type="text"
+                      value={destLatInput}
+                      onChange={(e) => setDestLatInput(e.target.value)}
+                      placeholder="Target Lat"
+                      className="min-h-[32px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-[11px] text-[#edf0f5]"
+                      aria-label="Target Latitude"
+                    />
+                    <input
+                      type="text"
+                      value={destLonInput}
+                      onChange={(e) => setDestLonInput(e.target.value)}
+                      placeholder="Target Lon"
+                      className="min-h-[32px] bg-[#0b0d11] border border-[#353c4a] rounded-[4px] px-2 font-mono text-[11px] text-[#edf0f5]"
+                      aria-label="Target Longitude"
+                    />
+                  </div>
+                </div>
+
+                {/* Apply Buttons */}
+                <div className="grid grid-cols-3 gap-1 pt-1">
+                  <button
+                    type="button"
+                    onClick={handleApplyOriginCoords}
+                    className="min-h-[30px] rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#38bdf8]/40 text-[#38bdf8] font-mono text-[9px] font-bold uppercase cursor-pointer"
+                    title="Lock Origin Coordinate"
+                  >
+                    SET ORIGIN
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyDestCoords}
+                    className="min-h-[30px] rounded-[4px] bg-[#191d24] hover:bg-[#222731] border border-[#22c55e]/40 text-[#22c55e] font-mono text-[9px] font-bold uppercase cursor-pointer"
+                    title="Lock Target Coordinate"
+                  >
+                    SET TARGET
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleApplyCoordinateVectors}
+                    className="min-h-[30px] rounded-[4px] bg-[#222731] hover:bg-[#2c323f] border border-[#4f5767] font-mono text-[9px] font-bold text-[#edf0f5] uppercase cursor-pointer"
+                    title="Calculate Route Between Vectors"
+                  >
+                    CALC BOTH
+                  </button>
+                </div>
               </div>
 
               {/* Mobility Profile Selector */}

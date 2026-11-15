@@ -3,7 +3,7 @@
  * Connects the React GUI to the FastAPI backend running backend/core/engine.py.
  */
 
-import { LOADOUT_PROFILES, SAFE_RESERVE_PCT, WEATHER_CONDITIONS } from './pathfinder';
+import { LOADOUT_PROFILES, SAFE_RESERVE_PCT, WEATHER_CONDITIONS } from './pathfinder.js';
 
 const API_BASE = '/api';
 

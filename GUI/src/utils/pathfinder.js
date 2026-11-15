@@ -605,10 +605,13 @@ function buildNavigationSteps({ start, end, leg1, leg2, chargingStation }) {
     chargingStation ? chargingStation.lon : end.lon
   );
 
+  const startLabel = (start?.name || `Point (${Number(start.lat).toFixed(4)}, ${Number(start.lon).toFixed(4)})`).toUpperCase();
+  const endLabel = (end?.name || `Point (${Number(end.lat).toFixed(4)}, ${Number(end.lon).toFixed(4)})`).toUpperCase();
+
   steps.push({
     id: 'depart',
     icon: 'start',
-    instruction: `DEPART ${start.name.toUpperCase()} HDG ${bearing1}`,
+    instruction: `DEPART ${startLabel} HDG ${bearing1}`,
     distanceKm: leg1.distKm,
     detail: `PLSS & power check nominal (${leg1.durationMin} min leg).`,
     warning: null,
@@ -629,7 +632,7 @@ function buildNavigationSteps({ start, end, leg1, leg2, chargingStation }) {
     steps.push({
       id: 'charge',
       icon: 'charge',
-      instruction: `DOCK AT ${chargingStation.name.toUpperCase()} [CHARGING BASE]`,
+      instruction: `DOCK AT ${(chargingStation.name || 'CHARGING STATION').toUpperCase()} [CHARGING BASE]`,
       distanceKm: 0,
       detail: `Recharge battery to 100% and refill PLSS O2 (+15 min pit stop).`,
       warning: `${chargingStation.powerOutputKw || 25} kW KILOPOWER PAD`,
@@ -645,7 +648,7 @@ function buildNavigationSteps({ start, end, leg1, leg2, chargingStation }) {
     steps.push({
       id: 'leg2',
       icon: 'nav',
-      instruction: `PROCEED HDG ${bearing2} TOWARD ${end.name.toUpperCase()}`,
+      instruction: `PROCEED HDG ${bearing2} TOWARD ${endLabel}`,
       distanceKm: leg2.distKm,
       detail: `100% reserves restored. ${leg2.durationMin} min trek.`,
       warning: null,
@@ -666,9 +669,9 @@ function buildNavigationSteps({ start, end, leg1, leg2, chargingStation }) {
   steps.push({
     id: 'arrive',
     icon: 'arrive',
-    instruction: `ARRIVE AT ${end.name.toUpperCase()}`,
+    instruction: `ARRIVE AT ${endLabel}`,
     distanceKm: 0,
-    detail: `Elev ${end.elev} m | ${end.minerals || 'Target site'}.`,
+    detail: `Elev ${end.elev != null ? end.elev : '--'} m | ${end.minerals || 'Target site'}.`,
     warning: null,
   });
 
@@ -704,16 +707,26 @@ export function computeMarswalkRoute({
   const directArrivalBattery = Number((startBatteryPct - directLeg.batteryPercentUsed).toFixed(1));
   const directArrivalO2 = Number((startO2Pct - directLeg.o2PercentUsed).toFixed(1));
 
+  const isDifferentPoint =
+    (start.id && end.id && start.id !== end.id) ||
+    Math.abs(start.lat - end.lat) > 1e-5 ||
+    Math.abs(start.lon - end.lon) > 1e-5;
+
   const needsChargeStop =
-    start.id !== end.id &&
+    isDifferentPoint &&
     (directArrivalBattery < SAFE_RESERVE_PCT || directArrivalO2 < SAFE_RESERVE_PCT);
 
   const candidateStations = sciencePOIs.filter(
-    (p) => p.isChargingStation && p.id !== start.id && p.id !== end.id
+    (p) =>
+      p.isChargingStation &&
+      p.id !== start.id &&
+      p.id !== end.id &&
+      (Math.abs(p.lat - start.lat) > 1e-4 || Math.abs(p.lon - start.lon) > 1e-4) &&
+      (Math.abs(p.lat - end.lat) > 1e-4 || Math.abs(p.lon - end.lon) > 1e-4)
   );
 
   let bestPitStopPlan = null;
-  if (start.id !== end.id && candidateStations.length > 0) {
+  if (isDifferentPoint && candidateStations.length > 0) {
     for (const station of candidateStations) {
       const leg1 = computeSingleLeg({
         start,

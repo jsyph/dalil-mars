@@ -88,6 +88,10 @@ export default function JezeroTacticalMap({
   onOpenLandmarkVista,
   onNavigateToPOI,
   onSetOrigin,
+  onSetArbitraryOrigin,
+  onSetArbitraryDestination,
+  activePickMode = null,
+  onClearPickMode,
   onSelectLandmark,
   onAddDrawVertex,
   onDeleteZone,
@@ -109,6 +113,10 @@ export default function JezeroTacticalMap({
   const hazardZonesRef = useRef(hazardZones);
   const drawnZonesRef = useRef(drawnZones);
   const landmarksRef = useRef(landmarks);
+  const onSetArbitraryOriginRef = useRef(onSetArbitraryOrigin);
+  const onSetArbitraryDestinationRef = useRef(onSetArbitraryDestination);
+  const activePickModeRef = useRef(activePickMode);
+  const onClearPickModeRef = useRef(onClearPickMode);
 
   useEffect(() => {
     activeDrawModeRef.current = activeDrawMode;
@@ -117,6 +125,10 @@ export default function JezeroTacticalMap({
     hazardZonesRef.current = hazardZones;
     drawnZonesRef.current = drawnZones;
     landmarksRef.current = landmarks;
+    onSetArbitraryOriginRef.current = onSetArbitraryOrigin;
+    onSetArbitraryDestinationRef.current = onSetArbitraryDestination;
+    activePickModeRef.current = activePickMode;
+    onClearPickModeRef.current = onClearPickMode;
   });
 
   // Dispatch bridge for Leaflet HTML popup buttons
@@ -131,6 +143,14 @@ export default function JezeroTacticalMap({
     window.dispatchSetOrigin = (originId) => {
       mapInstanceRef.current?.closePopup();
       onSetOrigin?.(originId);
+    };
+    window.dispatchSetArbitraryOrigin = (lat, lon) => {
+      mapInstanceRef.current?.closePopup();
+      onSetArbitraryOriginRef.current?.([parseFloat(lat), parseFloat(lon)]);
+    };
+    window.dispatchSetArbitraryDestination = (lat, lon) => {
+      mapInstanceRef.current?.closePopup();
+      onSetArbitraryDestinationRef.current?.([parseFloat(lat), parseFloat(lon)]);
     };
     window.dispatchOpenLandmark = (landmarkId) => {
       mapInstanceRef.current?.closePopup();
@@ -152,6 +172,8 @@ export default function JezeroTacticalMap({
       delete window.dispatchMarsPano;
       delete window.dispatchNavigateTo;
       delete window.dispatchSetOrigin;
+      delete window.dispatchSetArbitraryOrigin;
+      delete window.dispatchSetArbitraryDestination;
       delete window.dispatchOpenLandmark;
       delete window.dispatchOpenLandmarkVista;
       delete window.dispatchDeleteZone;
@@ -160,6 +182,8 @@ export default function JezeroTacticalMap({
     onOpenPanorama,
     onNavigateToPOI,
     onSetOrigin,
+    onSetArbitraryOrigin,
+    onSetArbitraryDestination,
     onSelectLandmark,
     onOpenLandmarkVista,
     onDeleteZone,
@@ -358,18 +382,83 @@ export default function JezeroTacticalMap({
       route: L.layerGroup().addTo(map),
       dustFront: L.layerGroup().addTo(map),
       landmarks: L.layerGroup().addTo(map),
+      endpoints: L.layerGroup().addTo(map),
     };
 
-    // Map click handler for Exclusion Polygon drawing
+    const showCoordinateContextPopup = (lat, lng, latlng) => {
+      const elevM = estimateElev(lat, lng);
+      const haz = checkCursorHazards(lat, lng, hazardZonesRef.current, drawnZonesRef.current);
+      const content = `
+        <div style="font-size:12px; min-width:260px; max-width:290px; font-family:'JetBrains Mono',monospace;">
+          <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:4px;">
+            <span style="font-weight:700; color:#38bdf8; font-size:11px; text-transform:uppercase; letter-spacing:0.04em;">TACTICAL VECTOR</span>
+            <span style="color:#656d7d; font-size:9.5px;">ARBITRARY POINT</span>
+          </div>
+          <div style="font-weight:700; font-size:13px; color:#edf0f5; border-bottom:1px solid #242933; padding-bottom:5px; margin-bottom:8px;">
+            ${lat.toFixed(5)}°N, ${lng.toFixed(5)}°E
+          </div>
+          <div style="background:#191d24; border:1px solid #242933; border-radius:4px; padding:6px 8px; font-size:11px; margin-bottom:10px; line-height:1.5;">
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:#656d7d;">ELEVATION:</span>
+              <span style="color:#edf0f5; font-weight:700;">${elevM} m</span>
+            </div>
+            <div style="display:flex; justify-content:space-between;">
+              <span style="color:#656d7d;">SECTOR:</span>
+              <span style="color:${haz.isFault ? '#ef4444' : '#22c55e'}; font-weight:700;">${haz.label}</span>
+            </div>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:6px;">
+            <button onclick="window.dispatchSetArbitraryOrigin(${lat}, ${lng})" style="
+              width:100%; min-height:38px; padding:6px 12px; background:#191d24; color:#38bdf8;
+              border:1px solid #38bdf8; border-radius:4px; font-weight:700; font-size:11px; cursor:pointer; text-transform:uppercase; font-family:'JetBrains Mono',monospace;
+            ">SET AS ORIGIN (START)</button>
+            <button onclick="window.dispatchSetArbitraryDestination(${lat}, ${lng})" style="
+              width:100%; min-height:38px; padding:6px 12px; background:#16a34a; color:#0b0d11;
+              border:1px solid #22c55e; border-radius:4px; font-weight:700; font-size:11px; cursor:pointer; text-transform:uppercase; font-family:'JetBrains Mono',monospace;
+            ">ROUTE TO THIS DESTINATION</button>
+          </div>
+        </div>
+      `;
+      L.popup({ minWidth: 260, offset: [0, -4] })
+        .setLatLng(latlng)
+        .setContent(content)
+        .openOn(map);
+    };
+
+    // Map click handler for polygon drawing, arbitrary picking mode, or coordinate context
     const handleMapClick = (e) => {
+      const lat = Number(e.latlng.lat.toFixed(6));
+      const lng = Number(e.latlng.lng.toFixed(6));
+
       if (activeDrawModeRef.current) {
-        onAddDrawVertexRef.current?.([
-          Number(e.latlng.lat.toFixed(6)),
-          Number(e.latlng.lng.toFixed(6)),
-        ]);
+        onAddDrawVertexRef.current?.([lat, lng]);
+        return;
       }
+
+      if (activePickModeRef.current === 'origin') {
+        onSetArbitraryOriginRef.current?.([lat, lng]);
+        onClearPickModeRef.current?.();
+        return;
+      }
+
+      if (activePickModeRef.current === 'dest') {
+        onSetArbitraryDestinationRef.current?.([lat, lng]);
+        onClearPickModeRef.current?.();
+        return;
+      }
+
+      showCoordinateContextPopup(lat, lng, e.latlng);
     };
     map.on('click', handleMapClick);
+
+    // Right-click contextmenu for instant tactical coordinate context anywhere on Mars
+    const handleMapContextMenu = (e) => {
+      L.DomEvent.preventDefault(e);
+      const lat = Number(e.latlng.lat.toFixed(6));
+      const lng = Number(e.latlng.lng.toFixed(6));
+      showCoordinateContextPopup(lat, lng, e.latlng);
+    };
+    map.on('contextmenu', handleMapContextMenu);
 
     // RequestAnimationFrame throttled cursor telemetry probe
     let rafPending = false;
@@ -410,6 +499,7 @@ export default function JezeroTacticalMap({
     return () => {
       if (resizeObserver) resizeObserver.disconnect();
       map.off('click', handleMapClick);
+      map.off('contextmenu', handleMapContextMenu);
       map.off('mousemove', handleMouseMove);
       if (liveMarkerRef.current) {
         liveMarkerRef.current.remove();
@@ -428,20 +518,20 @@ export default function JezeroTacticalMap({
     };
   }, []);
 
-  // Update draw cursor & disable doubleClickZoom while actively placing polygon vertices
+  // Update draw cursor & disable doubleClickZoom while actively placing polygon vertices or picking vectors
   useEffect(() => {
     const map = mapInstanceRef.current;
     const container = mapContainerRef.current;
     if (!map || !container) return;
 
-    if (activeDrawMode) {
+    if (activeDrawMode || activePickMode) {
       container.style.cursor = 'crosshair';
       map.doubleClickZoom.disable();
     } else {
       container.style.cursor = '';
       map.doubleClickZoom.enable();
     }
-  }, [activeDrawMode]);
+  }, [activeDrawMode, activePickMode]);
 
   // Toggle static overlays (HiRISE 25cm, Ellipse, Linear, Surface, Nomenclature, Remote Traverse)
   useEffect(() => {
@@ -1182,6 +1272,150 @@ export default function JezeroTacticalMap({
       map.panTo(currentLatLon, { animate: true, duration: 0.35 });
     }
   }, [liveNavState, followAstronaut, locatePulse]);
+
+  // Render Prominent Draggable Route Endpoints (Origin Base & Target Waypoint)
+  useEffect(() => {
+    const { endpoints } = layerGroupsRef.current;
+    if (!endpoints) return;
+    endpoints.clearLayers();
+
+    // 1. Render tactical Start / Origin marker
+    if (startPOI && startPOI.lat != null && startPOI.lon != null) {
+      const startIcon = L.divIcon({
+        className: 'mars-tactical-start-marker',
+        html: `
+          <div style="position:relative; display:flex; flex-direction:column; align-items:center; pointer-events:auto; transform:translate(-50%, -100%);">
+            <div style="
+              white-space:nowrap; background:#0b0d11; color:#38bdf8; border:1.5px solid #38bdf8;
+              font-size:9.5px; font-weight:700; font-family:'JetBrains Mono',monospace; padding:2px 7px;
+              border-radius:4px; margin-bottom:3px; box-shadow:0 0 10px rgba(56,189,248,0.4);
+            ">ORIGIN // START</div>
+            <div style="
+              width:32px; height:32px; border-radius:50%; background:#0b0d11;
+              border:2.5px solid #38bdf8; display:flex; align-items:center; justify-content:center;
+              box-shadow:0 0 12px rgba(56,189,248,0.55); cursor:grab;
+            ">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#38bdf8" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+                <path d="M2 12h20" />
+              </svg>
+            </div>
+            <div style="width:2px; height:6px; background:#38bdf8;"></div>
+            <div style="width:6px; height:6px; border-radius:50%; background:#38bdf8;"></div>
+          </div>
+        `,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+
+      const startMarker = L.marker([startPOI.lat, startPOI.lon], {
+        icon: startIcon,
+        draggable: true,
+        zIndexOffset: 900,
+      });
+
+      startMarker.bindPopup(`
+        <div style="font-size:12px; min-width:250px; font-family:'JetBrains Mono',monospace;">
+          <div style="font-weight:700; color:#38bdf8; font-size:11px; text-transform:uppercase; margin-bottom:2px;">
+            TRAVERSE ORIGIN
+          </div>
+          <div style="font-weight:700; font-size:13px; color:#edf0f5; border-bottom:1px solid #242933; padding-bottom:4px; margin-bottom:6px;">
+            ${startPOI.name}
+          </div>
+          <div style="background:#191d24; border:1px solid #242933; border-radius:4px; padding:6px; font-size:11px; margin-bottom:8px; line-height:1.5;">
+            <div><span style="color:#656d7d;">COORDS:</span> <span style="color:#edf0f5;">${Number(startPOI.lat).toFixed(5)}°N, ${Number(startPOI.lon).toFixed(5)}°E</span></div>
+            <div><span style="color:#656d7d;">ELEVATION:</span> <span style="color:#edf0f5;">${estimateElev(startPOI.lat, startPOI.lon)} m</span></div>
+          </div>
+          <div style="font-size:10px; color:#9da5b4; font-family:'Inter',sans-serif;">
+            Drag this marker anywhere on Mars to reposition origin.
+          </div>
+        </div>
+      `);
+
+      startMarker.on('dragend', (e) => {
+        const pos = e.target.getLatLng();
+        onSetArbitraryOriginRef.current?.([
+          Number(pos.lat.toFixed(6)),
+          Number(pos.lng.toFixed(6)),
+        ]);
+      });
+
+      startMarker.addTo(endpoints);
+    }
+
+    // 2. Render tactical Target / Destination marker
+    if (endPOI && endPOI.lat != null && endPOI.lon != null) {
+      const endIcon = L.divIcon({
+        className: 'mars-tactical-dest-marker',
+        html: `
+          <div style="position:relative; display:flex; flex-direction:column; align-items:center; pointer-events:auto; transform:translate(-50%, -100%);">
+            <div style="
+              white-space:nowrap; background:#0b0d11; color:#22c55e; border:1.5px solid #22c55e;
+              font-size:9.5px; font-weight:700; font-family:'JetBrains Mono',monospace; padding:2px 7px;
+              border-radius:4px; margin-bottom:3px; box-shadow:0 0 10px rgba(34,197,94,0.4);
+            ">TARGET // DEST</div>
+            <div style="
+              width:32px; height:32px; border-radius:50%; background:#0b0d11;
+              border:2.5px solid #22c55e; display:flex; align-items:center; justify-content:center;
+              box-shadow:0 0 12px rgba(34,197,94,0.55); cursor:grab;
+            ">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#22c55e" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10" />
+                <circle cx="12" cy="12" r="6" />
+                <circle cx="12" cy="12" r="2" />
+              </svg>
+            </div>
+            <div style="width:2px; height:6px; background:#22c55e;"></div>
+            <div style="width:6px; height:6px; border-radius:50%; background:#22c55e;"></div>
+          </div>
+        `,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+
+      const endMarker = L.marker([endPOI.lat, endPOI.lon], {
+        icon: endIcon,
+        draggable: true,
+        zIndexOffset: 950,
+      });
+
+      endMarker.bindPopup(`
+        <div style="font-size:12px; min-width:250px; font-family:'JetBrains Mono',monospace;">
+          <div style="font-weight:700; color:#22c55e; font-size:11px; text-transform:uppercase; margin-bottom:2px;">
+            TRAVERSE TARGET
+          </div>
+          <div style="font-weight:700; font-size:13px; color:#edf0f5; border-bottom:1px solid #242933; padding-bottom:4px; margin-bottom:6px;">
+            ${endPOI.name}
+          </div>
+          <div style="background:#191d24; border:1px solid #242933; border-radius:4px; padding:6px; font-size:11px; margin-bottom:8px; line-height:1.5;">
+            <div><span style="color:#656d7d;">COORDS:</span> <span style="color:#edf0f5;">${Number(endPOI.lat).toFixed(5)}°N, ${Number(endPOI.lon).toFixed(5)}°E</span></div>
+            <div><span style="color:#656d7d;">ELEVATION:</span> <span style="color:#edf0f5;">${estimateElev(endPOI.lat, endPOI.lon)} m</span></div>
+          </div>
+          <div style="font-size:10px; color:#9da5b4; font-family:'Inter',sans-serif;">
+            Drag this marker anywhere on Mars to reposition target.
+          </div>
+        </div>
+      `);
+
+      endMarker.on('dragend', (e) => {
+        const pos = e.target.getLatLng();
+        onSetArbitraryDestinationRef.current?.([
+          Number(pos.lat.toFixed(6)),
+          Number(pos.lng.toFixed(6)),
+        ]);
+      });
+
+      endMarker.addTo(endpoints);
+    }
+  }, [
+    startPOI?.lat,
+    startPOI?.lon,
+    startPOI?.name,
+    endPOI?.lat,
+    endPOI?.lon,
+    endPOI?.name,
+  ]);
 
   return (
     <div className="relative w-full h-full bg-[#0b0d11]">
