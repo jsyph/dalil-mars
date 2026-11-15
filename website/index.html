@@ -965,22 +965,38 @@
           try {
             const resp = await fetch(gzUrl);
             if (resp.ok) {
-              const ds = new DecompressionStream('gzip');
-              const decompressed = resp.body.pipeThrough(ds);
-              const res = new Response(decompressed);
-              buffer = await res.arrayBuffer();
+              if (resp.headers.get('content-encoding') === 'gzip') {
+                buffer = await resp.arrayBuffer();
+              } else {
+                try {
+                  const ds = new DecompressionStream('gzip');
+                  const decompressed = resp.body.pipeThrough(ds);
+                  const res = new Response(decompressed);
+                  buffer = await res.arrayBuffer();
+                } catch (decompErr) {
+                  console.warn('[DalilMars] DecompressionStream error, trying raw bin fallback:', decompErr);
+                }
+              }
             }
-          } catch (e) {}
+          } catch (e) {
+            console.warn('[DalilMars] Could not fetch gzUrl, falling back to raw bin:', e);
+          }
         }
 
         if (!buffer) {
           try {
             const resp = await fetch(binUrl);
             if (resp.ok) buffer = await resp.arrayBuffer();
-          } catch (e) {}
+          } catch (e) {
+            console.error('[DalilMars] Could not fetch binUrl:', e);
+          }
         }
 
-        if (buffer) buildMesh(buffer);
+        if (buffer) {
+          buildMesh(buffer);
+        } else {
+          console.error('[DalilMars] Failed to load terrain binary data.');
+        }
       }
 
       function buildMesh(buffer) {
