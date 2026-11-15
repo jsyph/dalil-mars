@@ -1,0 +1,1074 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Dalil Mars | NASA Space Apps 2026 – Team Mahatet Mars (Alexandria, Egypt)</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Space+Grotesk:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #090b10;
+      --card-bg: #10131a;
+      --border: rgba(255, 255, 255, 0.08);
+      --accent: #ff5722;
+      --accent-soft: rgba(255, 87, 34, 0.12);
+      --text: #f0f2f5;
+      --text-muted: #8a94a6;
+      --font: 'Space Grotesk', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      --font-mono: 'JetBrains Mono', monospace;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      background-color: var(--bg);
+      color: var(--text);
+      font-family: var(--font);
+      line-height: 1.6;
+      overflow-x: hidden;
+    }
+
+    /* Simple Header */
+    header.site-header {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      z-index: 20;
+      padding: 20px 36px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-decoration: none;
+      color: #fff;
+      font-weight: 700;
+      font-size: 16px;
+      letter-spacing: 0.5px;
+    }
+
+    .brand-dot {
+      width: 10px;
+      height: 10px;
+      border-radius: 50%;
+      background: var(--accent);
+    }
+
+    nav.nav-links {
+      display: flex;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .nav-link {
+      color: var(--text-muted);
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.2s ease;
+    }
+
+    .nav-link:hover {
+      color: #fff;
+    }
+
+    /* HERO SECTION WITH 3D VIEWER BEHIND TEXT */
+    .hero-section {
+      position: relative;
+      width: 100%;
+      height: 100vh;
+      min-height: 650px;
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+    }
+
+    #hero-canvas-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      cursor: grab;
+    }
+
+    #hero-canvas-container:active {
+      cursor: grabbing;
+    }
+
+    /* Subtle gradient overlay to make text crystal clear over the 3D terrain */
+    .hero-backdrop-gradient {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 2;
+      pointer-events: none;
+      background: linear-gradient(
+        135deg,
+        rgba(9, 11, 16, 0.85) 0%,
+        rgba(9, 11, 16, 0.45) 50%,
+        rgba(9, 11, 16, 0.95) 100%
+      );
+    }
+
+    .hero-content {
+      position: relative;
+      z-index: 3;
+      max-width: 780px;
+      padding: 0 48px;
+      pointer-events: none;
+    }
+
+    .hero-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent);
+      background: var(--accent-soft);
+      border: 1px solid rgba(255, 87, 34, 0.3);
+      padding: 4px 12px;
+      border-radius: 20px;
+      margin-bottom: 20px;
+    }
+
+    .hero-title {
+      font-size: clamp(48px, 8vw, 84px);
+      font-weight: 800;
+      line-height: 1.05;
+      letter-spacing: -2px;
+      color: #fff;
+      margin-bottom: 12px;
+    }
+
+    .hero-title span {
+      color: var(--accent);
+    }
+
+    .hero-subtitle {
+      font-size: clamp(18px, 2.6vw, 24px);
+      font-weight: 600;
+      color: #e2e8f0;
+      line-height: 1.3;
+      margin-bottom: 18px;
+      letter-spacing: -0.5px;
+    }
+
+    .hero-description {
+      font-size: 17px;
+      color: var(--text-muted);
+      line-height: 1.6;
+      margin-bottom: 28px;
+      max-width: 620px;
+    }
+
+    .hero-buttons {
+      display: flex;
+      gap: 14px;
+      flex-wrap: wrap;
+      pointer-events: auto;
+    }
+
+    .btn {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      padding: 11px 22px;
+      border-radius: 6px;
+      text-decoration: none;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: #fff;
+      border: 1px solid var(--accent);
+    }
+
+    .btn-primary:hover {
+      background: #e64a19;
+      border-color: #e64a19;
+    }
+
+    .btn-outline {
+      background: rgba(255, 255, 255, 0.05);
+      color: #fff;
+      border: 1px solid var(--border);
+    }
+
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.1);
+      border-color: rgba(255, 255, 255, 0.25);
+    }
+
+    /* 3D Hero Viewer Controls (Restrained, Simple) */
+    .hero-viewer-hud {
+      position: absolute;
+      bottom: 24px;
+      left: 48px;
+      right: 48px;
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      pointer-events: none;
+    }
+
+    .viewer-hint {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      background: rgba(9, 11, 16, 0.7);
+      backdrop-filter: blur(8px);
+      padding: 6px 14px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+    }
+
+    .viewer-actions {
+      display: flex;
+      gap: 8px;
+      pointer-events: auto;
+    }
+
+    .viewer-btn-icon {
+      background: rgba(9, 11, 16, 0.7);
+      backdrop-filter: blur(8px);
+      border: 1px solid var(--border);
+      color: #fff;
+      font-size: 12px;
+      padding: 6px 12px;
+      border-radius: 6px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      transition: all 0.2s ease;
+    }
+
+    .viewer-btn-icon:hover {
+      border-color: var(--accent);
+      color: var(--accent);
+    }
+
+    /* Fullscreen mode for the hero 3D viewer */
+    .hero-section.fullscreen-active {
+      position: fixed !important;
+      top: 0 !important;
+      left: 0 !important;
+      width: 100vw !important;
+      height: 100vh !important;
+      z-index: 99999 !important;
+    }
+
+    .hero-section.fullscreen-active .hero-content {
+      display: none;
+    }
+
+    .hero-section.fullscreen-active .hero-backdrop-gradient {
+      opacity: 0.15;
+    }
+
+    /* Content Layout */
+    .content-wrapper {
+      max-width: 1120px;
+      margin: 0 auto;
+      padding: 70px 24px 100px;
+      display: flex;
+      flex-direction: column;
+      gap: 80px;
+    }
+
+    .section-header {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      margin-bottom: 24px;
+    }
+
+    .section-eyebrow {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .section-title {
+      font-size: 26px;
+      font-weight: 700;
+      color: #fff;
+      letter-spacing: -0.5px;
+    }
+
+    .section-subtitle {
+      font-size: 15px;
+      color: var(--text-muted);
+      max-width: 720px;
+    }
+
+    /* Simple 2-Column Grid */
+    .grid-2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 28px;
+      align-items: center;
+    }
+
+    .grid-3 {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+    }
+
+    /* Cards */
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 24px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .card h3 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+    }
+
+    .card p {
+      font-size: 13.5px;
+      color: var(--text-muted);
+      line-height: 1.6;
+    }
+
+    /* Video player container */
+    .video-box {
+      width: 100%;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #000;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .video-box video {
+      width: 100%;
+      height: auto;
+      display: block;
+      pointer-events: none;
+    }
+
+    .image-box {
+      width: 100%;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #000;
+    }
+
+    .image-box img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    .banner-box {
+      width: 100%;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid var(--border);
+      background: #000;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+    }
+
+    .banner-box img {
+      width: 100%;
+      height: auto;
+      display: block;
+    }
+
+    /* Simple Footer */
+    footer.site-footer {
+      border-top: 1px solid var(--border);
+      padding: 32px 24px;
+      background: #07080c;
+    }
+
+    .footer-inner {
+      max-width: 1120px;
+      margin: 0 auto;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: 16px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+
+    .footer-inner a {
+      color: var(--text-muted);
+      text-decoration: none;
+    }
+
+    .footer-inner a:hover {
+      color: #fff;
+    }
+
+    @media (max-width: 768px) {
+      .hero-content {
+        padding: 0 24px;
+      }
+      .hero-viewer-hud {
+        left: 24px;
+        right: 24px;
+      }
+      .grid-2 {
+        grid-template-columns: 1fr;
+      }
+      nav.nav-links {
+        display: none;
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Minimal Header -->
+  <header class="site-header">
+    <a href="#" class="brand">
+      <div class="brand-dot"></div>
+      <span>Dalil Mars</span>
+    </a>
+
+    <nav class="nav-links">
+      <a href="#why-jezero" class="nav-link">Why Jezero</a>
+      <a href="#data-terrain" class="nav-link">Data to 3D</a>
+      <a href="#astronaut-mode" class="nav-link">Astronaut Mode</a>
+      <a href="#scientist-mode" class="nav-link">Scientist Mode</a>
+      <a href="#visor-hud" class="nav-link">Visor HUD</a>
+      <a href="https://github.com/jsyph/dalil-mars" target="_blank" rel="noopener" class="nav-link">GitHub</a>
+    </nav>
+  </header>
+
+  <!-- HERO: 3D TERRAIN VIEWER OPERATES AS THE HERO CANVAS DIRECTLY BEHIND THE TEXT -->
+  <section id="hero" class="hero-section">
+    <!-- Interactive WebGL Canvas behind the text -->
+    <div id="hero-canvas-container"></div>
+    <div class="hero-backdrop-gradient"></div>
+
+    <!-- Foreground Text Content -->
+    <div class="hero-content">
+      <div class="hero-pill">
+        <span>NASA Space Apps 2026 // Team Mahatet Mars • Alexandria, Egypt</span>
+      </div>
+
+      <h1 class="hero-title">
+        Dalil <span>Mars</span>
+      </h1>
+
+      <p class="hero-subtitle">
+        Autonomous Surface Navigation on 3D Martian Terrain
+      </p>
+
+      <p class="hero-description">
+        Developed for <strong>NASA Space Apps 2026</strong> by Team <strong>Mahatet Mars</strong> in the Alexandria, Egypt Local Event. Dalil Mars processes orbital stereo CTX DTMs, ESA HRSC elevation, slope gradients, and obstacle barriers into high-density 3D costmaps for precision astronaut surface traverses.
+      </p>
+
+      <div class="hero-buttons">
+        <a href="#why-jezero" class="btn btn-primary">Explore Mission</a>
+        <a href="https://github.com/jsyph/dalil-mars" target="_blank" rel="noopener" class="btn btn-outline">GitHub Source</a>
+      </div>
+    </div>
+
+    <!-- Bottom Controls for the 3D Hero Terrain -->
+    <div class="hero-viewer-hud">
+      <div class="viewer-hint">
+        <span>🖱️ Drag to orbit 3D Jezero terrain (0.8x exag)</span>
+      </div>
+
+      <div class="viewer-actions">
+        <button id="btn-reset-cam" class="viewer-btn-icon" title="Reset camera view">
+          <span>↺</span> Reset View
+        </button>
+        <button id="btn-toggle-fullscreen" class="viewer-btn-icon" title="Toggle full screen 3D viewer">
+          <span>⛶</span> Fullscreen
+        </button>
+      </div>
+    </div>
+  </section>
+
+  <!-- MAIN PAGE CONTENT (Simple, Clean Layout) -->
+  <main class="content-wrapper">
+
+    <!-- Section 1: Why Jezero Crater -->
+    <section id="why-jezero">
+      <div class="section-header">
+        <span class="section-eyebrow">01 // Context</span>
+        <h2 class="section-title">Why Jezero Crater?</h2>
+        <p class="section-subtitle">A landing site with authentic planetary datasets to build upon.</p>
+      </div>
+
+      <div class="grid-2">
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="card">
+            <h3>Ancient River Delta</h3>
+            <p>A former lake basin and a prime place to look for signs of past microbial life.</p>
+          </div>
+          <div class="card">
+            <h3>Orbit to Ground Data</h3>
+            <p>USGS SIM 3464 geologic layers, ESA HRSC stereo elevation, and 708 ground-truth Perseverance waypoints.</p>
+          </div>
+          <div class="card">
+            <h3>Floor, Delta, and Rim</h3>
+            <p>Real slopes, dunes, and boulder fields that an autonomous surface traverse must identify and safely avoid.</p>
+          </div>
+        </div>
+
+        <div class="video-box">
+          <video autoplay loop muted playsinline disablePictureInPicture disableRemotePlayback controlsList="nodownload nopictureinpicture" poster="assets/images/image2.png">
+            <source src="assets/videos/media1.mp4" type="video/mp4">
+          </video>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top: 24px;">
+        <div class="image-box">
+          <img src="assets/images/image1.jpeg" alt="Jezero Crater Orbital Context and Landing Site Map" loading="lazy">
+        </div>
+        <div class="card" style="justify-content: center;">
+          <span class="section-eyebrow">Orbital Reconnaissance</span>
+          <h3>Perseverance Landing Site & Regional Geology</h3>
+          <p>Orbital stereo imaging across Jezero Crater provides sub-meter resolution topographic and mineralogical data, linking 708 ground-truth Perseverance waypoints directly to regional elevation contours and USGS geologic strata.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 2: From Data to 3D Terrain -->
+    <section id="data-terrain">
+      <div class="section-header">
+        <span class="section-eyebrow">02 // Preprocessing</span>
+        <h2 class="section-title">From Data to 3D Terrain</h2>
+        <p class="section-subtitle">A depth heat map becomes an interactive 3D terrain costmap.</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="video-box">
+          <video autoplay loop muted playsinline disablePictureInPicture disableRemotePlayback controlsList="nodownload nopictureinpicture" poster="assets/images/image3.png">
+            <source src="assets/videos/media2.mp4" type="video/mp4">
+          </video>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="card">
+            <h3>6-Stage Ingestion Pipeline</h3>
+            <p>Ingests multi-DTM stereo rasters at 20.2m resolution, computes Sobel gradient vectors, classifies cliff barriers, and snaps exploration waypoints.</p>
+          </div>
+          <div class="card">
+            <h3>Hierarchical All-Pairs Heuristics</h3>
+            <p>Precomputed distance fields across 64-macro-cell blocks allow sub-second obstacle-aware trajectory planning across the entire crater.</p>
+          </div>
+          <div class="card">
+            <h3>Depth Heat Map to 3D Voxel Costmap</h3>
+            <p>Raw 2D digital terrain elevation rasters are mapped into an interactive heightfield, scoring slope angle, roughness, and traversability limits for rover navigation.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top: 24px;">
+        <div class="card" style="justify-content: center;">
+          <span class="section-eyebrow">Transformation</span>
+          <h3>2D Elevation Heat Map to 3D Terrain Model</h3>
+          <p>The preprocessing pipeline transforms raw 2D digital terrain elevation rasters into an interactive 3D voxel heightfield. Each grid cell is cost-scored by slope angle, roughness, and traversability limits for rover navigation.</p>
+        </div>
+        <div class="image-box">
+          <img src="assets/images/image3.png" alt="2D Elevation Heat Map to 3D Terrain Model Transformation" loading="lazy">
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 3: Astronaut Mode -->
+    <section id="astronaut-mode">
+      <div class="section-header">
+        <span class="section-eyebrow">03 // Field Navigation UI</span>
+        <h2 class="section-title">Astronaut Mode</h2>
+        <p class="section-subtitle">Glove-friendly navigation with survival numbers up front.</p>
+      </div>
+
+      <div class="grid-2">
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="card">
+            <h3>Few, Large Controls</h3>
+            <p>Oversized touch targets engineered for pressurized spacesuit gloves. Only what is needed to move and stay alive.</p>
+          </div>
+          <div class="card">
+            <h3>Battery & O₂ Settings</h3>
+            <p>Continuous consumption monitoring. If battery reserves dip, recharge waypoints are automatically inserted into the route.</p>
+          </div>
+          <div class="card">
+            <h3>Abort Mission Scenario</h3>
+            <p>Immediate calculation of egress corridors escaping sudden dust storms, solar flares, or rover hardware hazards back to Base Camp.</p>
+          </div>
+        </div>
+
+        <div class="video-box">
+          <video autoplay loop muted playsinline disablePictureInPicture disableRemotePlayback controlsList="nodownload nopictureinpicture" poster="assets/images/image5.png">
+            <source src="assets/videos/media4.mp4" type="video/mp4">
+          </video>
+        </div>
+      </div>
+
+      <!-- Secondary Video: Astronaut Mode Telemetry Walkthrough -->
+      <div class="grid-2" style="margin-top: 24px;">
+        <div class="video-box">
+          <video autoplay loop muted playsinline disablePictureInPicture disableRemotePlayback controlsList="nodownload nopictureinpicture" poster="assets/images/image4.png">
+            <source src="assets/videos/media3.mp4" type="video/mp4">
+          </video>
+        </div>
+        <div class="card" style="justify-content: center;">
+          <span class="section-eyebrow">Dynamic Telemetry</span>
+          <h3>Field Traversal & Real-Time Egress</h3>
+          <p>Astronaut Mode presents clean, high-contrast operational status directly on the rover dashboard. Traversable corridors, battery drain profiles, and abort paths are updated continuously during EVA surface operations.</p>
+        </div>
+      </div>
+
+      <!-- 6 Astronaut Features Gallery -->
+      <div class="grid-3" style="margin-top: 24px;">
+        <div class="card">
+          <div class="image-box"><img src="assets/images/image4.png" alt="Multi-Layer View" loading="lazy"></div>
+          <h3>01 // Multi-Layer View</h3>
+          <p>Toggle seamlessly between satellite imagery, slope heat maps, and danger barrier overlays.</p>
+        </div>
+        <div class="card">
+          <div class="image-box"><img src="assets/images/image5.png" alt="Location Details and 360 Panorama View" loading="lazy"></div>
+          <h3>02 // Location Details & 360 Panorama</h3>
+          <p>Visual verification of slopes, scarps, and boulder fields prior to sector entry.</p>
+        </div>
+        <div class="card">
+          <div class="image-box"><img src="assets/images/image6.png" alt="Current Location Lock" loading="lazy"></div>
+          <h3>03 // Current Location Lock</h3>
+          <p>Real-time vehicle position, bearing heading, and route path history.</p>
+        </div>
+        <div class="card">
+          <div class="image-box"><img src="assets/images/image7.png" alt="Battery and O2 Settings" loading="lazy"></div>
+          <h3>04 // Battery & O₂ Settings</h3>
+          <p>Continuous consumption monitoring with automatic recharge waypoint insertion.</p>
+        </div>
+        <div class="card">
+          <div class="image-box"><img src="assets/images/image8.png" alt="Abort Mission Scenario" loading="lazy"></div>
+          <h3>05 // Abort Mission Scenario</h3>
+          <p>Immediate calculation of egress corridors escaping dust storms, solar flares, or any hazard.</p>
+        </div>
+        <div class="card">
+          <div class="image-box"><img src="assets/images/image9.png" alt="Mission Control Telemetry" loading="lazy"></div>
+          <h3>06 // Mission Control Telemetry</h3>
+          <p>Unified split telemetry linking real-time astronaut field status with ground control monitoring.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 4: Scientist Mode -->
+    <section id="scientist-mode">
+      <div class="section-header">
+        <span class="section-eyebrow">04 // Ground Station</span>
+        <h2 class="section-title">Scientist Mode</h2>
+        <p class="section-subtitle">The same terrain map with far more information for scientific analysis.</p>
+      </div>
+
+      <div class="grid-2">
+        <div class="video-box">
+          <video autoplay loop muted playsinline disablePictureInPicture disableRemotePlayback controlsList="nodownload nopictureinpicture" poster="assets/images/image10.png">
+            <source src="assets/videos/media5.mp4" type="video/mp4">
+          </video>
+        </div>
+
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="card">
+            <h3>Full Data Layers</h3>
+            <p>Geology, elevation, slope, and rover telemetry in one unified tactical screen.</p>
+          </div>
+          <div class="card">
+            <h3>Flag a New Region</h3>
+            <p>Pick an area to explore and add it to the map with custom survey polygons.</p>
+          </div>
+          <div class="card">
+            <h3>Astrobiology Sample Planning</h3>
+            <p>Target high-priority sediment delta beds with calculated scientific payoff vs traverse risk.</p>
+          </div>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top: 24px;">
+        <div class="card" style="justify-content: center;">
+          <span class="section-eyebrow">Ground Station Analysis</span>
+          <h3>Comprehensive Geological & Cartographic Layers</h3>
+          <p>Scientist Mode transforms the surface navigation model into a scientific research workstation. Mission controllers can inspect orbital multispectral signatures, examine USGS SIM 3464 stratigraphy, and designate scientific targets with millimeter accuracy.</p>
+        </div>
+        <div class="image-box">
+          <img src="assets/images/image10.png" alt="Scientist Mode Full Data Layers" loading="lazy">
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 5: Visor AR HUD -->
+    <section id="visor-hud">
+      <div class="section-header">
+        <span class="section-eyebrow">05 // Spatial Computing</span>
+        <h2 class="section-title">Visor AR HUD Display</h2>
+        <p class="section-subtitle">The spatial visor HUD runs directly on our shared 3D terrain model.</p>
+      </div>
+
+      <div class="grid-2">
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          <div class="card">
+            <h3>One 3D Model</h3>
+            <p>The single source of truth feeds both the workstation and the astronaut's heads-up display.</p>
+          </div>
+          <div class="card">
+            <h3>Hands-Free Wayfinding</h3>
+            <p>Route corridors and terrain hazards stay anchored in the astronaut's field of view.</p>
+          </div>
+          <div class="card">
+            <h3>Real-Time Hazard Overlays</h3>
+            <p>Dynamic detection of obstacles updates the safe corridor and elevation profile directly in visor sight.</p>
+          </div>
+        </div>
+
+        <div class="video-box">
+          <video autoplay loop muted playsinline disablePictureInPicture disableRemotePlayback controlsList="nodownload nopictureinpicture" poster="assets/images/image11.png">
+            <source src="assets/videos/media6.mp4" type="video/mp4">
+          </video>
+        </div>
+      </div>
+
+      <div class="grid-2" style="margin-top: 24px;">
+        <div class="image-box">
+          <img src="assets/images/image11.png" alt="Visor AR HUD Holographic Spatial Projection" loading="lazy">
+        </div>
+        <div class="card" style="justify-content: center;">
+          <span class="section-eyebrow">Spatial Computing</span>
+          <h3>Direct-to-Visor Holographic Projection</h3>
+          <p>The heads-up visor HUD renders directly from the shared 3D terrain geometry. EVA astronauts see real-time safe corridors, slopes, and hazard boundaries projected stereoscopically over the Martian surface without looking down at a tablet.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- Section 6: What's Next -->
+    <section id="whats-next">
+      <div class="section-header">
+        <span class="section-eyebrow">06 // Extensibility</span>
+        <h2 class="section-title">What's Next</h2>
+        <p class="section-subtitle">Built on Jezero, ready for any outer-space terrain.</p>
+      </div>
+
+      <!-- Pitch Deck Slide 13 Feature Graphic -->
+      <div class="banner-box" style="margin-bottom: 28px;">
+        <img src="assets/images/image12.png" alt="Dalil Mars: Built on Jezero, ready for any terrain" loading="lazy">
+      </div>
+
+      <div class="grid-3">
+        <div class="card">
+          <span class="section-eyebrow">Mars</span>
+          <h3>Other Mars Sites</h3>
+          <p>Swap in new elevation and geology data for any region, including Valles Marineris and Gale Crater.</p>
+        </div>
+        <div class="card">
+          <span class="section-eyebrow">Beyond</span>
+          <h3>Moon and Deep Space</h3>
+          <p>The same pipeline can map Lunar South Pole topography and craters for Artemis surface missions.</p>
+        </div>
+        <div class="card">
+          <span class="section-eyebrow">Missions</span>
+          <h3>Artemis and Mars Crews</h3>
+          <p>A universal navigation terminal for future planetary surface operations. Reliable, data-driven, built for survival.</p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Clean Footer -->
+  <footer class="site-footer">
+    <div class="footer-inner">
+      <span>Dalil Mars // Developed for <strong>NASA Space Apps 2026</strong> by Team <strong>Mahatet Mars</strong> (Alexandria, Egypt Local Event)</span>
+      <div style="display: flex; gap: 20px;">
+        <a href="#hero">Back to Top ↑</a>
+        <a href="https://github.com/jsyph/dalil-mars" target="_blank" rel="noopener">GitHub</a>
+      </div>
+    </div>
+  </footer>
+
+  <!-- Enforce No Picture-in-Picture -->
+  <script>
+    document.querySelectorAll('video').forEach(function(v) {
+      v.disablePictureInPicture = true;
+      if ('disableRemotePlayback' in v) v.disableRemotePlayback = true;
+      v.addEventListener('enterpictureinpicture', function(e) {
+        e.preventDefault();
+        if (document.exitPictureInPicture) document.exitPictureInPicture();
+      });
+    });
+  </script>
+
+  <!-- Three.js and OrbitControls -->
+  <script src="assets/js/three.min.js"></script>
+  <script src="assets/js/OrbitControls.js"></script>
+  <script>
+    if (typeof THREE.OrbitControls === 'undefined') {
+      document.write('<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"><\\/script>');
+    }
+  </script>
+
+  <!-- LIGHTWEIGHT HERO 3D VIEWER LOGIC: FLOATING 3D TERRAIN MAP (0.8x EXAG, DENSITY 2.0) -->
+  <script>
+    (function() {
+      const HEIGHT_MULTIPLIER = 0.8;
+      const BLOCK_SIZE_MULTIPLIER = 2.0;
+
+      let scene, camera, renderer, controls;
+      let instancedMesh = null;
+      let animationId = null;
+      let isHeroVisible = true;
+
+      const heroSection = document.getElementById('hero');
+      const container = document.getElementById('hero-canvas-container');
+      const btnResetCam = document.getElementById('btn-reset-cam');
+      const btnToggleFullscreen = document.getElementById('btn-toggle-fullscreen');
+
+      // Colormap
+      const DTM_STOPS = [
+        { t: 0.00, color: new THREE.Color('#0f2b82') },
+        { t: 0.12, color: new THREE.Color('#1963c6') },
+        { t: 0.24, color: new THREE.Color('#00b4d8') },
+        { t: 0.38, color: new THREE.Color('#10b981') },
+        { t: 0.52, color: new THREE.Color('#84cc16') },
+        { t: 0.64, color: new THREE.Color('#eab308') },
+        { t: 0.76, color: new THREE.Color('#c27803') },
+        { t: 0.86, color: new THREE.Color('#8b4513') },
+        { t: 0.94, color: new THREE.Color('#a89f91') },
+        { t: 1.00, color: new THREE.Color('#ffffff') }
+      ];
+
+      function getDtmColor(t, outColor) {
+        const val = Math.max(0, Math.min(1, t));
+        for (let i = 0; i < DTM_STOPS.length - 1; i++) {
+          const s0 = DTM_STOPS[i];
+          const s1 = DTM_STOPS[i + 1];
+          if (val >= s0.t && val <= s1.t) {
+            const ratio = (val - s0.t) / (s1.t - s0.t);
+            outColor.copy(s0.color).lerp(s1.color, ratio);
+            return outColor;
+          }
+        }
+        outColor.copy(DTM_STOPS[DTM_STOPS.length - 1].color);
+        return outColor;
+      }
+
+      function initHero3D() {
+        const width = container.clientWidth || window.innerWidth;
+        const height = container.clientHeight || window.innerHeight;
+
+        scene = new THREE.Scene();
+        scene.background = new THREE.Color(0x090b10);
+        scene.fog = new THREE.FogExp2(0x090b10, 0.0012);
+
+        camera = new THREE.PerspectiveCamera(42, width / height, 0.1, 4000);
+        camera.position.set(160, 200, 240);
+
+        renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+        renderer.setSize(width, height);
+        renderer.setPixelRatio(Math.min(window.devicePixelRatio, 1.25));
+        container.appendChild(renderer.domElement);
+
+        controls = new THREE.OrbitControls(camera, renderer.domElement);
+        controls.enableDamping = true;
+        controls.dampingFactor = 0.05;
+        controls.enableZoom = false; // Prevents page scroll trapping while still allowing drag to orbit!
+        controls.autoRotate = true;
+        controls.autoRotateSpeed = 0.35; // Gentle atmospheric rotation
+        controls.maxDistance = 2500;
+        controls.minDistance = 10;
+        controls.target.set(0, 0, 0);
+
+        window.addEventListener('resize', onResize);
+
+        btnResetCam.addEventListener('click', () => {
+          camera.position.set(160, 200, 240);
+          controls.target.set(0, 0, 0);
+          controls.update();
+        });
+
+        btnToggleFullscreen.addEventListener('click', () => {
+          const isFs = heroSection.classList.toggle('fullscreen-active');
+          controls.enableZoom = isFs; // Enable zoom when in dedicated fullscreen mode!
+          btnToggleFullscreen.innerHTML = isFs ? '<span>⤢</span> Exit' : '<span>⛶</span> Fullscreen';
+          setTimeout(onResize, 100);
+        });
+
+        // Pause WebGL rendering loop when hero is scrolled off-screen
+        if ('IntersectionObserver' in window) {
+          const heroObserver = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+              isHeroVisible = entry.isIntersecting;
+              if (isHeroVisible && !animationId) {
+                animate();
+              }
+            });
+          }, { threshold: 0.05 });
+          heroObserver.observe(heroSection);
+        }
+
+        loadStep16Terrain();
+        animate();
+      }
+
+      function onResize() {
+        if (!container || !camera || !renderer) return;
+        const width = container.clientWidth;
+        const height = container.clientHeight;
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height);
+      }
+
+      // Ultra-lightweight Step 16 binary loading (~366 KB gzipped)
+      async function loadStep16Terrain() {
+        const gzUrl = 'assets/data/terrain_step16.bin.gz';
+        const binUrl = 'assets/data/terrain_step16.bin';
+        let buffer = null;
+
+        if (typeof DecompressionStream !== 'undefined') {
+          try {
+            const resp = await fetch(gzUrl);
+            if (resp.ok) {
+              const ds = new DecompressionStream('gzip');
+              const decompressed = resp.body.pipeThrough(ds);
+              const res = new Response(decompressed);
+              buffer = await res.arrayBuffer();
+            }
+          } catch (e) {}
+        }
+
+        if (!buffer) {
+          try {
+            const resp = await fetch(binUrl);
+            if (resp.ok) buffer = await resp.arrayBuffer();
+          } catch (e) {}
+        }
+
+        if (buffer) buildMesh(buffer);
+      }
+
+      function buildMesh(buffer) {
+        if (buffer.byteLength < 64) return;
+        const view = new DataView(buffer);
+        const totalNodes = view.getUint32(8, true);
+        const gridRows = view.getUint32(12, true);
+        const gridCols = view.getUint32(16, true);
+        const step = view.getUint32(20, true) || 16;
+        const minZ = view.getFloat32(24, true);
+        const maxZ = view.getFloat32(28, true);
+
+        const aspect = gridCols / gridRows;
+        const extentY = 240;
+        const extentX = extentY * aspect;
+        const deltaZ = (maxZ - minZ) || 1.0;
+        const verticalSpan = 35.0;
+
+        const normScale = {
+          scaleX: extentX / gridCols,
+          scaleY: extentY / gridRows,
+          scaleZ: verticalSpan / deltaZ,
+          offsetX: -extentX / 2,
+          offsetY: -extentY / 2
+        };
+
+        const blockWidth = (extentX / (gridCols / step)) * BLOCK_SIZE_MULTIPLIER;
+        const blockDepth = (extentY / (gridRows / step)) * BLOCK_SIZE_MULTIPLIER;
+        const blockHeight = Math.max(0.6, blockWidth * 0.7);
+
+        const geo = new THREE.BoxGeometry(blockWidth, blockHeight, blockDepth);
+        const mat = new THREE.MeshBasicMaterial();
+
+        instancedMesh = new THREE.InstancedMesh(geo, mat, totalNodes);
+        instancedMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage);
+
+        const dummy = new THREE.Object3D();
+        const color = new THREE.Color();
+        const headerOffset = 64;
+        const recordSize = 20;
+        const datumBaseline = (minZ + maxZ) / 2.0;
+        const zRange = maxZ - minZ || 1.0;
+
+        for (let i = 0; i < totalNodes; i++) {
+          const offset = headerOffset + i * recordSize;
+          const col = view.getFloat32(offset, true);
+          const row = view.getFloat32(offset + 4, true);
+          const z = view.getFloat32(offset + 8, true);
+          const status = view.getUint8(offset + 12);
+
+          const posX = normScale.offsetX + col * normScale.scaleX;
+          const posZ = normScale.offsetY + row * normScale.scaleY;
+          const posY = (z - datumBaseline) * normScale.scaleZ * HEIGHT_MULTIPLIER;
+
+          dummy.position.set(posX, posY, posZ);
+          dummy.updateMatrix();
+          instancedMesh.setMatrixAt(i, dummy.matrix);
+
+          if (status === 2) {
+            color.set('#ff2222');
+          } else if (status === 1) {
+            color.set('#ffd600');
+          } else {
+            const t = Math.max(0, Math.min(1, (z - minZ) / zRange));
+            getDtmColor(t, color);
+          }
+          instancedMesh.setColorAt(i, color);
+        }
+
+        instancedMesh.instanceMatrix.needsUpdate = true;
+        if (instancedMesh.instanceColor) instancedMesh.instanceColor.needsUpdate = true;
+
+        scene.add(instancedMesh);
+      }
+
+      function animate() {
+        if (!isHeroVisible) {
+          animationId = null;
+          return;
+        }
+        animationId = requestAnimationFrame(animate);
+        controls.update();
+        renderer.render(scene, camera);
+      }
+
+      window.addEventListener('DOMContentLoaded', initHero3D);
+    })();
+  </script>
+
+</body>
+</html>

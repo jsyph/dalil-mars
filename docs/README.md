@@ -1,6 +1,7 @@
 # Dalil Mars // Unified Jezero Surface Terminal & Ground Control
 
 > **2026 NASA Space Apps Challenge** — *Interplanetary Survival Guide: Martian Map*  
+> **Team Mahatet Mars** // *Alexandria, Egypt Local Event*  
 > High-density, glove-compatible EVA navigation terminal & geospatial ground control system for astronauts and operators in **Jezero Crater, Mars**.
 
 [![Status](https://img.shields.io/badge/Status-Production%20Grade-22c55e?style=flat-square)](#)
