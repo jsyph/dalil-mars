@@ -26,8 +26,8 @@ It provides orbital-to-surface traverse planning, slope-aware A* routing, dynami
   - `GET /api/layers/metadata` — Vector and raster layer catalogue from USGS SIM 3464.
   - `GET /data/*` — Static file server for regional rasters, GeoJSONs, and landmark image assets.
 
-### B. Ground Control & Mission Terminal (`ground-control/`)
-- **Location**: `ground-control/index.html`
+### B. Ground Control & Mission Terminal (`GUI/ground-control/`)
+- **Location**: `GUI/ground-control/index.html`
 - **UI Architecture**:
   - Aerospace / automotive instrument cluster design system (neutral dark/light grays, strict zero blue/orange, green/crimson WCAG AA status indicators).
   - Leaflet map view clamped to authentic USGS SIM 3464 regional bounds (`17.3000° N` to `18.7013° N`, `76.8000° E` to `77.9972° E`).
@@ -47,7 +47,7 @@ It provides orbital-to-surface traverse planning, slope-aware A* routing, dynami
   - Interactive exclusion zone drawing tools (thermal, radiation, perchlorate, rough terrain, safe corridors) with individual zone deletion and polygon coordinates display.
   - Live elevation profile transect graph with min/max bounds and slope grade classification.
 
-### C. Curated Geospatial Assets (`ground-control/data/`, `public/data/`, `src/data/`)
+### C. Curated Geospatial Assets (`GUI/ground-control/data/`, `GUI/public/data/`, `GUI/src/data/`)
 - `landmarks.json` — 11 curated planetary landmarks:
   1. Octavia E. Butler Landing Site
   2. Kodiak Butte
@@ -84,7 +84,7 @@ python3 -m uvicorn main:app --port 8000 --host 0.0.0.0
 - Swagger API documentation is available at `http://localhost:8000/docs`.
 
 ### Option 2: Standalone Static Terminal
-Simply open `ground-control/index.html` directly in any web browser.
+Simply open `GUI/ground-control/index.html` directly in any web browser.
 
 ### Option 3: Importing Landmarks into React EVA App
 `landmarks.json` and `public/data/landmarks/` have been mirrored into the Vite project:

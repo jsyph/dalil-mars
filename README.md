@@ -215,10 +215,10 @@ flowchart TD
 
 ## 3. The Pathfinding & Physics Engine (`engine.py`)
 
-The heart of Dalil Mars is [`engine.py`](file:///home/joe/Development/nasa-space-apps-2026/dalil-mars/engine.py) (re-exporting [`backend.core.engine`](file:///home/joe/Development/nasa-space-apps-2026/dalil-mars/backend/core/engine.py)). It is implemented as a **zero-dependency, high-performance embedded Python library** (`import engine`).
+The heart of Dalil Mars is [`backend/core/engine.py`](file:///home/joe/Development/nasa-space-apps-2026/dalil-mars/backend/core/engine.py). It is implemented as a **zero-dependency, high-performance embedded Python library** (`from backend.core import engine`).
 
 ```python
-import engine
+from backend.core import engine
 
 eng = engine.get_engine()
 route = eng.plan_route(
@@ -565,10 +565,12 @@ Beyond the datasets directly bundled in this repository, planetary geologists, f
 ```
 dalil-mars/
 ├── README.md                      # Primary project documentation & mission specification
-├── engine.py                      # Compatibility root shim re-exporting backend.core.engine
 ├── preprocess                     # Master preprocessing executable shell script
 ├── start.sh                       # One-command unified launcher (FastAPI backend + Vite GUI)
-├── package.json                   # NPM workspace configuration
+├── start-backend.sh               # Backend FastAPI launcher
+├── start-gui.sh                   # GUI Vite dev server launcher
+├── start-website.sh               # Static website server launcher
+├── start-viewer.sh                # 3D stage visualizer launcher
 │
 ├── backend/                       # Python Geospatial & Pathfinding Server
 │   ├── main.py                    # FastAPI application entrypoint & static routes
@@ -578,7 +580,10 @@ dalil-mars/
 │   ├── routers/                   # Modular API routers (engine_api, routing, elevation, hazards, layers)
 │   └── utils/                     # Geodatabase reader, elevation queries, and hazard buffers
 │
-├── GUI/                           # Astronaut EVA Tablet & Ground Control React Application
+├── GUI/                           # Astronaut EVA Tablet, AR Visor & Ground Control Frontend
+│   ├── .oxlintrc.json             # Frontend linter configuration
+│   ├── ground-control/            # Standalone Ground Control tactical terminal
+│   │   └── index.html             # Tactical operator map with polygon drawing & transect tools
 │   ├── src/
 │   │   ├── components/            # JezeroTacticalMap, VisorHudPage, MarsPanoramaViewer, LandmarkDrawer
 │   │   ├── data/                  # In-situ landmarks, MEDA weather, waypoints, panoramas
@@ -592,9 +597,6 @@ dalil-mars/
 │   ├── visualizer.py              # Data inspector & 2D/3D matrix validation tools
 │   ├── sim3464_JezeroNili/        # Authentic USGS SIM 3464 rasters & Nili.gdb geodatabase
 │   └── output/                    # Preprocessed master matrices (Stages 1 through 6)
-│
-├── ground-control/                # Standalone Ground Control tactical terminal
-│   └── index.html                 # Tactical operator map with polygon drawing & transect tools
 │
 ├── scripts/                       # Planetary automation scripts
 │   ├── fetch_nasa_data.py         # NASA M20 live waypoint & weather harvester

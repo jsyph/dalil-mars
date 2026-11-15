@@ -21,7 +21,7 @@ adb forward "tcp:${DEVTOOLS_PORT}" localabstract:chrome_devtools_remote
 
 if ! ss -tln | grep -q ":${PORT} "; then
   echo "==> [4/6] Starting Vite dev server on port ${PORT}..."
-  (cd "${ROOT_DIR}" && npm run dev -- --port "${PORT}" >/tmp/dalil-mars-vite.log 2>&1 &)
+  (cd "${ROOT_DIR}/GUI" && npm run dev -- --port "${PORT}" >/tmp/dalil-mars-vite.log 2>&1 &)
   sleep 2
 else
   echo "==> [4/6] Vite dev server already running on port ${PORT}."

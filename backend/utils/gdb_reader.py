@@ -7,7 +7,10 @@ import json
 from functools import lru_cache
 from typing import Optional
 
-GDB_PATH = os.getenv("GDB_PATH", "../data/Nili.gdb")
+_DEFAULT_GDB_PATH = os.path.abspath(
+    os.path.join(os.path.dirname(__file__), "../../preprocessing/sim3464_JezeroNili/Geodatabase/Nili.gdb")
+)
+GDB_PATH = os.getenv("GDB_PATH", _DEFAULT_GDB_PATH)
 
 
 def get_gdb_path() -> str:

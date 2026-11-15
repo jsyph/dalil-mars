@@ -56,10 +56,11 @@ if _HAS_LEGACY_GIS:
     app.include_router(hazards.router,   prefix="/api/hazards",   tags=["Hazards"])
 
 # ── Ensure directories exist ──────────────────────────────────────
-os.makedirs("data/cache", exist_ok=True)
-static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../ground-control"))
+cache_dir = os.path.join(os.path.dirname(__file__), "data", "cache")
+os.makedirs(cache_dir, exist_ok=True)
+static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../GUI/ground-control"))
 if not os.path.exists(static_dir):
-    static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../frontend"))
+    static_dir = os.path.abspath(os.path.join(os.path.dirname(__file__), "../GUI/dist"))
 
 if os.path.exists(static_dir):
     frontend_data_dir = os.path.join(static_dir, "data")
@@ -80,7 +81,10 @@ async def root():
 
 @app.get("/api/health", tags=["Health"])
 async def health():
-    gdb_path = os.getenv("GDB_PATH", "../data/Nili.gdb")
+    default_gdb = os.path.abspath(
+        os.path.join(os.path.dirname(__file__), "../preprocessing/sim3464_JezeroNili/Geodatabase/Nili.gdb")
+    )
+    gdb_path = os.getenv("GDB_PATH", default_gdb)
     return {
         "status": "ok",
         "gdb_found": os.path.exists(gdb_path),

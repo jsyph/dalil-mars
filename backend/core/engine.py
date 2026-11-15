@@ -28,15 +28,8 @@ PREPROCESSING_DIR = os.path.join(BASE_DIR, "preprocessing")
 
 
 def _resolve_data_file(filename: str) -> str:
-    """Resolves a JSON data file across GUI/src/data and src/data."""
-    candidates = [
-        os.path.join(BASE_DIR, "GUI", "src", "data", filename),
-        os.path.join(BASE_DIR, "src", "data", filename),
-    ]
-    for path in candidates:
-        if os.path.exists(path):
-            return path
-    return candidates[0]
+    """Resolves a JSON data file inside GUI/src/data."""
+    return os.path.join(BASE_DIR, "GUI", "src", "data", filename)
 
 # =============================================================================
 # 1. PHYSICAL CONSTANTS & MARTIAN GEODESY
