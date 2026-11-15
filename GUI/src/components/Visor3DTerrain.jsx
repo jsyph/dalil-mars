@@ -1052,7 +1052,15 @@ export default function Visor3DTerrain({
     vrRig.rotation.y = -THREE.MathUtils.degToRad(hudState?.liveNavState?.heading ?? 285);
 
     renderer.xr.enabled = true;
-    renderer.xr.setReferenceSpaceType('local-floor');
+    try {
+      renderer.xr.setReferenceSpaceType('local-floor');
+    } catch {
+      try {
+        renderer.xr.setReferenceSpaceType('local');
+      } catch {
+        renderer.xr.setReferenceSpaceType('viewer');
+      }
+    }
 
     // Head-locked Fullscreen HUD CanvasTexture (guaranteed to render in Quest 2 WebXR)
     const hudCanvas = document.createElement('canvas');
@@ -1152,8 +1160,14 @@ export default function Visor3DTerrain({
       isOffRoute,
     };
 
-    renderer.xr.setSession(xrSession).catch((err) => {
-      console.error('Failed to bind XR session to Visor3DTerrain:', err);
+    renderer.xr.setSession(xrSession).catch(async (err) => {
+      console.warn('Failed to bind XR session with current reference space, retrying with viewer:', err);
+      try {
+        renderer.xr.setReferenceSpaceType('viewer');
+        await renderer.xr.setSession(xrSession);
+      } catch (err2) {
+        console.error('Failed to bind XR session to Visor3DTerrain:', err2);
+      }
     });
 
     return () => {

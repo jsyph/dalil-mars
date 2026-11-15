@@ -236,6 +236,7 @@ export default function VisorHudPage() {
   const rootRef = useRef(null);
   const [xrSession, setXrSession] = useState(null);
   const [xrSupported, setXrSupported] = useState(false);
+  const [xrError, setXrError] = useState(null);
 
   const isArMode = useMemo(() => {
     const params = new URLSearchParams(window.location.search);
@@ -247,30 +248,73 @@ export default function VisorHudPage() {
   );
 
   useEffect(() => {
-    if (!isArMode || !navigator.xr) return;
+    if (!isArMode || !navigator?.xr) return;
     const xrMode = isTransparentBg ? 'immersive-ar' : 'immersive-vr';
-    navigator.xr.isSessionSupported(xrMode).then(setXrSupported).catch(() => {});
+    navigator.xr.isSessionSupported(xrMode)
+      .then((supported) => {
+        if (!supported && xrMode === 'immersive-ar') {
+          return navigator.xr.isSessionSupported('immersive-vr');
+        }
+        return supported;
+      })
+      .then(setXrSupported)
+      .catch(() => setXrSupported(false));
   }, [isArMode, isTransparentBg]);
 
   const startArSession = useCallback(async () => {
-    if (!navigator.xr || xrSession) return;
+    if (xrSession) return;
+    setXrError(null);
+
+    const isSecure = window.isSecureContext || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+    if (!isSecure) {
+      setXrError('WebXR requires a secure context (HTTPS or localhost). Please switch to HTTPS or use adb reverse.');
+      return;
+    }
+
+    if (!navigator?.xr) {
+      setXrError('WebXR (navigator.xr) is not available. Please open this page in Meta Quest Browser over HTTPS.');
+      return;
+    }
+
     try {
-      const mode = isTransparentBg ? 'immersive-ar' : 'immersive-vr';
-      const session = await navigator.xr.requestSession(mode, {
-        requiredFeatures: ['local-floor'],
+      let mode = isTransparentBg ? 'immersive-ar' : 'immersive-vr';
+      let isSupported = false;
+      try {
+        isSupported = await navigator.xr.isSessionSupported(mode);
+      } catch {
+        isSupported = false;
+      }
+
+      if (!isSupported && mode === 'immersive-ar') {
+        mode = 'immersive-vr';
+        try {
+          isSupported = await navigator.xr.isSessionSupported('immersive-vr');
+        } catch {
+          isSupported = false;
+        }
+      }
+
+      const sessionInit = {
+        optionalFeatures: ['local-floor', 'bounded-floor', 'hand-tracking', 'layers'],
+      };
+
+      let session;
+      try {
+        session = await navigator.xr.requestSession(mode, sessionInit);
+      } catch (firstErr) {
+        console.warn('Primary WebXR request failed, retrying immersive-vr without optional features:', firstErr);
+        session = await navigator.xr.requestSession('immersive-vr');
+      }
+
+      session.addEventListener('end', () => {
+        setXrSession(null);
       });
-      session.addEventListener('end', () => setXrSession(null));
       setXrSession(session);
     } catch (err) {
-      console.warn('WebXR session start:', err?.message || err);
+      console.error('WebXR session start error:', err);
+      setXrError(err?.message || 'Failed to start WebXR session. Check Quest guardian and permissions.');
     }
   }, [xrSession, isTransparentBg]);
-
-  useEffect(() => {
-    if (isArMode && xrSupported && !xrSession) {
-      startArSession();
-    }
-  }, [isArMode, xrSupported, xrSession, startArSession]);
 
   useEffect(() => {
     const unsubscribe = subscribeVisorState(
@@ -956,14 +1000,33 @@ export default function VisorHudPage() {
 
       {/* Prominent Enter VR/AR Prompt when in AR mode on Quest Browser */}
       {isArMode && !xrSession && (
-        <div className="pointer-events-auto fixed inset-x-0 bottom-24 z-40 flex justify-center">
+        <div className="pointer-events-auto fixed inset-x-0 bottom-20 z-40 flex flex-col items-center gap-3 px-4">
           <button
+            type="button"
             onClick={startArSession}
-            className="flex items-center gap-2.5 rounded-full border-2 border-emerald-400 bg-emerald-950/90 px-6 py-3 text-sm font-extrabold tracking-wider text-emerald-100 shadow-[0_0_28px_rgba(52,211,153,0.45)] hover:bg-emerald-900 cursor-pointer backdrop-blur-md"
+            className="flex items-center gap-2.5 rounded-full border-2 border-emerald-400 bg-emerald-950/95 px-7 py-3.5 text-sm font-extrabold tracking-wider text-emerald-100 shadow-[0_0_32px_rgba(52,211,153,0.5)] hover:bg-emerald-900 cursor-pointer backdrop-blur-md active:scale-95 transition-transform"
           >
             <Eye className="h-5 w-5 text-emerald-300" />
-            ENTER VR / AR PASSTHROUGH
+            <span>ENTER VR / AR PASSTHROUGH</span>
           </button>
+
+          {xrError && (
+            <div className="max-w-lg rounded-lg border border-red-500/70 bg-black/90 p-3.5 text-center text-xs text-red-200 shadow-2xl backdrop-blur-md">
+              <div className="font-bold text-red-400 mb-1">WebXR Notification</div>
+              <div className="mb-2 leading-relaxed">{xrError}</div>
+              {window.location.protocol === 'http:' && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.location.href = window.location.href.replace(/^http:/, 'https:');
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded bg-emerald-600 px-4 py-1.5 text-xs font-bold text-white hover:bg-emerald-500 cursor-pointer shadow-lg active:scale-95 transition-transform"
+                >
+                  Switch to HTTPS (Required for WebXR)
+                </button>
+              )}
+            </div>
+          )}
         </div>
       )}
 
