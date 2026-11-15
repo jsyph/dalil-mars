@@ -379,6 +379,49 @@ class DalilMarsEngine:
                     "mast_height_m": CommsPhysics.RELAY_MAST_HEIGHT_M,
                 })
 
+        # Rasterize depth_hazard_regions.geojson onto master_grid so backend A* matches the map's red hazard shapes
+        depth_geo_path = _resolve_data_file("depth_hazard_regions.geojson")
+        if depth_geo_path and os.path.exists(depth_geo_path):
+            try:
+                with open(depth_geo_path, encoding="utf-8") as f:
+                    depth_geo = json.load(f)
+                for feat in depth_geo.get("features", []):
+                    ring = feat.get("geometry", {}).get("coordinates", [[]])[0]
+                    if len(ring) < 3:
+                        continue
+                    pts_rc = [self.latlon_to_grid(pt[1], pt[0]) for pt in ring]
+                    pr = np.array([p[0] for p in pts_rc], dtype=np.float32)
+                    pc = np.array([p[1] for p in pts_rc], dtype=np.float32)
+                    r0 = max(0, int(np.floor(pr.min())))
+                    r1 = min(H, int(np.ceil(pr.max())) + 1)
+                    c0 = max(0, int(np.floor(pc.min())))
+                    c1 = min(W, int(np.ceil(pc.max())) + 1)
+                    if r1 <= r0 or c1 <= c0:
+                        continue
+                    sub_h, sub_w = r1 - r0, c1 - c0
+                    rr, cc = np.meshgrid(np.arange(sub_h), np.arange(sub_w), indexing="ij")
+                    lpr = pr - r0
+                    lpc = pc - c0
+                    inside = np.zeros((sub_h, sub_w), dtype=bool)
+                    j = len(lpr) - 1
+                    for i in range(len(lpr)):
+                        ri, ci = lpr[i], lpc[i]
+                        rj, cj = lpr[j], lpc[j]
+                        cond = (ci > cc) != (cj > cc)
+                        denom = (cj - ci) if abs(cj - ci) > 1e-9 else 1e-9
+                        intersect_r = (rj - ri) * (cc - ci) / denom + ri
+                        inside ^= cond & (rr < intersect_r)
+                        j = i
+                    sev = feat.get("properties", {}).get("severity", "high")
+                    sub_m = self.master_grid[r0:r1, c0:c1]
+                    mask = inside & (~np.isinf(sub_m))
+                    if sev == "critical":
+                        sub_m[mask] *= 150.0
+                    else:
+                        sub_m[mask] *= 18.0
+            except Exception as exc:
+                sys.stderr.write(f"Warning: failed to rasterize depth_hazard_regions.geojson: {exc}\n")
+
         self.intra_bound = self.M * np.sqrt(2.0) * self.pixel_res * 1.0
         elapsed = time.time() - t0
         sys.stderr.write(f"Engine ready in {elapsed:.2f}s! ({H}x{W} fine nodes, {self.cH}x{self.cW} macro-cells, {len(self.shelters)} shelters, {len(self.comms_towers)} comms towers)\n")
@@ -477,6 +520,7 @@ class DalilMarsEngine:
         tau: float,
         uphill_penalty: float | None = None,
         custom_exclusion_zones: list[dict] | None = None,
+        progress_cb=None,
     ) -> dict:
         r1, c1 = start_rc
         r2, c2 = goal_rc
@@ -532,6 +576,16 @@ class DalilMarsEngine:
             macro_path.append((curr_I, curr_J))
             visited_macro.add((curr_I, curr_J))
 
+        # Ensure goal macro-cell (I2, J2) is connected to macro_path so goal_local is always inside sub_grid
+        if (curr_I, curr_J) != (I2, J2):
+            steps_bridge = max(abs(I2 - curr_I), abs(J2 - curr_J), 1)
+            for b in range(1, steps_bridge + 1):
+                bi = int(round(curr_I + (I2 - curr_I) * (b / steps_bridge)))
+                bj = int(round(curr_J + (J2 - curr_J) * (b / steps_bridge)))
+                if 0 <= bi < self.cH and 0 <= bj < self.cW and (bi, bj) not in visited_macro:
+                    macro_path.append((bi, bj))
+                    visited_macro.add((bi, bj))
+
         # 2. Form Active Bounding Corridor (~3.9km wide swath around macro-path)
         corridor = set()
         for mI, mJ in macro_path:
@@ -568,9 +622,9 @@ class DalilMarsEngine:
             red_nodes_in_corridor = int(np.sum(red_mask))
 
             # 2. Caution / Dangerous Slopes (15 deg to max_slope)
-            # Apply 2.5x hazard effort penalty to strongly steer clear of steep terrain
+            # Apply 12x hazard effort penalty so routes steer around red depth-map hazard regions without stalling A*
             caution_mask = (sub_slope >= 15.0) & (sub_slope <= max_slope) & (~np.isinf(sub_grid))
-            sub_grid[caution_mask] *= 2.5
+            sub_grid[caution_mask] *= 12.0
             caution_nodes_in_corridor = int(np.sum(caution_mask))
 
         if custom_exclusion_zones:
@@ -583,11 +637,15 @@ class DalilMarsEngine:
 
         # Snap start/goal to nearest traversable pixel if placed on a micro-obstacle or red slope
         for pt_local in [start_local, goal_local]:
+            pt_local[0] = int(np.clip(pt_local[0], 0, sub_H - 1))
+            pt_local[1] = int(np.clip(pt_local[1], 0, sub_W - 1))
             if np.isinf(sub_grid[pt_local[0], pt_local[1]]):
                 snapped = False
-                for radius in range(1, 8):
+                for radius in range(1, 20):
                     for dr in range(-radius, radius + 1):
                         for dc in range(-radius, radius + 1):
+                            if abs(dr) != radius and abs(dc) != radius:
+                                continue
                             sr, sc = pt_local[0] + dr, pt_local[1] + dc
                             if 0 <= sr < sub_H and 0 <= sc < sub_W and not np.isinf(sub_grid[sr, sc]):
                                 pt_local[0], pt_local[1] = sr, sc
@@ -648,12 +706,20 @@ class DalilMarsEngine:
             (1, -1, step_diag), (1, 1, step_diag),
         ]
 
-        dist_map = np.full(sub_H * sub_W, np.inf, dtype=np.float32)
+        sub_pixels = sub_H * sub_W
+        h_weight = 1.8 if sub_pixels > 400_000 else (1.35 if sub_pixels > 120_000 else 1.0)
+        max_pops = 600_000
+        pops = 0
+        t_search_start = time.monotonic()
+
+        dist_map = np.full(sub_pixels, np.inf, dtype=np.float32)
         dist_map[start_idx] = 0.0
 
-        pq = [(sub_heur_1d[start_idx], 0.0, start_idx)]
+        pq = [(sub_heur_1d[start_idx] * h_weight, 0.0, start_idx)]
         came_from = {}
         found = False
+        best_u = start_idx
+        best_h = float(sub_heur_1d[start_idx])
 
         while pq:
             f, g, u = heapq.heappop(pq)
@@ -662,6 +728,31 @@ class DalilMarsEngine:
                 break
             if g > dist_map[u]:
                 continue
+
+            pops += 1
+            uh = float(sub_heur_1d[u])
+            if uh < best_h:
+                best_h = uh
+                best_u = u
+            if pops >= max_pops or (pops & 4095 == 0 and (time.monotonic() - t_search_start) > 8.0):
+                break
+            if progress_cb is not None and pops % 20_000 == 0 and best_u != start_idx:
+                p_pixels = []
+                p_curr = best_u
+                while p_curr in came_from:
+                    p_pixels.append((min_r + p_curr // sub_W, min_c + p_curr % sub_W))
+                    p_curr = came_from[p_curr]
+                p_pixels.append((r1, c1))
+                p_pixels.reverse()
+                p_stride = max(1, len(p_pixels) // 80)
+                p_sampled = p_pixels[::p_stride]
+                if p_pixels[-1] not in p_sampled:
+                    p_sampled.append(p_pixels[-1])
+                partial_coords = []
+                for pr, pc in p_sampled:
+                    plat, plon = self.grid_to_latlon(pr, pc)
+                    partial_coords.append([round(plon, 6), round(plat, 6)])
+                progress_cb(partial_coords)
 
             ur = u // sub_W
             uc = u % sub_W
@@ -689,12 +780,12 @@ class DalilMarsEngine:
                         if ng < dist_map[v]:
                             dist_map[v] = ng
                             came_from[v] = u
-                            heapq.heappush(pq, (ng + sub_heur_1d[v], ng, v))
+                            heapq.heappush(pq, (ng + sub_heur_1d[v] * h_weight, ng, v))
 
         # 4. Path Reconstruction & Exact Fine Shadowing
         path_pixels = []
-        if found:
-            curr = goal_idx
+        if found or best_u != start_idx:
+            curr = goal_idx if found else best_u
             while curr in came_from:
                 ur = curr // sub_W
                 uc = curr % sub_W
@@ -702,6 +793,8 @@ class DalilMarsEngine:
                 curr = came_from[curr]
             path_pixels.append((r1, c1))
             path_pixels.reverse()
+            if not found and path_pixels[-1] != (r2, c2):
+                path_pixels.append((r2, c2))
         else:
             path_pixels = [(r1, c1), (r2, c2)]
 
@@ -872,6 +965,7 @@ class DalilMarsEngine:
         uphill_penalty: float | None = None,
         loadout_key: str | None = None,
         custom_exclusion_zones: list[dict] | None = None,
+        progress_cb=None,
         **kwargs,
     ) -> dict:
         """Computes safe, terrain-aware Martian route from start to destination.
@@ -913,6 +1007,7 @@ class DalilMarsEngine:
             opt_tau,
             uphill_penalty=uphill_penalty,
             custom_exclusion_zones=custom_exclusion_zones,
+            progress_cb=progress_cb,
         )
 
         batt_remain_direct = initial_battery_pct - leg1["battery_used_pct"]
@@ -1916,6 +2011,7 @@ class DalilMarsEngine:
         best_tower = None
         min_path_loss = np.inf
         direct_hab_los = False
+        towers_eval = []
 
         for tow in self.comms_towers:
             has_los = CommsPhysics.test_line_of_sight(
@@ -1930,6 +2026,17 @@ class DalilMarsEngine:
             if has_los and pl_db < min_path_loss:
                 min_path_loss = pl_db
                 best_tower = tow
+
+            towers_eval.append({
+                "name": tow["name"],
+                "type": tow["type"],
+                "lat": float(tow["lat"]),
+                "lon": float(tow["lon"]),
+                "has_los": bool(has_los),
+                "distance_km": float(round(dist_km, 2)),
+                "path_loss_db": float(round(pl_db, 1)) if has_los else None,
+                "antenna_height_m": float(tow.get("mast_height_m", 12.0)),
+            })
 
         if best_tower:
             status = "DIRECT_HAB_LOS" if best_tower["type"] == "primary" else "RELAY_CONNECTED"
@@ -1958,6 +2065,7 @@ class DalilMarsEngine:
             "rx_power_dbm": rx_pow,
             "distance_to_hab_km": dist_to_hab_km,
             "distance_km": dist_to_hab_km,
+            "towers": towers_eval,
         }
 
     @staticmethod

@@ -1,7 +1,7 @@
 import React, { useEffect, useRef } from 'react';
 import L from 'leaflet';
 import APP_THEME from '../theme';
-import { estimateElev, checkCursorHazards } from '../utils/pathfinder';
+import { estimateElev, checkCursorHazards, loadDepthHazardRegions } from '../utils/pathfinder';
 
 const REGIONAL_BOUNDS = APP_THEME.regionalBounds;
 
@@ -92,6 +92,10 @@ export default function JezeroTacticalMap({
   onSetArbitraryDestination,
   activePickMode = null,
   onClearPickMode,
+  rfProbeActive = false,
+  onProbeRfComms = null,
+  rfProbeResult = null,
+  scienceTourResult = null,
   onSelectLandmark,
   onAddDrawVertex,
   onDeleteZone,
@@ -105,6 +109,7 @@ export default function JezeroTacticalMap({
   const basemapOverlayRef = useRef(null);
   const reliefOverlayRef = useRef(null);
   const opmTileRef = useRef(null);
+  const depthHazardsGeoRef = useRef(null);
 
   // Refs for stable event listeners inside map init
   const activeDrawModeRef = useRef(activeDrawMode);
@@ -117,6 +122,8 @@ export default function JezeroTacticalMap({
   const onSetArbitraryDestinationRef = useRef(onSetArbitraryDestination);
   const activePickModeRef = useRef(activePickMode);
   const onClearPickModeRef = useRef(onClearPickMode);
+  const rfProbeActiveRef = useRef(rfProbeActive);
+  const onProbeRfCommsRef = useRef(onProbeRfComms);
 
   useEffect(() => {
     activeDrawModeRef.current = activeDrawMode;
@@ -129,7 +136,22 @@ export default function JezeroTacticalMap({
     onSetArbitraryDestinationRef.current = onSetArbitraryDestination;
     activePickModeRef.current = activePickMode;
     onClearPickModeRef.current = onClearPickMode;
-  });
+    rfProbeActiveRef.current = rfProbeActive;
+    onProbeRfCommsRef.current = onProbeRfComms;
+  }, [
+    activeDrawMode,
+    onAddDrawVertex,
+    onCursorMove,
+    hazardZones,
+    drawnZones,
+    landmarks,
+    onSetArbitraryOrigin,
+    onSetArbitraryDestination,
+    activePickMode,
+    onClearPickMode,
+    rfProbeActive,
+    onProbeRfComms,
+  ]);
 
   // Dispatch bridge for Leaflet HTML popup buttons
   useEffect(() => {
@@ -383,6 +405,8 @@ export default function JezeroTacticalMap({
       dustFront: L.layerGroup().addTo(map),
       landmarks: L.layerGroup().addTo(map),
       endpoints: L.layerGroup().addTo(map),
+      rfProbe: L.layerGroup().addTo(map),
+      scienceTour: L.layerGroup().addTo(map),
     };
 
     const showCoordinateContextPopup = (lat, lng, latlng) => {
@@ -429,6 +453,11 @@ export default function JezeroTacticalMap({
     const handleMapClick = (e) => {
       const lat = Number(e.latlng.lat.toFixed(6));
       const lng = Number(e.latlng.lng.toFixed(6));
+
+      if (rfProbeActiveRef.current) {
+        onProbeRfCommsRef.current?.([lat, lng]);
+        return;
+      }
 
       if (activeDrawModeRef.current) {
         onAddDrawVertexRef.current?.([lat, lng]);
@@ -643,7 +672,7 @@ export default function JezeroTacticalMap({
         const w = waypoints[i];
         const tilt = w.tilt || 0;
         let color = APP_THEME.colors.ok; // < 7 deg nominal
-        if (tilt >= 14) color = APP_THEME.colors.fault; // >= 14 deg fault
+        if (tilt >= 14) color = '#f59e0b'; // >= 14 deg steep grade (amber dot; red reserved for depth-map hazard shapes)
         else if (tilt >= 7) color = APP_THEME.colors.textSecondary; // 7-13.9 deg moderate
 
         const circle = L.circleMarker([w.lat, w.lon], {
@@ -684,7 +713,7 @@ export default function JezeroTacticalMap({
     }
   }, [waypoints, layers.traverse, layers.slope, onSelectWaypointSol]);
 
-  // Render Hazard Zones (Terrain Hazards + Modeled Science Hazards)
+  // Render Depth-Map Hazard Regions (Preprocess Stages 1, 2 & 4 polygon shapes instead of red circles)
   useEffect(() => {
     const { hazards } = layerGroupsRef.current;
     if (!hazards) return;
@@ -692,36 +721,62 @@ export default function JezeroTacticalMap({
 
     if (!layers.hazards) return;
 
-    hazardZones.forEach((hz) => {
-      const color =
-        hz.severity === 'critical'
-          ? APP_THEME.colors.fault
-          : hz.severity === 'high'
-          ? APP_THEME.colors.faultDark
-          : '#991b1b';
+    let cancelled = false;
 
-      const circle = L.circle([hz.lat, hz.lon], {
-        radius: hz.radiusMeters,
-        color,
-        fillColor: color,
-        fillOpacity: 0.2,
-        weight: 1.5,
-        dashArray: '5, 5',
-      });
+    const renderGeoRegions = (geojson) => {
+      if (cancelled || !geojson?.features?.length) return;
+      hazards.clearLayers();
+      L.geoJSON(geojson, {
+        style: (feature) => {
+          const sev = feature?.properties?.severity;
+          const isCritical = sev === 'critical';
+          return {
+            color: isCritical ? APP_THEME.colors.fault : APP_THEME.colors.faultDark,
+            fillColor: isCritical ? APP_THEME.colors.fault : APP_THEME.colors.faultDark,
+            fillOpacity: isCritical ? 0.28 : 0.16,
+            weight: isCritical ? 1.4 : 1.0,
+            opacity: isCritical ? 0.85 : 0.65,
+          };
+        },
+        onEachFeature: (feature, layer) => {
+          const p = feature?.properties || {};
+          const isCritical = p.severity === 'critical';
+          layer.bindPopup(`
+            <div style="font-size:11px; max-width:240px; font-family:'JetBrains Mono',monospace;">
+              <div style="font-weight:700; color:#ef4444; text-transform:uppercase; font-size:10px; border-bottom:1px solid #242933; padding-bottom:4px; margin-bottom:4px;">
+                [FAULT] ${(p.severity || 'HIGH').toUpperCase()} DEPTH-MAP HAZARD
+              </div>
+              <div style="font-weight:700; font-size:12px; color:#edf0f5; margin-bottom:4px;">${p.label || 'STEEP TERRAIN REGION'}</div>
+              <div style="color:#9da5b4; line-height:1.5;">
+                <div>PEAK GRADE: <span style="color:${isCritical ? '#ef4444' : '#edf0f5'}; font-weight:700;">${p.peakSlopeDeg ?? '--'} deg</span></div>
+                <div>ELEVATION: <span style="color:#edf0f5;">${p.minElevM ?? '--'} m .. ${p.maxElevM ?? '--'} m</span></div>
+                <div>REGION AREA: <span style="color:#edf0f5;">${p.areaKm2 ?? '--'} km²</span></div>
+              </div>
+              <p style="margin:6px 0 0; color:#656d7d; font-family:'Inter',sans-serif; font-size:10px; line-height:1.35;">
+                Derived from Preprocess Stages 1, 2 & 4 consolidated DEM & slope grids.
+              </p>
+            </div>
+          `);
+        },
+      }).addTo(hazards);
+    };
 
-      circle.bindPopup(`
-        <div style="font-size:11px; max-width:230px; font-family:'JetBrains Mono',monospace;">
-          <div style="font-weight:700; color:#ef4444; text-transform:uppercase; font-size:10px; border-bottom:1px solid #242933; padding-bottom:4px; margin-bottom:4px;">
-            [FAULT] ${hz.severity.toUpperCase()} TERRAIN HAZARD
-          </div>
-          <div style="font-weight:700; font-size:12px; color:#edf0f5; margin-bottom:4px;">${hz.name}</div>
-          <div style="color:#9da5b4; margin-bottom:4px;">PEAK GRADE: <span style="color:#edf0f5;">${hz.maxSlope} deg</span></div>
-          <p style="margin:0; color:#9da5b4; font-family:'Inter',sans-serif; font-size:11px; line-height:1.4;">${hz.description}</p>
-        </div>
-      `);
+    if (depthHazardsGeoRef.current) {
+      renderGeoRegions(depthHazardsGeoRef.current);
+    } else {
+      loadDepthHazardRegions()
+        .then((geojson) => {
+          if (geojson) {
+            depthHazardsGeoRef.current = geojson;
+            renderGeoRegions(geojson);
+          }
+        })
+        .catch(() => {});
+    }
 
-      circle.addTo(hazards);
-    });
+    return () => {
+      cancelled = true;
+    };
   }, [hazardZones, layers.hazards]);
 
   // Render Operator-Drawn Exclusion & Safe Corridor Polygons
@@ -1416,6 +1471,114 @@ export default function JezeroTacticalMap({
     endPOI?.lon,
     endPOI?.name,
   ]);
+
+  // Render RF Comms 7-Mast Raymarch Probe
+  useEffect(() => {
+    const { rfProbe } = layerGroupsRef.current;
+    if (!rfProbe) return;
+    rfProbe.clearLayers();
+    if (!rfProbeResult?.location) return;
+
+    const [pLat, pLon] = rfProbeResult.location;
+
+    // Probe Origin Marker
+    const probeIcon = L.divIcon({
+      className: 'rf-probe-origin-marker',
+      html: `
+        <div style="
+          width:24px; height:24px; border-radius:50%; background:rgba(56,189,248,0.25);
+          border:2px solid #38bdf8; display:flex; align-items:center; justify-content:center;
+          box-shadow:0 0 14px #38bdf8;
+        ">
+          <div style="width:8px; height:8px; border-radius:50%; background:#38bdf8;"></div>
+        </div>
+      `,
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
+    });
+
+    L.marker([pLat, pLon], { icon: probeIcon, zIndexOffset: 1100 })
+      .bindTooltip(`RF PROBE: ${pLat.toFixed(5)}°N, ${pLon.toFixed(5)}°E`, { permanent: false, sticky: true })
+      .addTo(rfProbe);
+
+    // 3D Line-of-sight rays to each of the 7 towers
+    (rfProbeResult.towers || []).forEach((tow) => {
+      const isLos = tow.has_los;
+      L.polyline([[pLat, pLon], [tow.lat, tow.lon]], {
+        color: isLos ? '#22c55e' : '#ef4444',
+        weight: isLos ? 2.5 : 1.5,
+        dashArray: isLos ? null : '6, 6',
+        opacity: isLos ? 0.95 : 0.6,
+      })
+        .bindTooltip(
+          `<b>${tow.name}</b><br/>${isLos ? `LOS CLEAR • ${tow.distance_km} km • ${tow.path_loss_db} dB FSPL` : `TERRAIN OCCLUDED • ${tow.distance_km} km`}`,
+          { sticky: true }
+        )
+        .addTo(rfProbe);
+    });
+  }, [rfProbeResult]);
+
+  // Render Martian Orienteering Science Tour Circuit
+  useEffect(() => {
+    const { scienceTour } = layerGroupsRef.current;
+    if (!scienceTour) return;
+    scienceTour.clearLayers();
+    if (!scienceTourResult?.legs?.length) return;
+
+    const legColors = ['#38bdf8', '#22c55e', '#f59e0b', '#ec4899', '#8b5cf6', '#06b6d4'];
+
+    scienceTourResult.legs.forEach((leg, i) => {
+      const coords = (leg.path_coords || []).map((pt) => [pt[1], pt[0]]);
+      if (coords.length > 0) {
+        const color = legColors[i % legColors.length];
+        L.polyline(coords, {
+          color: '#0b0d11',
+          weight: 6,
+          opacity: 0.9,
+          lineJoin: 'round',
+        }).addTo(scienceTour);
+
+        L.polyline(coords, {
+          color,
+          weight: 3.5,
+          opacity: 1.0,
+          lineJoin: 'round',
+        })
+          .bindTooltip(
+            `<b>TOUR LEG ${i + 1}</b><br/>${leg.from_stop} &rarr; ${leg.to_stop}<br/>${Number((leg.dist_km ?? 0).toFixed(2))} km (${leg.duration_min ?? '?'} min)`,
+            { sticky: true }
+          )
+          .addTo(scienceTour);
+      }
+    });
+
+    (scienceTourResult.ordered_stops || []).forEach((stop, idx) => {
+      const isBase = idx === 0 || idx === scienceTourResult.ordered_stops.length - 1;
+      const stopIcon = L.divIcon({
+        className: 'tour-stop-marker',
+        html: `
+          <div style="
+            padding:2px 8px; border-radius:12px;
+            background:${isBase ? '#d97706' : '#0284c7'};
+            color:#ffffff; font-size:10px; font-weight:700;
+            font-family:'JetBrains Mono',monospace; border:1.5px solid #ffffff;
+            box-shadow:0 2px 8px rgba(0,0,0,0.8); white-space:nowrap;
+          ">
+            ${idx}. ${stop.name}
+          </div>
+        `,
+        iconSize: [0, 0],
+        iconAnchor: [0, 0],
+      });
+
+      L.marker([stop.lat, stop.lon], { icon: stopIcon, zIndexOffset: 1000 })
+        .bindTooltip(
+          `<b>${stop.name}</b> [Stop ${idx}]<br/>Arrival: ${stop.arrival_lst || '09:00 LST'}<br/>${isBase ? 'Mission Base' : `Sample collection (${stop.dwell_time_min ?? 25}m dwell)`}`,
+          { sticky: true }
+        )
+        .addTo(scienceTour);
+    });
+  }, [scienceTourResult]);
 
   return (
     <div className="relative w-full h-full bg-[#0b0d11]">

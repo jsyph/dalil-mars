@@ -182,6 +182,13 @@ function sampleDemGrid(dem, lat, lon) {
 
 // Consolidated 20.2m DTM elevation estimator (meters)
 export function estimateElev(lat, lon) {
+  const depthHit = findDepthHazardAtPoint(lat, lon);
+  if (depthHit) {
+    return {
+      label: `${depthHit.label} (${depthHit.peakSlopeDeg}°)`,
+      isFault: true,
+    };
+  }
   if (_loadedDem) {
     const { elev } = sampleDemGrid(_loadedDem, lat, lon);
     return Math.round(elev * 10) / 10;
@@ -211,6 +218,74 @@ export function estimateSlope(lat, lon) {
   return 0;
 }
 
+let _depthHazardGeoJson = null;
+let _depthHazardPolygons = [];
+let _depthHazardLoadPromise = null;
+
+export function getDepthHazardRegions() {
+  return _depthHazardGeoJson;
+}
+
+export function setDepthHazardRegions(geojson) {
+  _depthHazardGeoJson = geojson || null;
+  const polys = [];
+  for (const feat of geojson?.features || []) {
+    const ring = feat?.geometry?.coordinates?.[0];
+    if (!Array.isArray(ring) || ring.length < 3) continue;
+    let minLat = Infinity;
+    let maxLat = -Infinity;
+    let minLon = Infinity;
+    let maxLon = -Infinity;
+    const coords = ring.map(([lon, lat]) => {
+      if (lat < minLat) minLat = lat;
+      if (lat > maxLat) maxLat = lat;
+      if (lon < minLon) minLon = lon;
+      if (lon > maxLon) maxLon = lon;
+      return [lat, lon];
+    });
+    polys.push({
+      severity: feat?.properties?.severity || 'high',
+      label: feat?.properties?.label || 'STEEP DEPTH-GRADIENT REGION',
+      peakSlopeDeg: Number(feat?.properties?.peakSlopeDeg ?? 18),
+      minLat,
+      maxLat,
+      minLon,
+      maxLon,
+      coords,
+    });
+  }
+  _depthHazardPolygons = polys;
+  legCache.clear();
+}
+
+export function loadDepthHazardRegions() {
+  if (_depthHazardGeoJson) return Promise.resolve(_depthHazardGeoJson);
+  if (_depthHazardLoadPromise) return _depthHazardLoadPromise;
+  _depthHazardLoadPromise = fetch('/data/depth_hazard_regions.geojson')
+    .then((res) => (res.ok ? res.json() : null))
+    .then((geojson) => {
+      if (geojson) setDepthHazardRegions(geojson);
+      return geojson;
+    })
+    .catch(() => null);
+  return _depthHazardLoadPromise;
+}
+
+function findDepthHazardAtPoint(lat, lon) {
+  let hit = null;
+  for (let i = 0; i < _depthHazardPolygons.length; i++) {
+    const p = _depthHazardPolygons[i];
+    if (lat < p.minLat || lat > p.maxLat || lon < p.minLon || lon > p.maxLon) continue;
+    if (pointInPolygon(lat, lon, p.coords)) {
+      if (!hit || p.severity === 'critical') {
+        hit = p;
+        if (hit.severity === 'critical') return hit;
+      }
+    }
+  }
+  return hit;
+}
+
 export function checkCursorHazards(lat, lon, hazardZones = [], customExclusionZones = []) {
   for (const hz of hazardZones) {
     const dist = marsDistanceMeters(lat, lon, hz.lat, hz.lon);
@@ -225,6 +300,13 @@ export function checkCursorHazards(lat, lon, hazardZones = [], customExclusionZo
       }
       return { label: `EXCLUSION: ${zone.type.toUpperCase()}`, isFault: true };
     }
+  }
+  const depthHit = findDepthHazardAtPoint(lat, lon);
+  if (depthHit) {
+    return {
+      label: `${depthHit.label} (${depthHit.peakSlopeDeg}°)`,
+      isFault: true,
+    };
   }
   if (_loadedDem) {
     const { slope, hazardStatus } = sampleDemGrid(_loadedDem, lat, lon);
@@ -335,6 +417,15 @@ function getCellHazardPenalty(
         return { cost: 9999, slope: 26, blocked: true };
       }
     }
+  }
+
+  const depthHit = findDepthHazardAtPoint(lat, lon);
+  if (depthHit) {
+    const slopeVal = Math.max(localSlope, depthHit.peakSlopeDeg);
+    if (depthHit.severity === 'critical' || slopeVal > loadout.maxSlopeDeg) {
+      return { cost: 9999, slope: slopeVal, blocked: true };
+    }
+    return { cost: 45, slope: slopeVal, blocked: false };
   }
 
   for (const hz of hazardZones) {

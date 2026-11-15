@@ -7,18 +7,28 @@ import { LOADOUT_PROFILES, SAFE_RESERVE_PCT, WEATHER_CONDITIONS } from './pathfi
 
 const API_BASE = '/api';
 
-async function postJson(path, body, signal) {
-  const res = await fetch(`${API_BASE}${path}`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body),
-    signal,
-  });
-  if (!res.ok) {
-    const errText = await res.text().catch(() => res.statusText);
-    throw new Error(`Engine API ${path} failed (${res.status}): ${errText}`);
+async function postJson(path, body, signal, timeoutMs = 12000) {
+  const timeoutCtrl = new AbortController();
+  const timer = setTimeout(() => timeoutCtrl.abort(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs);
+  const combinedSignal =
+    signal && typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function'
+      ? AbortSignal.any([signal, timeoutCtrl.signal])
+      : signal || timeoutCtrl.signal;
+  try {
+    const res = await fetch(`${API_BASE}${path}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+      signal: combinedSignal,
+    });
+    if (!res.ok) {
+      const errText = await res.text().catch(() => res.statusText);
+      throw new Error(`Engine API ${path} failed (${res.status}): ${errText}`);
+    }
+    return res.json();
+  } finally {
+    clearTimeout(timer);
   }
-  return res.json();
 }
 
 async function getJson(path, signal) {
@@ -36,6 +46,60 @@ export async function getEngineStatusApi(signal) {
 
 export async function planRouteApi(params, signal) {
   return postJson('/route/plan', params, signal);
+}
+
+export async function planRouteStreamApi(params, onProgress, signal, timeoutMs = 15000) {
+  const timeoutCtrl = new AbortController();
+  const timer = setTimeout(() => timeoutCtrl.abort(new Error(`Timeout after ${timeoutMs}ms`)), timeoutMs);
+  const combinedSignal =
+    signal && typeof AbortSignal !== 'undefined' && typeof AbortSignal.any === 'function'
+      ? AbortSignal.any([signal, timeoutCtrl.signal])
+      : signal || timeoutCtrl.signal;
+
+  try {
+    const res = await fetch(`${API_BASE}/route/plan/stream`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(params),
+      signal: combinedSignal,
+    });
+    if (!res.ok || !res.body) {
+      const errText = await res.text().catch(() => res.statusText);
+      throw new Error(`Engine API /route/plan/stream failed (${res.status}): ${errText}`);
+    }
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    let finalResult = null;
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+        const msg = JSON.parse(trimmed);
+        if (msg.type === 'progress' && Array.isArray(msg.path_coords)) {
+          onProgress?.(msg.path_coords.map((pt) => [pt[1], pt[0]]));
+        } else if (msg.type === 'complete') {
+          finalResult = msg.result;
+        } else if (msg.type === 'error') {
+          throw new Error(msg.detail || 'Streamed route planning failed');
+        }
+      }
+    }
+
+    if (!finalResult) {
+      throw new Error('Route stream ended without completion payload');
+    }
+    return finalResult;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 export async function planEmergencyAbortApi(params, signal) {
@@ -56,6 +120,11 @@ export async function predictTelemetryApi(params, signal) {
 
 export async function evaluateRfCommsApi(params, signal) {
   return postJson('/comms/evaluate', params, signal);
+}
+
+export async function getPointTelemetryApi(params, signal) {
+  const query = new URLSearchParams(params).toString();
+  return getJson(`/engine/point-telemetry?${query}`, signal);
 }
 
 /**
@@ -195,6 +264,9 @@ export function adaptEngineRouteToGui(
     durationMin,
     roundTripMin,
     o2ConsumedLiters: Math.round(((engineRes.o2_used_pct ?? 0) / 100) * 480),
+    o2ConsumedKg: engineRes.o2_consumed_kg ?? Number((((engineRes.o2_used_pct ?? 0) / 100) * 480 * 0.001429).toFixed(3)),
+    waterConsumedL: engineRes.water_consumed_l ?? Number(((durationMin / 60) * 0.35).toFixed(2)),
+    solarEnergyWh: Number((engineRes.solar_energy_wh ?? 0).toFixed(1)),
     suitO2TankPercent: Math.min(100, Math.round(engineRes.o2_used_pct ?? 0)),
     batteryUsedTotalPct: Number((engineRes.battery_used_pct ?? 0).toFixed(1)),
     directArrivalBattery: finalArrivalBattery,

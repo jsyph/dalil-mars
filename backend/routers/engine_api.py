@@ -1,8 +1,12 @@
 """
 engine_api.py — FastAPI router exposing the Dalil-Mars Tactical Pathfinding Engine
 """
+import asyncio
+import json
 from fastapi import APIRouter, HTTPException, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
+from starlette.concurrency import run_in_threadpool
 from typing import Any, Dict, List, Optional, Union
 
 from core import engine as dalil_engine
@@ -81,7 +85,8 @@ async def api_plan_route(req: EngineRouteRequest):
     if dest is None:
         raise HTTPException(status_code=400, detail="destination (or goal) is required")
     try:
-        return dalil_engine.plan_route(
+        return await run_in_threadpool(
+            dalil_engine.plan_route,
             start=req.start,
             destination=dest,
             mode=req.mode,
@@ -97,6 +102,65 @@ async def api_plan_route(req: EngineRouteRequest):
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+
+@router.post("/route/plan/stream")
+async def api_plan_route_stream(req: EngineRouteRequest):
+    dest = req.destination if req.destination is not None else req.goal
+    if dest is None:
+        raise HTTPException(status_code=400, detail="destination (or goal) is required")
+
+    loop = asyncio.get_running_loop()
+    queue: asyncio.Queue = asyncio.Queue()
+
+    def on_progress(partial_coords):
+        loop.call_soon_threadsafe(
+            queue.put_nowait,
+            json.dumps({"type": "progress", "path_coords": partial_coords}) + "\n",
+        )
+
+    def worker():
+        try:
+            result = dalil_engine.plan_route(
+                start=req.start,
+                destination=dest,
+                mode=req.mode,
+                loadout_key=req.loadout_key,
+                departure_lst=req.departure_lst,
+                weather=req.weather,
+                tau=req.tau,
+                radiation_spe=req.radiation_spe,
+                initial_battery_pct=req.initial_battery_pct,
+                initial_o2_pct=req.initial_o2_pct,
+                allow_charging_pitstop=req.allow_charging_pitstop,
+                custom_exclusion_zones=req.custom_exclusion_zones,
+                progress_cb=on_progress,
+            )
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                json.dumps({"type": "complete", "result": result}) + "\n",
+            )
+        except Exception as exc:
+            loop.call_soon_threadsafe(
+                queue.put_nowait,
+                json.dumps({"type": "error", "detail": str(exc)}) + "\n",
+            )
+        finally:
+            loop.call_soon_threadsafe(queue.put_nowait, None)
+
+    async def event_generator():
+        task = asyncio.create_task(run_in_threadpool(worker))
+        try:
+            while True:
+                item = await queue.get()
+                if item is None:
+                    break
+                yield item
+        finally:
+            if not task.done():
+                await task
+
+    return StreamingResponse(event_generator(), media_type="application/x-ndjson")
 
 
 @router.post("/route/abort")
