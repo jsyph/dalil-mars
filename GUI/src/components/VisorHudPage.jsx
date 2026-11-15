@@ -30,15 +30,18 @@ import {
 import scienceHazardsData from '../data/jezero_science_hazards.json';
 import {
   calculateBearingDegrees,
+  computeMarswalkRoute,
+  LOADOUT_PROFILES,
   marsDistanceMeters,
   SAFE_RESERVE_PCT,
+  SUIT_O2_CAPACITY_LITERS,
 } from '../utils/pathfinder';
+import { adaptEngineRouteToGui, planRouteApi } from '../utils/engineApi';
 import {
   readCachedVisorState,
   sendVisorCommand,
   subscribeVisorState,
 } from '../utils/visorSync';
-import { planRouteApi } from '../utils/engineApi';
 import Visor3DTerrain, { VISOR_VERTICAL_FOV } from './Visor3DTerrain';
 
 const VISOR_FOV_DEG = 110; // ±55° horizontal field of view
@@ -92,6 +95,40 @@ function stepMarsCoordinates(lat, lon, bearingDeg, distanceMeters) {
     Number(((lat2 * 180) / Math.PI).toFixed(6)),
     Number(((lon2 * 180) / Math.PI).toFixed(6)),
   ];
+}
+
+function applyLocalResourceStep(prevSnapshot, prevLat, prevLon, nextLat, nextLon) {
+  const prevNav = prevSnapshot?.liveNavState || {};
+  const stepKm = marsDistanceMeters(prevLat, prevLon, nextLat, nextLon) / 1000;
+  const loadoutId = prevSnapshot?.loadout?.id || 'light';
+  const loadout = LOADOUT_PROFILES[loadoutId] || LOADOUT_PROFILES.light;
+  const dustFactor = prevSnapshot?.weatherKey === 'dust_storm' ? 1.25 : 1.0;
+
+  const prevBat = Number.isFinite(prevNav.currentBattery) ? prevNav.currentBattery : 85;
+  const prevO2 = Number.isFinite(prevNav.currentO2) ? prevNav.currentO2 : 90;
+  const prevDist = Number.isFinite(prevNav.distCoveredKm) ? prevNav.distCoveredKm : 0;
+
+  const stations = (scienceHazardsData.sciencePOIs || []).filter((p) => p.isChargingStation);
+  const docked = stations.some((st) => marsDistanceMeters(nextLat, nextLon, st.lat, st.lon) <= 120);
+  if (docked) {
+    return {
+      currentBattery: 100,
+      currentO2: 100,
+      isRecharging: true,
+      distCoveredKm: Number((prevDist + stepKm).toFixed(2)),
+    };
+  }
+
+  const batDrain = stepKm * loadout.batteryDrainPerKm * dustFactor;
+  const stepMinutes = (stepKm / Math.max(0.5, loadout.speedKmh)) * 60;
+  const o2DrainPct = ((stepMinutes * loadout.o2RateLpm) / SUIT_O2_CAPACITY_LITERS) * 100;
+
+  return {
+    currentBattery: Math.max(0, Number((prevBat - batDrain).toFixed(4))),
+    currentO2: Math.max(0, Number((prevO2 - o2DrainPct).toFixed(4))),
+    isRecharging: false,
+    distCoveredKm: Number((prevDist + stepKm).toFixed(3)),
+  };
 }
 
 const FALLBACK_SNAPSHOT = {
@@ -172,9 +209,20 @@ const FALLBACK_SNAPSHOT = {
   routePathCoords: [],
 };
 
+const QUEST_FALLBACK_ROUTE = [
+  [18.444627, 77.450886],
+  [18.4472, 77.4415],
+  [18.4501, 77.4310],
+  [18.4534, 77.4178],
+  [18.4565, 77.4035],
+];
+
 export default function VisorHudPage() {
   const [snapshot, setSnapshot] = useState(() => readCachedVisorState() || FALLBACK_SNAPSHOT);
-  const [linkLive, setLinkLive] = useState(() => Boolean(readCachedVisorState()));
+  const [linkLive, setLinkLive] = useState(false);
+  const lastHeartbeatRef = useRef(0);
+  const [offlineRescueRoute, setOfflineRescueRoute] = useState(null);
+  const offlineOriginRef = useRef(null);
   const [lastSyncTs, setLastSyncTs] = useState(null);
   const [showContours, setShowContours] = useState(true);
 
@@ -185,18 +233,74 @@ export default function VisorHudPage() {
   const [screenMarkerCoords, setScreenMarkerCoords] = useState({});
   const dragRef = useRef({ active: false, x: 0, y: 0, yaw: 0, pitch: 0 });
 
+  const rootRef = useRef(null);
+  const [xrSession, setXrSession] = useState(null);
+  const [xrSupported, setXrSupported] = useState(false);
+
+  const isArMode = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('mode') === 'visor-ar';
+  }, []);
   const isTransparentBg = useMemo(
     () => new URLSearchParams(window.location.search).get('bg') === 'transparent',
     []
   );
 
   useEffect(() => {
-    const unsubscribe = subscribeVisorState((nextSnapshot, ts) => {
-      setSnapshot(nextSnapshot);
-      setLinkLive(true);
-      setLastSyncTs(ts || Date.now());
-    });
-    return unsubscribe;
+    if (!isArMode || !navigator.xr) return;
+    const xrMode = isTransparentBg ? 'immersive-ar' : 'immersive-vr';
+    navigator.xr.isSessionSupported(xrMode).then(setXrSupported).catch(() => {});
+  }, [isArMode, isTransparentBg]);
+
+  const startArSession = useCallback(async () => {
+    if (!navigator.xr || xrSession) return;
+    try {
+      const mode = isTransparentBg ? 'immersive-ar' : 'immersive-vr';
+      const session = await navigator.xr.requestSession(mode, {
+        requiredFeatures: ['local-floor'],
+      });
+      session.addEventListener('end', () => setXrSession(null));
+      setXrSession(session);
+    } catch (err) {
+      console.warn('WebXR session start:', err?.message || err);
+    }
+  }, [xrSession, isTransparentBg]);
+
+  useEffect(() => {
+    if (isArMode && xrSupported && !xrSession) {
+      startArSession();
+    }
+  }, [isArMode, xrSupported, xrSession, startArSession]);
+
+  useEffect(() => {
+    const unsubscribe = subscribeVisorState(
+      (nextSnapshot, ts) => {
+        setSnapshot(nextSnapshot);
+        lastHeartbeatRef.current = Date.now();
+        setLinkLive(true);
+        setLastSyncTs(ts || Date.now());
+      },
+      (isOnline, ts) => {
+        if (isOnline) {
+          lastHeartbeatRef.current = Date.now();
+          setLinkLive(true);
+          if (ts) setLastSyncTs(ts);
+        } else {
+          lastHeartbeatRef.current = 0;
+          setLinkLive(false);
+        }
+      }
+    );
+    sendVisorCommand('VISOR_PING');
+    const watchdog = setInterval(() => {
+      if (lastHeartbeatRef.current === 0 || Date.now() - lastHeartbeatRef.current > 5000) {
+        setLinkLive(false);
+      }
+    }, 1000);
+    return () => {
+      clearInterval(watchdog);
+      unsubscribe();
+    };
   }, []);
 
   const {
@@ -218,6 +322,12 @@ export default function VisorHudPage() {
     walkbackHorizon = null,
     engineLoading = false,
   } = snapshot;
+  const activeRoutePathCoords =
+    routePathCoords?.length >= 2
+      ? routePathCoords
+      : isArMode
+        ? QUEST_FALLBACK_ROUTE
+        : routePathCoords;
 
   const bodyHeading = liveNavState?.heading ?? 0;
   const viewHeading = normalizeHeading(bodyHeading + lookYawOffset);
@@ -248,6 +358,174 @@ export default function VisorHudPage() {
     }
   }, [viewHeading, navPlaying]);
   const [curLat, curLon] = liveNavState?.currentLatLon ?? [18.444627, 77.450886];
+
+  // Auto-route to nearest charging station when EVA Tablet is offline (desktop AR Visor mode)
+  const nearestChargingStation = useMemo(() => {
+    const stations = (scienceHazardsData.sciencePOIs || []).filter((p) => p.isChargingStation);
+    let best = null;
+    let bestDist = Infinity;
+    for (const st of stations) {
+      const d = marsDistanceMeters(curLat, curLon, st.lat, st.lon);
+      if (d < bestDist) {
+        bestDist = d;
+        best = st;
+      }
+    }
+    return best ? { station: best, distKm: Number((bestDist / 1000).toFixed(2)) } : null;
+  }, [curLat, curLon]);
+
+  useEffect(() => {
+    if (linkLive || isArMode || !nearestChargingStation?.station) {
+      if (linkLive) {
+        setOfflineRescueRoute(null);
+        offlineOriginRef.current = null;
+      }
+      return;
+    }
+
+    const st = nearestChargingStation.station;
+    if (nearestChargingStation.distKm * 1000 < 50) {
+      offlineOriginRef.current = { lat: curLat, lon: curLon, stationId: st.id, docked: true };
+      setOfflineRescueRoute({ station: st, pathCoords: [], distKm: 0, docked: true });
+      return;
+    }
+
+    const prev = offlineOriginRef.current;
+    if (
+      prev &&
+      !prev.docked &&
+      prev.stationId === st.id &&
+      marsDistanceMeters(curLat, curLon, prev.lat, prev.lon) < 150
+    ) {
+      return;
+    }
+
+    offlineOriginRef.current = { lat: curLat, lon: curLon, stationId: st.id, docked: false };
+
+    // Compute immediate local A* rescue path synchronously so the 3D ribbon appears with 0ms latency
+    const fallback = computeMarswalkRoute({
+      start: { id: 'visor-pos', name: 'Current Position', lat: curLat, lon: curLon },
+      end: st,
+      hazardZones: scienceHazardsData.hazardZones || [],
+      waypoints: [],
+      sciencePOIs: scienceHazardsData.sciencePOIs || [],
+      loadoutKey: loadout?.id || 'light',
+      weatherKey,
+      useChargingStop: false,
+    });
+    const immediatePath =
+      fallback.pathCoords?.length >= 2
+        ? fallback.pathCoords
+        : [
+            [curLat, curLon],
+            [st.lat, st.lon],
+          ];
+    offlineWalkIdxRef.current = 0;
+    setOfflineRescueRoute({
+      station: st,
+      pathCoords: immediatePath,
+      distKm: fallback.distKm ?? nearestChargingStation.distKm,
+      docked: false,
+    });
+
+    // Optionally upgrade with backend DEM A* engine if reachable (without aborting on 16ms movement ticks)
+    let cancelled = false;
+    planRouteApi({
+      start: [curLat, curLon],
+      destination: [st.lat, st.lon],
+      mode: 'balanced',
+      loadout_key: loadout?.id || 'light',
+      weather: weatherKey,
+      initial_battery_pct: liveNavState?.currentBattery ?? 85,
+      initial_o2_pct: liveNavState?.currentO2 ?? 90,
+      allow_charging_pitstop: false,
+    })
+      .then((res) => {
+        if (cancelled || linkLive) return;
+        const adapted = adaptEngineRouteToGui(res, {
+          start: { id: 'visor-pos', name: 'Current Position', lat: curLat, lon: curLon },
+          end: st,
+          loadoutKey: loadout?.id || 'light',
+          weatherKey,
+        });
+        if (adapted.pathCoords?.length >= 2) {
+          offlineWalkIdxRef.current = 0;
+          setOfflineRescueRoute({
+            station: st,
+            pathCoords: adapted.pathCoords,
+            distKm: adapted.distKm,
+            docked: false,
+          });
+        }
+      })
+      .catch(() => {
+        // Local computeMarswalkRoute path is already active
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [linkLive, isArMode, nearestChargingStation, curLat, curLon, loadout?.id, weatherKey]);
+
+  const effectiveEndPOI =
+    !linkLive && !isArMode && offlineRescueRoute?.station ? offlineRescueRoute.station : endPOI;
+  const effectiveRoutePathCoords =
+    !linkLive && !isArMode && offlineRescueRoute?.pathCoords?.length >= 2
+      ? offlineRescueRoute.pathCoords
+      : activeRoutePathCoords;
+
+  // Standalone Auto-Walk along the offline charging-station route when EVA Tablet is offline
+  const offlineWalkIdxRef = useRef(0);
+  useEffect(() => {
+    if (linkLive || isArMode || !navPlaying || effectiveRoutePathCoords.length < 2) {
+      if (!navPlaying) offlineWalkIdxRef.current = 0;
+      return;
+    }
+    const path = effectiveRoutePathCoords;
+    const timer = setInterval(() => {
+      const totalPoints = path.length;
+      const idxFloor = Math.min(totalPoints - 2, Math.max(0, Math.floor(offlineWalkIdxRef.current)));
+      const segLenM = Math.max(
+        2,
+        marsDistanceMeters(path[idxFloor][0], path[idxFloor][1], path[idxFloor + 1][0], path[idxFloor + 1][1])
+      );
+      const nextIdx = Math.min(totalPoints - 1, offlineWalkIdxRef.current + (10.5 * navSpeed) / segLenM);
+      offlineWalkIdxRef.current = nextIdx;
+
+      const fIdx = Math.floor(nextIdx);
+      const cIdx = Math.min(totalPoints - 1, fIdx + 1);
+      const frac = nextIdx - fIdx;
+      const nextPos =
+        fIdx === cIdx
+          ? path[fIdx]
+          : [
+              path[fIdx][0] + (path[cIdx][0] - path[fIdx][0]) * frac,
+              path[fIdx][1] + (path[cIdx][1] - path[fIdx][1]) * frac,
+            ];
+      const lookIdx = Math.min(totalPoints - 1, fIdx + 2);
+      const hdg =
+        fIdx < totalPoints - 1
+          ? Math.round(calculateBearingDegrees(nextPos[0], nextPos[1], path[lookIdx][0], path[lookIdx][1]))
+          : Math.round(calculateBearingDegrees(path[Math.max(0, fIdx - 1)][0], path[Math.max(0, fIdx - 1)][1], nextPos[0], nextPos[1]));
+
+      setSnapshot((prev) => {
+        const [pLat, pLon] = prev.liveNavState?.currentLatLon ?? nextPos;
+        const resUpdate = applyLocalResourceStep(prev, pLat, pLon, nextPos[0], nextPos[1]);
+        return {
+          ...prev,
+          navPlaying: nextIdx < totalPoints - 1,
+          liveNavState: {
+            ...prev.liveNavState,
+            ...resUpdate,
+            active: true,
+            currentLatLon: nextPos,
+            heading: hdg,
+          },
+        };
+      });
+    }, 150);
+    return () => clearInterval(timer);
+  }, [linkLive, isArMode, navPlaying, navSpeed, effectiveRoutePathCoords]);
   const deviation = liveNavState?.routeDeviation;
   const isOffRoute = Boolean(deviation?.isOffRoute);
 
@@ -323,16 +601,21 @@ export default function VisorHudPage() {
         moveBearing,
         STEP_DISTANCE_M
       );
-      setSnapshot((prev) => ({
-        ...prev,
-        navPlaying: false,
-        liveNavState: {
-          ...prev.liveNavState,
-          active: true,
-          currentLatLon: [nextLat, nextLon],
-          heading: bodyHeading,
-        },
-      }));
+      setSnapshot((prev) => {
+        const [pLat, pLon] = prev.liveNavState?.currentLatLon ?? [curLat, curLon];
+        const resUpdate = applyLocalResourceStep(prev, pLat, pLon, nextLat, nextLon);
+        return {
+          ...prev,
+          navPlaying: false,
+          liveNavState: {
+            ...prev.liveNavState,
+            ...resUpdate,
+            active: true,
+            currentLatLon: [nextLat, nextLon],
+            heading: bodyHeading,
+          },
+        };
+      });
       sendVisorCommand('MANUAL_MOVE', {
         lat: nextLat,
         lon: nextLon,
@@ -346,6 +629,36 @@ export default function VisorHudPage() {
   const keysPressedRef = useRef(new Set());
   const moveStateRef = useRef({ curLat, curLon, viewHeading, bodyHeading });
   moveStateRef.current = { curLat, curLon, viewHeading, bodyHeading };
+
+  // Move astronaut smoothly from Quest 2 Touch controller thumbstick (forward, strafe in [-1, 1])
+  const moveByStick = useCallback((forward, strafe, dt) => {
+    const { curLat: lat, curLon: lon, viewHeading: vh, bodyHeading: bh } = moveStateRef.current;
+    const relOffsetDeg = (Math.atan2(strafe, forward) * 180) / Math.PI;
+    const moveBearing = normalizeHeading(vh + relOffsetDeg);
+    const mag = Math.min(1, Math.hypot(forward, strafe));
+    const distM = WALK_SPEED_MPS * mag * dt;
+    const [nextLat, nextLon] = stepMarsCoordinates(lat, lon, moveBearing, distM);
+
+    moveStateRef.current.curLat = nextLat;
+    moveStateRef.current.curLon = nextLon;
+
+    setSnapshot((prev) => {
+      const [pLat, pLon] = prev.liveNavState?.currentLatLon ?? [lat, lon];
+      const resUpdate = applyLocalResourceStep(prev, pLat, pLon, nextLat, nextLon);
+      return {
+        ...prev,
+        navPlaying: false,
+        liveNavState: {
+          ...prev.liveNavState,
+          ...resUpdate,
+          active: true,
+          currentLatLon: [nextLat, nextLon],
+          heading: bh,
+        },
+      };
+    });
+    sendVisorCommand('MANUAL_MOVE', { lat: nextLat, lon: nextLon, heading: bh });
+  }, []);
 
   // Smooth continuous WASD movement via requestAnimationFrame + Arrow keys for head look
   useEffect(() => {
@@ -376,16 +689,21 @@ export default function VisorHudPage() {
           moveStateRef.current.curLat = nextLat;
           moveStateRef.current.curLon = nextLon;
 
-          setSnapshot((prev) => ({
-            ...prev,
-            navPlaying: false,
-            liveNavState: {
-              ...prev.liveNavState,
-              active: true,
-              currentLatLon: [nextLat, nextLon],
-              heading: bh,
-            },
-          }));
+          setSnapshot((prev) => {
+            const [pLat, pLon] = prev.liveNavState?.currentLatLon ?? [lat, lon];
+            const resUpdate = applyLocalResourceStep(prev, pLat, pLon, nextLat, nextLon);
+            return {
+              ...prev,
+              navPlaying: false,
+              liveNavState: {
+                ...prev.liveNavState,
+                ...resUpdate,
+                active: true,
+                currentLatLon: [nextLat, nextLon],
+                heading: bh,
+              },
+            };
+          });
 
           if (now - lastSyncTs >= 60) {
             flushSync(nextLat, nextLon, bh, vh);
@@ -486,12 +804,12 @@ export default function VisorHudPage() {
 
   // Target & shelter bearings
   const targetGuidance = useMemo(() => {
-    if (!endPOI) return null;
-    const bearing = calculateBearingDegrees(curLat, curLon, endPOI.lat, endPOI.lon);
-    const distM = marsDistanceMeters(curLat, curLon, endPOI.lat, endPOI.lon);
+    if (!effectiveEndPOI) return null;
+    const bearing = calculateBearingDegrees(curLat, curLon, effectiveEndPOI.lat, effectiveEndPOI.lon);
+    const distM = marsDistanceMeters(curLat, curLon, effectiveEndPOI.lat, effectiveEndPOI.lon);
     const delta = normalizeSignedAngle(bearing - viewHeading);
-    return { name: endPOI.name, bearing: Math.round(bearing), distM, delta };
-  }, [curLat, curLon, endPOI, viewHeading]);
+    return { name: effectiveEndPOI.name, bearing: Math.round(bearing), distM, delta };
+  }, [curLat, curLon, effectiveEndPOI, viewHeading]);
 
   const shelterVector = useMemo(() => {
     const st = nearestShelter?.station;
@@ -569,9 +887,9 @@ export default function VisorHudPage() {
     return items.sort((a, b) => b.distM - a.distM).slice(0, 10);
   }, [curLat, curLon, viewHeading, endPOI?.id, horizonYPct, screenMarkerCoords]);
 
-  // Gaze-target lock when a marker is within ±7° of center reticle
+  // Gaze-target lock when a marker is within ±1.2° of center reticle
   const gazeLockedMarker = useMemo(() => {
-    const candidates = projectedMarkers.filter((m) => m.absDelta <= 7);
+    const candidates = projectedMarkers.filter((m) => m.absDelta <= 1.2);
     if (!candidates.length) return null;
     return candidates.sort((a, b) => a.absDelta - b.absDelta)[0];
   }, [projectedMarkers]);
@@ -596,6 +914,12 @@ export default function VisorHudPage() {
 
   return (
     <div
+      ref={rootRef}
+      onClick={(e) => {
+        if (isArMode && xrSupported && !xrSession && !e.target?.closest?.('button,a')) {
+          startArSession();
+        }
+      }}
       onPointerDown={handlePointerDown}
       onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
@@ -604,23 +928,44 @@ export default function VisorHudPage() {
         isTransparentBg ? 'bg-transparent' : isLowLight ? 'bg-slate-950' : 'bg-slate-950'
       }`}
     >
-      {/* DEDICATED 3D TERRAIN MOUNT SLOT (USGS SIM 3464 Three.js First-Person Terrain) */}
+      {/* DEDICATED 3D TERRAIN MOUNT SLOT (USGS SIM 3464 Three.js First-Person Terrain; Martian world hidden in desktop transparent AR mode) */}
       <div id="visor-3d-terrain-slot" className="pointer-events-none absolute inset-0 z-0">
-        {!isTransparentBg && (
+        {(!isTransparentBg || isArMode) && (
           <Visor3DTerrain
             currentLatLon={[curLat, curLon]}
             viewHeading={viewHeading}
             lookPitchDeg={lookPitchDeg}
-            routePathCoords={routePathCoords}
+            routePathCoords={effectiveRoutePathCoords}
+            projectedMarkers={projectedMarkers}
             isOffRoute={isOffRoute}
             isDusty={isDusty}
             isLowLight={isLowLight}
             showContours={showContours}
+            arPassthrough={isTransparentBg}
+            xrSession={xrSession}
+            hudState={snapshot}
+            targetBearingDeg={targetGuidance?.bearing ?? null}
+            targetDistM={targetGuidance?.distM ?? null}
+            onXrHeadYaw={(yaw) => setLookYawOffset(normalizeSignedAngle(yaw))}
+            onXrStickMove={moveByStick}
             onGroundElevation={setGroundElevM}
             onProjectedScreenMarkers={setScreenMarkerCoords}
           />
         )}
       </div>
+
+      {/* Prominent Enter VR/AR Prompt when in AR mode on Quest Browser */}
+      {isArMode && !xrSession && (
+        <div className="pointer-events-auto fixed inset-x-0 bottom-24 z-40 flex justify-center">
+          <button
+            onClick={startArSession}
+            className="flex items-center gap-2.5 rounded-full border-2 border-emerald-400 bg-emerald-950/90 px-6 py-3 text-sm font-extrabold tracking-wider text-emerald-100 shadow-[0_0_28px_rgba(52,211,153,0.45)] hover:bg-emerald-900 cursor-pointer backdrop-blur-md"
+          >
+            <Eye className="h-5 w-5 text-emerald-300" />
+            ENTER VR / AR PASSTHROUGH
+          </button>
+        </div>
+      )}
 
       {/* DUST STORM & LOW-LIGHT ATMOSPHERIC VISOR EFFECTS */}
       {isDusty && (
@@ -655,14 +1000,16 @@ export default function VisorHudPage() {
 
       {/* SYNTHETIC WIREFRAME CONTOUR, HORIZON & PROJECTED A* GROUND PATH */}
       <div className="pointer-events-none absolute inset-0 z-10">
-        <div
-          className="absolute inset-0"
-          style={{
-            background: isTransparentBg
-              ? 'radial-gradient(ellipse at center, transparent 58%, rgba(2, 6, 23, 0.55) 100%)'
-              : 'radial-gradient(ellipse at center, rgba(8, 47, 73, 0.14) 0%, rgba(2, 6, 23, 0.85) 100%)',
-          }}
-        />
+        {(!isTransparentBg || !isArMode) && (
+          <div
+            className="absolute inset-0"
+            style={{
+              background: isTransparentBg
+                ? 'radial-gradient(ellipse at center, transparent 58%, rgba(2, 6, 23, 0.55) 100%)'
+                : 'radial-gradient(ellipse at center, rgba(8, 47, 73, 0.14) 0%, rgba(2, 6, 23, 0.85) 100%)',
+            }}
+          />
+        )}
 
         <svg
           viewBox="0 0 1000 600"
@@ -888,7 +1235,12 @@ export default function VisorHudPage() {
             {/* Two-Way Sim Controls */}
             <div className="pointer-events-auto flex flex-wrap items-center gap-1.5">
               <button
-                onClick={() => sendVisorCommand('TOGGLE_PLAY')}
+                onClick={() => {
+                  if (!linkLive) {
+                    setSnapshot((prev) => ({ ...prev, navPlaying: !prev.navPlaying }));
+                  }
+                  sendVisorCommand('TOGGLE_PLAY');
+                }}
                 className="flex items-center gap-1 rounded-full border border-emerald-500/50 bg-emerald-950/80 px-2.5 py-1 text-[11px] font-bold text-emerald-200 hover:bg-emerald-900/80 cursor-pointer backdrop-blur-md"
               >
                 {navPlaying ? <Pause className="h-3 w-3" /> : <Play className="h-3 w-3" />}
@@ -909,9 +1261,13 @@ export default function VisorHudPage() {
                 <span>RE-ROUTE GPS</span>
               </button>
               <button
-                onClick={() =>
-                  sendVisorCommand('SET_SPEED', { speed: navSpeed === 1 ? 3 : 1 })
-                }
+                onClick={() => {
+                  const nextSpeed = navSpeed === 1 ? 3 : 1;
+                  if (!linkLive) {
+                    setSnapshot((prev) => ({ ...prev, navSpeed: nextSpeed }));
+                  }
+                  sendVisorCommand('SET_SPEED', { speed: nextSpeed });
+                }}
                 className="rounded-full border border-cyan-500/40 bg-slate-950/80 px-2.5 py-1 text-[11px] font-bold text-cyan-200 hover:bg-cyan-950/70 cursor-pointer backdrop-blur-md"
               >
                 {navSpeed}x
@@ -937,6 +1293,30 @@ export default function VisorHudPage() {
               >
                 Contours: {showContours ? 'ON' : 'OFF'}
               </button>
+              {isArMode ? (
+                xrSession ? (
+                  <button
+                    onClick={() => xrSession.end()}
+                    className="rounded-full border border-red-400/70 bg-red-950/80 px-2.5 py-1 text-[11px] font-bold text-red-200 hover:bg-red-900/80 cursor-pointer backdrop-blur-md"
+                  >
+                    Exit AR
+                  </button>
+                ) : (
+                  <button
+                    onClick={startArSession}
+                    className="rounded-full border border-emerald-400/70 bg-emerald-950/80 px-2.5 py-1 text-[11px] font-bold text-emerald-200 hover:bg-emerald-900/80 cursor-pointer backdrop-blur-md"
+                  >
+                    {xrSupported ? 'Enter Quest 2 AR' : 'AR Transparent'}
+                  </button>
+                )
+              ) : (
+                <a
+                  href="?mode=visor-ar"
+                  className="rounded-full border border-emerald-400/50 bg-emerald-950/80 px-2.5 py-1 text-[11px] font-bold text-emerald-200 hover:bg-emerald-900/80 backdrop-blur-md"
+                >
+                  Quest 2 AR
+                </a>
+              )}
               {(lookYawOffset !== 0 || lookPitchDeg !== 0) && (
                 <button
                   onClick={() => {
@@ -1094,7 +1474,11 @@ export default function VisorHudPage() {
                 {isEmergency
                   ? weatherCondition?.alert ||
                     `Dust Front ${dustFrontState?.distanceAheadKm} km • ETA ${dustFrontState?.etaMin} min`
-                  : currentManeuver?.instruction}
+                  : !linkLive && !isArMode && offlineRescueRoute?.station
+                    ? offlineRescueRoute.docked
+                      ? `EVA TABLET OFFLINE — Docked at nearest charging station: ${offlineRescueRoute.station.name}`
+                      : `EVA TABLET OFFLINE — Routing to nearest charging station: ${offlineRescueRoute.station.name} (${offlineRescueRoute.distKm} km)`
+                    : currentManeuver?.instruction}
               </span>
             </div>
 
@@ -1119,11 +1503,11 @@ export default function VisorHudPage() {
               ) : (
                 <Battery className="h-3.5 w-3.5 text-cyan-300" />
               )}
-              {liveNavState?.currentBattery ?? 0}%
+              {Number((liveNavState?.currentBattery ?? 0).toFixed(1))}%
             </span>
             <span className={`flex items-center gap-1 font-bold ${liveNavState?.isRecharging ? 'text-amber-300' : lowReserve ? 'text-red-400' : 'text-emerald-300'}`}>
               <Droplets className="h-3.5 w-3.5" />
-              {liveNavState?.currentO2 ?? 0}%
+              {Number((liveNavState?.currentO2 ?? 0).toFixed(1))}%
             </span>
             {liveNavState?.isRecharging && (
               <span className="rounded-full bg-amber-500/20 border border-amber-400/40 px-2 py-0.5 text-[9px] font-bold text-amber-200 animate-pulse">

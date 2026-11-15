@@ -25,6 +25,20 @@ export function publishVisorState(snapshot) {
   }
 }
 
+export function publishVisorHeartbeat() {
+  if (typeof BroadcastChannel === 'undefined') return;
+  const channel = new BroadcastChannel(CHANNEL_NAME);
+  channel.postMessage({ type: 'VISOR_HEARTBEAT', timestamp: Date.now() });
+  channel.close();
+}
+
+export function publishTabletOffline() {
+  if (typeof BroadcastChannel === 'undefined') return;
+  const channel = new BroadcastChannel(CHANNEL_NAME);
+  channel.postMessage({ type: 'TABLET_OFFLINE', timestamp: Date.now() });
+  channel.close();
+}
+
 /**
  * Sends a control action from the AR Visor HUD back to the main EVA Tablet
  * (e.g., triggering an emergency shelter divert).
@@ -59,7 +73,7 @@ export function readCachedVisorState() {
  * Subscribes to live visor state updates from the main EVA Tablet.
  * Returns an unsubscribe cleanup function.
  */
-export function subscribeVisorState(onUpdate) {
+export function subscribeVisorState(onUpdate, onStatus) {
   let channel = null;
 
   if (typeof BroadcastChannel !== 'undefined') {
@@ -67,6 +81,10 @@ export function subscribeVisorState(onUpdate) {
     channel.onmessage = (event) => {
       if (event.data?.type === 'VISOR_STATE_UPDATE' && event.data.snapshot) {
         onUpdate(event.data.snapshot, event.data.timestamp);
+      } else if (event.data?.type === 'VISOR_HEARTBEAT') {
+        onStatus?.(true, event.data.timestamp);
+      } else if (event.data?.type === 'TABLET_OFFLINE') {
+        onStatus?.(false, event.data.timestamp);
       }
     };
   }

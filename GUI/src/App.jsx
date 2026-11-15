@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   AlertTriangle,
   ArrowLeftRight,
@@ -81,7 +81,12 @@ import {
   planScienceTourApi,
   predictTelemetryApi,
 } from './utils/engineApi';
-import { publishVisorState, subscribeVisorCommands } from './utils/visorSync';
+import {
+  publishVisorState,
+  publishVisorHeartbeat,
+  publishTabletOffline,
+  subscribeVisorCommands,
+} from './utils/visorSync';
 
 function formatLst(totalMinutes) {
   const wrapped = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
@@ -140,7 +145,7 @@ export default function App() {
   // Terminal Dual-Mode UX ('astronaut' = Glove-first Google Maps Tablet UI | 'developer' = Ground Control Terminal)
   const [uiMode, setUiMode] = useState('astronaut');
   const [navMode, setNavMode] = useState('browse');
-  const [followAstronaut, setFollowAstronaut] = useState(true);
+  const [followAstronaut, setFollowAstronaut] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
   const [showLayersSheet, setShowLayersSheet] = useState(false);
   const [showLegendSheet, setShowLegendSheet] = useState(false);
@@ -158,6 +163,7 @@ export default function App() {
   // Camera & Locating State
   const [locatePulse, setLocatePulse] = useState(null);
   const [flyToTarget, setFlyToTarget] = useState(null);
+  const locateTimerRef = useRef(null);
 
   // Basemap & Hillshade Blend State
   const [basemap, setBasemap] = useState('satellite');
@@ -440,8 +446,11 @@ export default function App() {
           ? 'hab-alpha'
           : target === 'seitah_dunes'
           ? 'seitah-ridge'
+          : target === 'wildcat_ridge'
+          ? 'hawksbill-gap'
           : target;
       const targetNorm = normalizeKey(aliasTarget);
+      const rawTargetNorm = normalizeKey(target);
 
       match =
         viewerArchiveList.find(
@@ -450,8 +459,11 @@ export default function App() {
             p.poiId === target ||
             p.poiId === aliasTarget ||
             normalizeKey(p.poiId) === targetNorm ||
+            normalizeKey(p.poiId) === rawTargetNorm ||
             normalizeKey(p.id) === targetNorm ||
-            p.title.toLowerCase().includes(target.toLowerCase())
+            normalizeKey(p.id) === rawTargetNorm ||
+            normalizeKey(p.title).includes(rawTargetNorm) ||
+            normalizeKey(p.locationName).includes(rawTargetNorm)
         ) || null;
 
       if (!match) {
@@ -499,7 +511,7 @@ export default function App() {
     showToast({
       id: `pano-${Date.now()}`,
       type: 'info',
-      title: match.is360 ? '360 PHOTOSPHERE LOADED' : 'SURFACE IMAGERY LOADED',
+      title: match.type === '360_sphere' ? '360 PHOTOSPHERE LOADED' : 'PANORAMIC VISTA LOADED',
       message: `${match.locationName || match.title}`,
     });
   };
@@ -935,7 +947,21 @@ export default function App() {
       }
 
       setNavStepIdx((prev) => {
-        const next = Math.min(totalPoints - 1, prev + navSpeed * 0.1);
+        const coords = routeResult.pathCoords;
+        const idxFloor = Math.min(totalPoints - 2, Math.max(0, Math.floor(prev)));
+        const segLenM = Math.max(
+          2,
+          marsDistanceMeters(
+            coords[idxFloor][0],
+            coords[idxFloor][1],
+            coords[idxFloor + 1][0],
+            coords[idxFloor + 1][1]
+          )
+        );
+        // Constant brisk ground speed (~70 m/s at 1x) over 150ms ticks; Visor3DTerrain interpolates at 60 FPS
+        const stepMeters = 10.5 * navSpeed;
+        const deltaIdx = stepMeters / segLenM;
+        const next = Math.min(totalPoints - 1, prev + deltaIdx);
 
         if (pitIdx !== null && !hasCompletedPitStop && prev < pitIdx && next >= pitIdx) {
           setRechargeTicksRemaining(45);
@@ -985,7 +1011,7 @@ export default function App() {
 
         return next;
       });
-    }, 33);
+    }, 150);
 
     return () => clearInterval(timer);
   }, [
@@ -1019,7 +1045,23 @@ export default function App() {
 
     let heading = 0;
     if (floorIdx < coords.length - 1) {
-      const lookAheadIdx = Math.min(coords.length - 1, floorIdx + 2);
+      // Look ahead ~80m along the path so A* grid vertices never cause abrupt heading snaps
+      let lookAheadIdx = floorIdx + 1;
+      let accumM = marsDistanceMeters(
+        currentLatLon[0],
+        currentLatLon[1],
+        coords[lookAheadIdx][0],
+        coords[lookAheadIdx][1]
+      );
+      while (accumM < 80 && lookAheadIdx < coords.length - 1) {
+        accumM += marsDistanceMeters(
+          coords[lookAheadIdx][0],
+          coords[lookAheadIdx][1],
+          coords[lookAheadIdx + 1][0],
+          coords[lookAheadIdx + 1][1]
+        );
+        lookAheadIdx += 1;
+      }
       heading = calculateBearingDegrees(
         currentLatLon[0],
         currentLatLon[1],
@@ -1043,29 +1085,31 @@ export default function App() {
       const { leg1Stats, leg2Stats } = routeResult.chargingStop;
       if (idx <= pitIdx && !hasCompletedPitStop && !isRecharging) {
         const leg1Progress = pitIdx > 0 ? idx / pitIdx : 1;
-        currentBattery = startBatteryPct - leg1Stats.batteryPercentUsed * leg1Progress;
-        currentO2 = startO2Pct - leg1Stats.o2PercentUsed * leg1Progress;
-        distCoveredKm = leg1Stats.distKm * leg1Progress;
+        currentBattery = startBatteryPct - (leg1Stats?.batteryPercentUsed ?? 0) * leg1Progress;
+        currentO2 = startO2Pct - (leg1Stats?.o2PercentUsed ?? 0) * leg1Progress;
+        distCoveredKm = (leg1Stats?.distKm ?? 0) * leg1Progress;
       } else if (isRecharging) {
         currentBattery = 100;
         currentO2 = 100;
-        distCoveredKm = leg1Stats.distKm;
+        distCoveredKm = leg1Stats?.distKm ?? 0;
       } else {
         const leg2Total = coords.length - 1 - pitIdx;
         const leg2Progress = leg2Total > 0 ? (idx - pitIdx) / leg2Total : 1;
-        currentBattery = 100 - leg2Stats.batteryPercentUsed * leg2Progress;
-        currentO2 = 100 - leg2Stats.o2PercentUsed * leg2Progress;
-        distCoveredKm = leg1Stats.distKm + leg2Stats.distKm * leg2Progress;
+        currentBattery = 100 - (leg2Stats?.batteryPercentUsed ?? 0) * leg2Progress;
+        currentO2 = 100 - (leg2Stats?.o2PercentUsed ?? 0) * leg2Progress;
+        distCoveredKm = (leg1Stats?.distKm ?? 0) + (leg2Stats?.distKm ?? 0) * leg2Progress;
       }
     } else {
       const progress = coords.length > 1 ? idx / (coords.length - 1) : 1;
-      currentBattery = startBatteryPct - routeResult.batteryUsedTotalPct * progress;
+      currentBattery = startBatteryPct - (routeResult.batteryUsedTotalPct ?? 0) * progress;
       currentO2 = startO2Pct - (routeResult.suitO2TankPercent || 0) * progress;
-      distCoveredKm = routeResult.distKm * progress;
+      distCoveredKm = (routeResult.distKm ?? 0) * progress;
     }
 
-    const effectiveBat = manualPosOverride?.batteryPct ?? currentBattery;
-    const effectiveO2 = manualPosOverride?.o2Pct ?? currentO2;
+    const effectiveBatRaw = manualPosOverride?.batteryPct ?? currentBattery;
+    const effectiveO2Raw = manualPosOverride?.o2Pct ?? currentO2;
+    const effectiveBat = Number.isFinite(effectiveBatRaw) ? effectiveBatRaw : startBatteryPct;
+    const effectiveO2 = Number.isFinite(effectiveO2Raw) ? effectiveO2Raw : startO2Pct;
     const effectiveDistCoveredKm = manualPosOverride?.distMovedKm ?? distCoveredKm;
     const effectiveIsRecharging = manualPosOverride
       ? Boolean(manualPosOverride.isRecharging)
@@ -1410,38 +1454,72 @@ export default function App() {
   }, [liveNavState?.heading]);
 
   // Actions
-  const triggerLocateAstronaut = (zoomLevel = 14.5) => {
-    setFollowAstronaut(true);
-    setLocatePulse({
-      timestamp: Date.now(),
-      zoom: zoomLevel,
-      showWave: true,
+  const handleUserMapPan = useCallback(() => {
+    setFollowAstronaut((prev) => {
+      if (prev) {
+        showToast({
+          id: 'gps-unlocked',
+          type: 'nominal',
+          title: 'GPS UNTETHERED',
+          message: 'Camera lock released. Free pan active.',
+        });
+        return false;
+      }
+      return false;
     });
-    if (pinTagTimerRef.current) clearTimeout(pinTagTimerRef.current);
-    setShowLocationPinTag(true);
-    pinTagTimerRef.current = setTimeout(() => {
-      setShowLocationPinTag(false);
-    }, 4200);
+    setShowLocationPinTag(false);
+  }, []);
 
+  const triggerLocateAstronaut = (zoomLevel = 14.5, forceFollow = null) => {
     const lat = liveNavState?.currentLatLon ? liveNavState.currentLatLon[0] : startPOI.lat;
     const lon = liveNavState?.currentLatLon ? liveNavState.currentLatLon[1] : startPOI.lon;
     const elev = estimateElev(lat, lon);
+
+    // If already locked and no explicit override given, clicking toggles GPS lock off
+    const nextFollow = forceFollow !== null ? forceFollow : !followAstronaut;
+    setFollowAstronaut(nextFollow);
+
+    // One-shot smooth fly-to & radar pulse
+    setLocatePulse({
+      timestamp: Date.now(),
+      zoom: zoomLevel,
+      latLon: [lat, lon],
+      showWave: nextFollow,
+    });
+
+    if (locateTimerRef.current) clearTimeout(locateTimerRef.current);
+    locateTimerRef.current = setTimeout(() => {
+      setLocatePulse(null);
+    }, 4500);
+
+    if (pinTagTimerRef.current) clearTimeout(pinTagTimerRef.current);
+    if (nextFollow) {
+      setShowLocationPinTag(true);
+      pinTagTimerRef.current = setTimeout(() => {
+        setShowLocationPinTag(false);
+      }, 3500);
+    } else {
+      setShowLocationPinTag(false);
+    }
+
     showToast({
       id: 'gps-lock',
-      type: 'info',
-      title: 'GPS FIX LOCKED',
-      message: `${lat.toFixed(4)} N, ${lon.toFixed(4)} E // ELEV ${elev} m`,
+      type: nextFollow ? 'info' : 'nominal',
+      title: nextFollow ? 'GPS FIX LOCKED' : 'GPS CAMERA FREED',
+      message: nextFollow
+        ? `${lat.toFixed(4)} N, ${lon.toFixed(4)} E // CAMERA TETHER ACTIVE`
+        : `FREE PAN ENABLED // DRAG MAP FREELY`,
     });
   };
 
   const handleCompassReset = () => {
     setCompassRotation((r) => r + 360);
-    triggerLocateAstronaut(13.5);
+    triggerLocateAstronaut(13.5, true);
   };
 
   const handleCompassClick = () => {
     setCompassRotation((r) => r + 360);
-    triggerLocateAstronaut(14.5);
+    triggerLocateAstronaut(14.5, true);
   };
 
   const switchUiMode = (nextMode) => {
@@ -1483,8 +1561,7 @@ export default function App() {
     }
     setNavMode('navigating');
     setNavPlaying(true);
-    setFollowAstronaut(true);
-    triggerLocateAstronaut(14.5);
+    triggerLocateAstronaut(14.5, true);
   };
 
   const stopNavigation = () => {
@@ -1601,10 +1678,11 @@ export default function App() {
     navPlaying,
   ]);
 
+  const latestVisorSnapshotRef = useRef(null);
+
   // Broadcast live EVA state to standalone Visor HUD (?mode=visor)
   useEffect(() => {
-    const weatherCondition = WEATHER_CONDITIONS[weatherKey] || WEATHER_CONDITIONS.nominal;
-    publishVisorState({
+    const snap = {
       navPlaying,
       navSpeed,
       weatherKey,
@@ -1622,7 +1700,9 @@ export default function App() {
       rfComms: routeResult?.rfComms,
       walkbackHorizon: routeResult?.walkbackHorizon,
       engineLoading,
-    });
+    };
+    latestVisorSnapshotRef.current = snap;
+    publishVisorState(snap);
   }, [
     navPlaying,
     navSpeed,
@@ -1657,9 +1737,26 @@ export default function App() {
     triggerRecalculate: handleRecalculateFromCurrentPosition,
   };
 
+  // Heartbeat so Visor HUD detects immediately when EVA Tablet goes offline
+  useEffect(() => {
+    publishVisorHeartbeat();
+    const hb = setInterval(() => publishVisorHeartbeat(), 2000);
+    const onUnload = () => publishTabletOffline();
+    window.addEventListener('beforeunload', onUnload);
+    return () => {
+      clearInterval(hb);
+      window.removeEventListener('beforeunload', onUnload);
+    };
+  }, []);
+
   useEffect(() => {
     return subscribeVisorCommands((command, data) => {
-      if (command === 'SHELTER_DIVERT') {
+      if (command === 'VISOR_PING') {
+        publishVisorHeartbeat();
+        if (latestVisorSnapshotRef.current) {
+          publishVisorState(latestVisorSnapshotRef.current);
+        }
+      } else if (command === 'SHELTER_DIVERT') {
         visorCmdCtxRef.current.triggerShelterDivert?.();
       } else if (command === 'TOGGLE_PLAY') {
         const ctx = visorCmdCtxRef.current;
@@ -1695,9 +1792,13 @@ export default function App() {
         setManualPosOverride((prev) => {
           const prevLat = prev ? prev.lat : ctx.currentLatLon?.[0] ?? data.lat;
           const prevLon = prev ? prev.lon : ctx.currentLatLon?.[1] ?? data.lon;
-          const prevBat = prev ? prev.batteryPct : ctx.currentBattery;
-          const prevO2 = prev ? prev.o2Pct : ctx.currentO2;
-          const prevDistKm = prev ? prev.distMovedKm : ctx.distCoveredKm;
+          const prevBatRaw = prev ? prev.batteryPct : ctx.currentBattery;
+          const prevO2Raw = prev ? prev.o2Pct : ctx.currentO2;
+          const prevBat = Number.isFinite(prevBatRaw) ? prevBatRaw : 85;
+          const prevO2 = Number.isFinite(prevO2Raw) ? prevO2Raw : 90;
+          const prevDistKm = Number.isFinite(prev ? prev.distMovedKm : ctx.distCoveredKm)
+            ? (prev ? prev.distMovedKm : ctx.distCoveredKm)
+            : 0;
 
           const stepKm = marsDistanceMeters(prevLat, prevLon, data.lat, data.lon) / 1000;
           const dustFactor = ctx.weatherKey === 'dust_storm' ? 1.25 : 1.0;
@@ -1803,6 +1904,8 @@ export default function App() {
     setNavMode('browse');
     setNavStepIdx(0);
     setNavPlaying(false);
+    setFollowAstronaut(false);
+    setShowLocationPinTag(false);
     setFlyToTarget({ latLon: [targetPOI.lat, targetPOI.lon], zoom: 13.5, timestamp: Date.now() });
     showToast({
       id: 'route-set',
@@ -1821,6 +1924,8 @@ export default function App() {
     setNavStepIdx(0);
     setNavPlaying(false);
     setNavMode('browse');
+    setFollowAstronaut(false);
+    setShowLocationPinTag(false);
     if (target) {
       setFlyToTarget({ latLon: [target.lat, target.lon], zoom: 13.8, timestamp: Date.now() });
     }
@@ -1957,6 +2062,8 @@ export default function App() {
     setNavStepIdx(0);
     setNavPlaying(false);
     setNavMode('browse');
+    setFollowAstronaut(false);
+    setShowLocationPinTag(false);
     if (origValid && destValid) {
       setFlyToTarget({ latLon: [(oLat + dLat) / 2, (oLon + dLon) / 2], zoom: 12.5, timestamp: Date.now() });
     } else if (origValid) {
@@ -1974,6 +2081,8 @@ export default function App() {
 
   const handleQuickLandmarkClick = (lm) => {
     setSelectedQuickLandmarkId(lm.id);
+    setFollowAstronaut(false);
+    setShowLocationPinTag(false);
     setFlyToTarget({ latLon: lm.coords, zoom: 14, timestamp: Date.now() });
     showToast({
       id: `lm-${lm.id}`,
@@ -2304,11 +2413,15 @@ export default function App() {
           <button
             type="button"
             onClick={() => triggerLocateAstronaut(15)}
-            className="glove-btn min-h-[36px] px-2.5 rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer"
-            title="Lock GPS and Zoom to EVA Position"
+            className={`glove-btn min-h-[36px] px-2.5 rounded-[4px] font-mono text-[10px] font-bold flex items-center gap-1.5 cursor-pointer transition-colors ${
+              followAstronaut
+                ? 'bg-[#191d24] text-[#22c55e] border border-[#22c55e]'
+                : 'bg-[#191d24] hover:bg-[#222731] text-[#edf0f5] border border-[#353c4a]'
+            }`}
+            title={followAstronaut ? 'GPS Locked (Camera Following) - Click to Unlock' : 'Locate EVA Position & Center Camera'}
           >
-            <Crosshair className="h-3.5 w-3.5 text-[#22c55e]" />
-            <span>LOCATE EVA</span>
+            <Crosshair className={`h-3.5 w-3.5 ${followAstronaut ? 'text-[#22c55e]' : 'text-[#9da5b4]'}`} />
+            <span>{followAstronaut ? 'EVA LOCKED' : 'LOCATE EVA'}</span>
           </button>
 
           <button
@@ -2479,6 +2592,8 @@ export default function App() {
             rfProbeResult={rfProbeResult}
             scienceTourResult={scienceTourResult}
             onSelectLandmark={(lm) => {
+              setFollowAstronaut(false);
+              setShowLocationPinTag(false);
               if (typeof lm === 'string') {
                 const found = landmarksData.find((l) => l.id === lm);
                 if (found) setActiveLandmark(found);
@@ -2489,6 +2604,7 @@ export default function App() {
             onAddDrawVertex={handleAddDrawVertex}
             onDeleteZone={handleDeleteZone}
             onCursorMove={setCursorTelemetry}
+            onUserPan={handleUserMapPan}
           />
 
           {/* ACTIVE MAP PICK MODE PROMPT BANNER */}
@@ -2657,10 +2773,14 @@ export default function App() {
             </div>
           </div>
 
-          {/* HUD TOP-RIGHT: EXCLUSION POLYGON DRAWING TOOLSET */}
-          <div className="absolute top-2.5 right-2.5 z-[450] w-[195px] bg-[#13161c]/95 border border-[#242933] rounded-[4px] p-1.5 flex flex-col gap-1">
-            <div className="px-1 pb-1 border-b border-[#242933] font-mono text-[9.5px] font-bold text-[#656d7d] tracking-wider uppercase">
-              EXCLUSION DRAW TOOLS
+          {/* HUD TOP-RIGHT: NEW ZONE / TERRITORY DRAWING TOOLSET */}
+          <div className="absolute top-2.5 right-2.5 z-[450] w-[210px] bg-[#13161c]/95 border border-[#242933] rounded-[4px] p-2 flex flex-col gap-1.5 shadow-xl">
+            <div className="flex items-center justify-between pb-1 border-b border-[#242933] font-mono text-[9.5px] font-bold text-[#656d7d] tracking-wider uppercase">
+              <span>NEW ZONE / TERRITORY</span>
+              <span className="text-[#22c55e]">{drawnZones.length} ACTIVE</span>
+            </div>
+            <div className="text-[9px] font-mono text-[#9da5b4] leading-tight">
+              Select type, click map to mark 3+ boundary vertices:
             </div>
             {Object.entries(APP_THEME.hazards).map(([zoneKey, cfg]) => {
               const isDrawingThis = activeDrawMode === zoneKey;
@@ -2670,7 +2790,7 @@ export default function App() {
                   type="button"
                   key={zoneKey}
                   onClick={() => activateDrawMode(zoneKey)}
-                  className={`min-h-[32px] px-2 py-1 rounded-[4px] border font-mono text-[10px] font-bold flex items-center gap-2 cursor-pointer text-left ${
+                  className={`min-h-[32px] px-2 py-1 rounded-[4px] border font-mono text-[10px] font-bold flex items-center gap-2 cursor-pointer text-left transition-colors ${
                     isDrawingThis
                       ? 'bg-[#2c323f] text-[#edf0f5] border-[#edf0f5]'
                       : 'bg-[#191d24] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] border-[#242933]'
@@ -2687,9 +2807,12 @@ export default function App() {
             })}
 
             {activeDrawMode && (
-              <div className="mt-1 pt-1 border-t border-[#242933] space-y-1">
-                <div className="font-mono text-[9.5px] text-[#edf0f5] px-1">
-                  VERTICES PLACED: {drawVertices.length}
+              <div className="mt-1 pt-1.5 border-t border-[#242933] space-y-1.5 bg-[#191d24]/60 p-1.5 rounded-[4px]">
+                <div className="font-mono text-[9.5px] font-bold text-[#edf0f5] flex items-center justify-between">
+                  <span>VERTICES: {drawVertices.length}</span>
+                  <span className={drawVertices.length >= 3 ? 'text-[#22c55e]' : 'text-[#ef4444]'}>
+                    {drawVertices.length >= 3 ? 'READY TO COMMIT' : 'MIN 3 REQUIRED'}
+                  </span>
                 </div>
                 <div className="grid grid-cols-2 gap-1">
                   <button
@@ -2698,7 +2821,7 @@ export default function App() {
                     disabled={drawVertices.length < 3}
                     className="min-h-[32px] rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] disabled:bg-[#222731] disabled:text-[#656d7d] text-[#0b0d11] font-mono text-[10px] font-bold cursor-pointer border border-[#22c55e] disabled:border-[#353c4a]"
                   >
-                    FINISH
+                    COMMIT
                   </button>
                   <button
                     type="button"
@@ -2715,10 +2838,10 @@ export default function App() {
               <button
                 type="button"
                 onClick={handleClearAllZones}
-                className="min-h-[30px] px-2 rounded-[4px] bg-[#191d24] hover:bg-[#dc2626]/20 text-[#ef4444] border border-[#353c4a] font-mono text-[10px] font-bold cursor-pointer flex items-center justify-center gap-1"
+                className="min-h-[30px] px-2 rounded-[4px] bg-[#191d24] hover:bg-[#dc2626]/20 text-[#ef4444] border border-[#353c4a] font-mono text-[10px] font-bold cursor-pointer flex items-center justify-center gap-1 transition-colors"
               >
                 <Trash2 className="h-3 w-3" />
-                <span>CLEAR ZONES ({drawnZones.length})</span>
+                <span>CLEAR ALL ZONES ({drawnZones.length})</span>
               </button>
             )}
           </div>
@@ -3160,13 +3283,13 @@ export default function App() {
                 <button
                   type="button"
                   onClick={() => triggerLocateAstronaut(15)}
-                  title="Locate EVA: Smooth GPS Zoom & Radar Wave"
-                  className={`glove-btn flex h-12 w-12 items-center justify-center rounded-[6px] border cursor-pointer ${
+                  title={followAstronaut ? 'GPS Locked (Camera Following) - Click to Unlock' : 'Locate EVA: Smooth GPS Zoom & Radar Wave'}
+                  className={`glove-btn flex h-12 w-12 items-center justify-center rounded-[6px] border cursor-pointer transition-colors ${
                     followAstronaut
                       ? 'bg-[#16a34a] text-[#0b0d11] border-[#22c55e]'
                       : 'bg-[#13161c]/95 hover:bg-[#222731] text-[#edf0f5] border-[#353c4a]'
                   }`}
-                  aria-label="Locate EVA Position"
+                  aria-label={followAstronaut ? 'Unlock GPS Camera' : 'Locate EVA Position'}
                 >
                   <Crosshair className="h-6 w-6" />
                 </button>
@@ -5305,20 +5428,95 @@ export default function App() {
               </div>
             </section>
 
-            {/* PANEL 6: ACTIVE EXCLUSION ZONES & MISSION EXPORT */}
+            {/* PANEL 6: TACTICAL EXCLUSION ZONES & TERRITORIES */}
             <section className="p-3 space-y-2.5">
               <div>
                 <div className="flex items-center justify-between mb-1.5">
-                  <h3 className="font-mono text-[10px] font-bold tracking-wider uppercase text-[#656d7d]">
-                    CUSTOM EXCLUSION ZONES [{drawnZones.length}]
+                  <h3 className="font-mono text-[10px] font-bold tracking-wider uppercase text-[#656d7d] flex items-center gap-1.5">
+                    <ShieldAlert className="h-3.5 w-3.5 text-[#22c55e]" />
+                    <span>TACTICAL EXCLUSION ZONES & TERRITORIES [{drawnZones.length}]</span>
                   </h3>
+                  {drawnZones.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={handleClearAllZones}
+                      className="text-[9px] font-mono text-[#ef4444] hover:underline cursor-pointer"
+                    >
+                      CLEAR ALL
+                    </button>
+                  )}
                 </div>
+
+                {/* Direct "NEW ZONE / TERRITORY" Controls in Sidebar */}
+                <div className="p-2 bg-[#191d24] border border-[#242933] rounded-[4px] space-y-2 mb-2">
+                  <div className="flex items-center justify-between font-mono text-[9.5px] font-bold text-[#edf0f5]">
+                    <span className="text-[#22c55e]">+ DRAW NEW ZONE / TERRITORY</span>
+                    {activeDrawMode && (
+                      <span className="text-[#ef4444] animate-pulse">
+                        {drawVertices.length} PTS
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-1 font-mono text-[9.5px]">
+                    {Object.entries(APP_THEME.hazards).map(([zoneKey, cfg]) => {
+                      const isDrawingThis = activeDrawMode === zoneKey;
+                      const isSafe = zoneKey === 'safe';
+                      return (
+                        <button
+                          type="button"
+                          key={zoneKey}
+                          onClick={() => activateDrawMode(zoneKey)}
+                          className={`min-h-[28px] px-1.5 py-1 rounded-[4px] border font-bold flex items-center gap-1.5 cursor-pointer text-left truncate transition-colors ${
+                            isDrawingThis
+                              ? 'bg-[#2c323f] text-[#edf0f5] border-[#edf0f5]'
+                              : 'bg-[#13161c] hover:bg-[#222731] text-[#9da5b4] hover:text-[#edf0f5] border-[#242933]'
+                          }`}
+                          title={`Draw ${cfg.label} on map`}
+                        >
+                          <span
+                            className={`w-1.5 h-1.5 rounded-full shrink-0 ${
+                              isSafe ? 'bg-[#22c55e]' : 'bg-[#ef4444]'
+                            }`}
+                          />
+                          <span className="truncate">{cfg.label}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {activeDrawMode && (
+                    <div className="pt-1.5 border-t border-[#242933] space-y-1.5">
+                      <div className="text-[9px] font-mono text-[#9da5b4]">
+                        Click on map to place polygon vertices. (Minimum 3 points)
+                      </div>
+                      <div className="grid grid-cols-2 gap-1.5">
+                        <button
+                          type="button"
+                          onClick={handleFinishPolygon}
+                          disabled={drawVertices.length < 3}
+                          className="min-h-[30px] rounded-[4px] bg-[#16a34a] hover:bg-[#22c55e] disabled:bg-[#222731] disabled:text-[#656d7d] text-[#0b0d11] font-mono text-[10px] font-bold cursor-pointer border border-[#22c55e] disabled:border-[#353c4a]"
+                        >
+                          COMMIT ZONE ({drawVertices.length})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={handleCancelPolygon}
+                          className="min-h-[30px] rounded-[4px] bg-[#191d24] hover:bg-[#222731] text-[#ef4444] font-mono text-[10px] font-bold cursor-pointer border border-[#353c4a]"
+                        >
+                          CANCEL
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
                 {drawnZones.length === 0 ? (
                   <div className="p-2 bg-[#191d24] border border-[#242933] rounded-[4px] font-mono text-[10px] text-[#656d7d]">
-                    NO CUSTOM POLYGONS DEFINED. USE TOP-RIGHT DRAW TOOLS.
+                    NO ACTIVE CUSTOM TERRITORIES. SELECT A TYPE ABOVE TO DRAW ON MAP.
                   </div>
                 ) : (
-                  <div className="space-y-1">
+                  <div className="space-y-1 max-h-[140px] overflow-y-auto aerospace-scroll">
                     {drawnZones.map((z) => (
                       <div
                         key={z.id}
@@ -5331,7 +5529,7 @@ export default function App() {
                             }`}
                           />
                           <span className="text-[#edf0f5] truncate">
-                            {APP_THEME.hazards[z.type]?.label || z.type}
+                            [{APP_THEME.hazards[z.type]?.label || z.type}] #{z.id}
                           </span>
                         </div>
                         <button
@@ -5339,7 +5537,7 @@ export default function App() {
                           onClick={() => handleDeleteZone(z.id)}
                           className="text-[#ef4444] hover:underline font-bold cursor-pointer shrink-0 ml-2"
                         >
-                          DEL
+                          REMOVE
                         </button>
                       </div>
                     ))}
@@ -5405,9 +5603,9 @@ export default function App() {
             <div className="text-[#edf0f5] font-semibold">{clo4Pct}</div>
           </div>
           <div className="px-2.5 py-1.5">
-            <div className="text-[9px] text-[#656d7d]">SECTOR STATUS</div>
+            <div className="text-[9px] text-[#656d7d]">TERRITORY STATUS</div>
             <div className={`font-bold truncate ${cursorTelemetry.isFault ? 'text-[#ef4444]' : 'text-[#22c55e]'}`}>
-              {cursorTelemetry.hazardLabel}
+              {cursorTelemetry.hazardLabel || 'CLEAR / PASSABLE'}
             </div>
           </div>
           <div className="px-2.5 py-1.5">

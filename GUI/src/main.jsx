@@ -4,10 +4,10 @@ import './index.css'
 import App from './App.jsx'
 import VisorHudPage from './components/VisorHudPage.jsx'
 
-const isVisorMode = new URLSearchParams(window.location.search).get('mode') === 'visor'
+const mode = new URLSearchParams(window.location.search).get('mode')
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    {isVisorMode ? <VisorHudPage /> : <App />}
+    {mode === 'visor' || mode === 'visor-ar' ? <VisorHudPage /> : <App />}
   </StrictMode>,
 )

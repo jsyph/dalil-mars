@@ -182,13 +182,6 @@ function sampleDemGrid(dem, lat, lon) {
 
 // Consolidated 20.2m DTM elevation estimator (meters)
 export function estimateElev(lat, lon) {
-  const depthHit = findDepthHazardAtPoint(lat, lon);
-  if (depthHit) {
-    return {
-      label: `${depthHit.label} (${depthHit.peakSlopeDeg}°)`,
-      isFault: true,
-    };
-  }
   if (_loadedDem) {
     const { elev } = sampleDemGrid(_loadedDem, lat, lon);
     return Math.round(elev * 10) / 10;

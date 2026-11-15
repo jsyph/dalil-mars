@@ -53,6 +53,18 @@ def _get_engine_safe():
     return None
 
 
+def _get_engine_safe():
+    """Lazily retrieve the consolidated DalilMarsEngine instance if available."""
+    try:
+        from core.engine import get_engine
+        eng = get_engine()
+        if eng is not None and eng.elev_matrix is not None:
+            return eng
+    except Exception:
+        pass
+    return None
+
+
 def get_elevation_at_point(lat: float, lon: float) -> dict:
     """Query elevation from the consolidated 20.2m DTM in DalilMarsEngine (primary) or HRSC fallback."""
     eng = _get_engine_safe()
