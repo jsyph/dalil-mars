@@ -1,694 +1,380 @@
-# DALIL MARS // دليل المريخ
-## Autonomous Surface Tactical Navigation & Planetary GIS for Jezero Crater, Mars
-
-```
-██████╗  █████╗ ██╗     ██╗██╗         ███╗   ███╗ █████╗ ██████╗ ███████╗
-██╔══██╗██╔══██╗██║     ██║██║         ████╗ ████║██╔══██╗██╔══██╗██╔════╝
-██║  ██║███████║██║     ██║██║         ██╔████╔██║███████║██████╔╝███████╗
-██║  ██║██╔══██║██║     ██║██║         ██║╚██╔╝██║██╔══██║██╔══██╗╚════██║
-██████╔╝██║  ██║███████╗██║███████╗    ██║ ╚═╝ ██║██║  ██║██║  ██║███████║
-╚═════╝ ╚═╝  ╚═╝╚══════╝╚═╝╚══════╝    ╚═╝     ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝
-       [ TACTICAL SURFACE NAVIGATION • PLANETARY GIS • EVA LIFE-SUPPORT HUD ]
-```
+# Dalil Mars (دليل المريخ)
+### Autonomous Surface Navigation & Tactical Planetary Map for Jezero Crater
 
 > **2026 NASA Space Apps Challenge** — *Interplanetary Survival Guide: Martian Map*  
 > **Team Mahatet Mars** // *Alexandria, Egypt Local Event*  
-> High-density, glove-compatible EVA navigation terminal, autonomous pathfinding engine, and geospatial ground control system for crewed missions and autonomous rovers operating in **Jezero Crater, Mars** ($18.38^\circ\text{ N} - 18.58^\circ\text{ N}, \; 77.20^\circ\text{ E} - 77.48^\circ\text{ E}$).
+> An interplanetary navigation system, terrain-aware pathfinding engine, and astronaut mission console for exploration in **Jezero Crater, Mars**.
 
 [![Status](https://img.shields.io/badge/Status-Production%20Grade-22c55e?style=for-the-badge&logo=target)](https://github.com/jsyph/dalil-mars)
 [![Python](https://img.shields.io/badge/Python-3.10%2B%20%7C%20FastAPI%20%7C%20NumPy-3776AB?style=for-the-badge&logo=python&logoColor=white)](https://python.org)
-[![Frontend](https://img.shields.io/badge/Frontend-React%2018%20%7C%20Vite%208%20%7C%20Tailwind-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
-[![Mapping](https://img.shields.io/badge/GIS-Leaflet%20%7C%20Three.js%20%7C%20Proj4-199900?style=for-the-badge&logo=leaflet&logoColor=white)](https://leafletjs.com)
+[![Frontend](https://img.shields.io/badge/Frontend-React%2018%20%7C%20Vite-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev)
+[![Mapping](https://img.shields.io/badge/GIS-Leaflet%20%7C%20Three.js-199900?style=for-the-badge&logo=leaflet&logoColor=white)](https://leafletjs.com)
 [![Cartography](https://img.shields.io/badge/Cartography-USGS%20SIM%203464%20%7C%20NASA%20M20-003366?style=for-the-badge&logo=nasa)](https://pubs.usgs.gov/publication/sim3464)
 [![Accessibility](https://img.shields.io/badge/Accessibility-WCAG%20AA%20Compliant-22c55e?style=for-the-badge)](https://www.w3.org/WAI/standards-guidelines/wcag/)
+
+<p align="center">
+  <img src=".github/assets/images/image12.png" alt="Dalil Mars: Built on Jezero, ready for any terrain" width="100%">
+</p>
 
 ---
 
 ## 📑 Table of Contents
 
-1. [Executive Summary & System Architecture](#1-executive-summary--system-architecture)
-2. [Planetary Data Sourcing & Preprocessing Pipeline](#2-planetary-data-sourcing--preprocessing-pipeline)
-   - [2.1 Sourced Planetary Datasets (In-Repo)](#21-sourced-planetary-datasets-in-repo)
-   - [2.2 The 6-Stage Consolidated Preprocessing Pipeline](#22-the-6-stage-consolidated-preprocessing-pipeline)
-   - [2.3 Dynamic Hazard Masking & Static WebGL Export](#23-dynamic-hazard-masking--static-webgl-export)
-3. [The Pathfinding & Physics Engine (`engine.py`)](#3-the-pathfinding--physics-engine-enginepy)
-   - [3.1 Coordinate Systems & Martian Geodesy](#31-coordinate-systems--martian-geodesy)
-   - [3.2 Hierarchical Corridor A* (HC-A*) & 4D Heuristic Tensor](#32-hierarchical-corridor-a-hc-a--4d-heuristic-tensor)
-   - [3.3 Topographic Shadows & Solar Ephemeris Physics](#33-topographic-shadows--solar-ephemeris-physics)
-   - [3.4 437 MHz UHF RF Line-of-Sight & FSPL Comms Model](#34-437-mhz-uhf-rf-line-of-sight--fspl-comms-model)
-   - [3.5 Multi-Agent Mobility & Life-Support Equilibrium](#35-multi-agent-mobility--life-support-equilibrium)
-   - [3.6 Core Python Library API Reference](#36-core-python-library-api-reference)
-4. [User Interface & Mission Environments](#4-user-interface--mission-environments)
-   - [4.1 Astronaut EVA Tablet Navigation Terminal](#41-astronaut-eva-tablet-navigation-terminal)
-   - [4.2 Ground Control Tactical Station](#42-ground-control-tactical-station)
-   - [4.3 360° Gigapixel Mars Panoramic Viewer](#43-360-gigapixel-mars-panoramic-viewer)
-5. [Complete Inventory of Data Sources](#5-complete-inventory-of-data-sources)
-   - [5.1 Direct Official Data Sources (Referenced in Project)](#51-direct-official-data-sources-referenced-in-project)
-   - [5.2 Foundational Mars Science Sources (External & Complementary)](#52-foundational-mars-science-sources-external--complementary)
-6. [Repository Structure & Quick Start Guide](#6-repository-structure--quick-start-guide)
-   - [6.1 Project Directory Layout](#61-project-directory-layout)
-   - [6.2 Quick Start Instructions](#62-quick-start-instructions)
+1. [Why We Built This: The Challenge of Navigating Mars](#1-why-we-built-this-the-challenge-of-navigating-mars)
+2. [What We Did: Overview of Dalil Mars](#2-what-we-did-overview-of-dalil-mars)
+3. [Visual Showcase & Core Capabilities](#3-visual-showcase--core-capabilities)
+4. [How It Works: Data, Physics & Pathfinding](#4-how-it-works-data-physics--pathfinding)
+   - [Planetary Data Sourcing (What & Why)](#planetary-data-sourcing-what--why)
+   - [The Preprocessing Pipeline](#the-preprocessing-pipeline)
+   - [Tactical Pathfinding & Survival Engine](#tactical-pathfinding--survival-engine)
+5. [Mission Interfaces](#5-mission-interfaces)
+6. [Planetary Data Attributions](#6-planetary-data-attributions)
+7. [Quick Start & Launcher Scripts Guide](#7-quick-start--launcher-scripts-guide)
+8. [Team & License](#8-team--license)
 
 ---
 
-## 1. Executive Summary & System Architecture
+## 1. Why We Built This: The Challenge of Navigating Mars
 
-**Dalil Mars** (*دليل المريخ* — Arabic for *Martian Guide*) is an integrated planetary geographic information system (GIS), autonomous pathfinding engine, and astronaut extravehicular activity (EVA) terminal designed for operations in **Jezero Crater, Mars**. 
+Imagine stepping outside a surface habitat into **Jezero Crater**—an ancient lake basin the size of Lake Tahoe, framed by rugged crater rims, delta breach canyons, and 60-meter sheer cliffs.
 
-Jezero Crater presents one of the most rugged, scientifically rewarding, and operationally hazardous exploration zones on the Martian surface: ancient delta drop-off cliffs towering $20\text{–}60\text{ meters}$, vast fields of transverse aeolian sand dunes (TARs), razor-sharp impact megabreccia, extreme diurnal thermal swings ($-85^\circ\text{C}$ to $-15^\circ\text{C}$), severe dust storm extinction ($\tau > 2.5$), and radio blackout zones behind the crater rim.
+<p align="center">
+  <img src=".github/assets/images/image1.jpeg" alt="Jezero Crater Context and Landing Map" width="100%">
+  <br>
+  <em>Orbital context of Jezero Crater and Nili Planum, showing the ancient river delta, crater rim, and landing ellipse.</em>
+</p>
 
-Dalil Mars bridges the gap between orbit-scale remote sensing, rover telemetry, and boots-on-the-ground survival by fusing:
-- **USGS SIM 3464** unified $1:75,000$ regional geologic geodatabase.
-- **MRO Context Camera (CTX)** $6\text{ m/pixel}$ orthomosaics and $20\text{ m/pixel}$ stereo Digital Terrain Models (DTM).
-- **ESA Mars Express HRSC** 3D topographic relief and hillshades.
-- **2001 Mars Odyssey THEMIS** nighttime thermal infrared inertia maps.
-- **MRO HiRISE** $25\text{ cm/pixel}$ ultra-high-resolution visible imagery.
-- **NASA Mars 2020 Perseverance** live telemetry: MEDA atmospheric weather, MMGIS rover traverse/waypoints, and Mastcam-Z gigapixel panoramic imagery.
+On Earth, navigation is taken for granted: GPS constellations provide centimeter accuracy, cellular towers provide instant connectivity, roads are paved, and the atmosphere is breathable. **On Mars, none of that exists:**
 
-```mermaid
-flowchart TD
-    subgraph DataSources["Planetary Remote Sensing & In-Situ Feeds"]
-        USGS["USGS SIM 3464<br>(Nili.gdb 13 Layers)"]
-        CTX["MRO CTX Rasters<br>(6m Ortho + 20m Stereo DTM)"]
-        HRSC["ESA Mars Express HRSC<br>(75m Regional DTM)"]
-        THEMIS["2001 Mars Odyssey THEMIS<br>(100m Thermal Night-IR)"]
-        M20["NASA Mars 2020 Live Feeds<br>(MEDA, MMGIS, Raw Imagery)"]
-    end
+- **No GPS Constellation**: Surface explorers and rovers cannot rely on satellite positioning to find their way around natural hazards.
+- **Treacherous Terrain**: A wrong turn can lead into a 50-meter vertical drop-off, a tire-puncturing boulder field, or deep transverse aeolian sand dunes that can swallow rover wheels or trap an EVA crew.
+- **Strict Consumable Margins**: Walking uphill in a pressurized spacesuit burns oxygen and battery power at twice the nominal rate. Running low on reserves far from base is fatal.
+- **RF Radio Dead Zones**: Deep canyon walls and the crater rim block direct line-of-sight communications with base camp habitats and orbital relays.
+- **Volatile Martian Weather**: Sudden dust storms can obscure solar arrays and drop temperatures to -85 °C, while solar radiation flares require immediate shelter.
 
-    subgraph Pipeline["6-Stage Master Preprocessing Pipeline"]
-        S1["Stage 1: Master DTM Mosaic<br>(6560x2950, 20.2m/px)"]
-        S2["Stage 2: Sobel Slope Filter<br>(Gradient Angles deg)"]
-        S3["Stage 3: Surface Hazards<br>(Dunes 3x, Megabreccia 2x)"]
-        S4["Stage 4: Impassable Cliffs<br>(Shear Scarps inf)"]
-        S5["Stage 5: Waypoint Snapping<br>(Geodesy & Stratigraphy)"]
-        S6["Stage 6: 4D All-Pairs Tensor<br>(102x46x102x46 Heuristics)"]
-
-        S1 --> S2 --> S3 --> S4 --> S5 --> S6
-    end
-
-    subgraph Engine["Tactical Pathfinding Engine (engine.py)"]
-        HCA["Hierarchical Corridor A* (HC-A*)"]
-        Physics["Physics Solvers:<br>• Solar Ephemeris & 3D Shadows<br>• 437 MHz UHF RF Line-of-Sight<br>• Asymmetric Gravitational Work"]
-        Survival["Survival Monitors:<br>• Apollo/Artemis Rule #1 Walkback<br>• Dynamic PLSS O2 & Battery Depletion<br>• Autonomous Emergency Abort"]
-
-        HCA --- Physics --- Survival
-    end
-
-    subgraph UserInterfaces["Mission Environments & Interfaces"]
-        EVA["Astronaut EVA HUD / Tablet<br>(Glove-Friendly, 56px Touch, Offline)"]
-        GC["Ground Control Station<br>(Multi-Sensor GIS, Hazard Buffers)"]
-        Pan360["360° Panoramic Viewer<br>(Mastcam-Z Gigapixel Mosaics)"]
-    end
-
-    DataSources --> S1
-    S4 --> Engine
-    S6 --> HCA
-    Engine <--> UserInterfaces
-```
+Surface exploration cannot rely on simple straight-line point-to-point waypoints. Astronauts and rovers need a navigational system that understands the physics of Mars and prioritizes human survival.
 
 ---
 
-## 2. Planetary Data Sourcing & Preprocessing Pipeline
+## 2. What We Did: Overview of Dalil Mars
 
-### 2.1 Sourced Planetary Datasets (In-Repo)
+**Dalil Mars** (*دليل المريخ* — Arabic for *"Martian Guide"*) is an integrated planetary navigation and tactical surface mapping system built for both crewed astronaut EVAs and autonomous robotic rovers.
 
-The system ingests and homogenizes multiple independent orbital and landed datasets covering the $1^\circ \times 1^\circ$ Jezero Crater and Nili Planum quadrant ($60 \text{ km} \times 60 \text{ km}$, $3,338\text{ km}^2$):
+We designed it as **"Google Maps meets Apollo Mission Control"**:
 
-1. **USGS Scientific Investigations Map 3464 (`Nili.gdb`)**:
-   - Authored by Vivian Z. Sun & Kathryn M. Stack (USGS / NASA JPL, 2020; [DOI: 10.3133/sim3464](https://doi.org/10.3133/sim3464)).
-   - Stored in an ESRI File Geodatabase containing **13 feature classes** and 14 distinct geological units:
-     - `GeoUnits_v1` (1,304 polygons): Stratigraphic units including `Nue` (Upper etched), `Nnp1` (Nili Planum basalt plains), `Njf` (Jezero crater floor mafic rocks), `Aeb` (Active aeolian bedforms), `NHjf1` & `NHjf2` (River delta bottomset and topset lobes), and `Nle` (Lower etched olivine-carbonate margin unit).
-     - `GeoContacts` (2,496 lines): Contact boundaries classified by scientific confidence (`certain`, `approximate`, `inferred`).
-     - `LinearFeatures` (382 lines): Fluvial channels, delta scarps, crater rims, and wrinkle ridges.
-     - `megabreccia_fig2` (361 points): Deep crustal shock-impact megabreccia blocks thrown during the Isidis basin impact.
-     - `SurfaceFeatures` (285 polygons): Regolith mantling textures, ripples, and sand dunes.
-2. **Context Camera (CTX) Orbital Photography & DTMs**:
-   - **Caltech / Murray Lab CTX Mosaic**: $6\text{ m/pixel}$ seamless orbital context orthomosaic covering Jezero and the Nili Planum plateau.
-   - **USGS CTX Stereo Digital Terrain Models**: Stereogrammetrically derived elevation rasters processed at $20\text{ m/pixel}$ (`B18_016575_1978_B17_016219_1978_20m_DTM.tif`, `J03_045994_1986_J03_046060_1986_20m_DTM.tif`).
-3. **ESA Mars Express HRSC (High Resolution Stereo Camera)**:
-   - Orbit `h0988_0000` calibrated $75\text{ m/pixel}$ regional elevation grid and shaded relief hillshade providing macro-topography for elevations ranging from $-3,097\text{ m}$ (crater floor) to $-1,413\text{ m}$ (rim peaks).
-4. **2001 Mars Odyssey THEMIS (Thermal Emission Imaging System)**:
-   - Controlled $100\text{ m/pixel}$ daytime and nighttime infrared mosaics (`nili_THEMIS_NightIR_Controlled_oct2018.tif`).
-   - Nighttime brightness temperature measures regolith thermal inertia: high values indicate exposed dense bedrock; low values denote deep, fine, wheel-trapping dust and loose unconsolidated silt.
-5. **NASA Mars 2020 Perseverance Live Data Streams**:
-   - **MMGIS Waypoints & Traverses**: GeoJSON tracking telemetry documenting every rover stop (RMC, sol, latitude, longitude, elevation, tilt, cumulative drive distance).
-   - **MEDA (Mars Environmental Dynamics Analyzer)**: In-situ diurnal atmospheric pressure, ambient air/ground temperatures, wind vectors, and atmospheric optical depth $\tau$.
-   - **Raw Surface Imagery**: Ingested from Mastcam-Z, Navcam, SuperCam RMI, and WATSON.
+1. 🗺️ **Slope & Hazard-Aware Routing**: Automatically calculates the safest and most efficient path across Jezero Crater, intelligently steering clear of sheer scarps, unstable sand dunes, and boulder fields.
+2. 🫁 **Life-Support & Consumables Budgeting**: Projects real-time oxygen and battery consumption by accounting for suit weight, slope gradient, and ambient Martian atmospheric conditions.
+3. 🏃 **Apollo/Artemis Rule #1 (Walkback Horizon)**: Continuously monitors the point of no return. If weather deteriorates or consumables drop below safety reserves, the system warns the crew immediately and maps the fastest retreat route to safety.
+4. 📡 **Communications Awareness**: Evaluates 437 MHz radio line-of-sight over authentic 3D terrain to alert operators before entering communication blackout zones.
+5. 🛰️ **Authentic Planetary Data**: Fuses high-resolution orbital satellite photography, USGS geologic geodatabases, and real-time telemetry from NASA's *Perseverance* rover into interactive mission interfaces.
 
 ---
 
-### 2.2 The 6-Stage Consolidated Preprocessing Pipeline
+## 3. Visual Showcase & Core Capabilities
 
-The master orchestrator [`preprocessing/preprocess.py`](file:///home/joe/Development/nasa-space-apps-2026/dalil-mars/preprocessing/preprocess.py) (callable via `./preprocess`) executes six automated mathematical stages that transform raw gigabyte-scale planetary GIS rasters into high-performance, vectorized NumPy binary matrices optimized for sub-millisecond pathfinding:
+### 1. Interactive 2D Tactical Surface Navigation
+Smooth tactical surface navigation across the entire Jezero Crater basin with slope-aware routing, hazard exclusion zones, and instant waypoint snapping.
 
-```mermaid
-flowchart TD
-    Rasters["Raw Planetary Datasets<br>(GeoTIFFs, Nili.gdb, REST Feeds)"] --> S1["Stage 1: Consolidated DTM Mosaic<br>• Bilinear Resampling & Seam Blending<br>• Master Grid: 6,560 x 2,950 cells (20.2m/px)<br>• Elevation Range: -3,097m to -1,413m"]
-    
-    S1 -->|"consolidated_elevation_matrix.npy"| S2["Stage 2: Slope Gradient Modeling<br>• 2D Sobel Filter Operators<br>• Slope Angle: θ = arctan(||∇Z||)<br>• Quadratic Slope Multipliers"]
-    
-    S2 -->|"consolidated_slope_angles_deg.npy"| S3["Stage 3: Surface Hazard Overlays<br>• Aeolian Dunes & TARs (3.0x friction)<br>• Isidis Megabreccia Blocks (2.0x penalty)<br>• Low Thermal Inertia Dust (1.5x penalty)"]
-    
-    S3 -->|"consolidated_hazard_annotated_costmap.npy"| S4["Stage 4: Structural Cliff Barriers<br>• Delta Front Scarps (20-60m drops)<br>• Neretva Vallis Canyon Walls<br>• Impassable Cutouts: Cost = ∞"]
-    
-    S4 -->|"consolidated_preprocessed_master_grid.npy"| S5["Stage 5: Waypoints Snapping<br>• Areocentric Lat/Lon to (Row, Col)<br>• Obstacle Safety Boundary Check<br>• Auto-Snap to Traversable Bedrock"]
-    
-    S5 -->|"consolidated_jezero_waypoints.geojson"| S6["Stage 6: 4D Heuristic Tensor<br>• Macro-Clustering: 102 x 46 (M=64)<br>• Multiprocessing All-Pairs Dijkstra<br>• Output: 83.98 MB Float32 Tensor"]
-    
-    S6 -->|"consolidated_all_pairs_4d_matrix.npy"| EngineReady["Engine Pathfinding Ready<br>(O(1) Admissible Macro Heuristics)"]
-```
+<p align="center">
+  <img src=".github/assets/images/image2.png" alt="2D Surface Navigation Map" width="100%">
+</p>
 
-#### Detailed Stage Breakdown:
-
-* **Stage 1 — Consolidated DTM Mosaic & Elevation Matrix (`stage1.py`)**:
-  - Mosaics the USGS CTX stereo pairs ($20\text{ m/px}$) with the regional HRSC elevation background ($75\text{ m/px}$) using bilinear resampling and seam feathering.
-  - Aligns to Mars Equirectangular Projection with datum radius $R_{\text{mars}} = 3,396,190\text{ m}$.
-  - Bounds the master grid to **$6,560\text{ rows} \times 2,950\text{ columns}$** ($19,352,000$ cells), with cell dimensions $\Delta x = \Delta y \approx 20.204\text{ m}$.
-  - Saves `consolidated_elevation_matrix.npy` ($77.4\text{ MB}$) and GeoTIFF mosaic.
-
-* **Stage 2 — Topographic Slope Angle Gradient & Cost Multipliers (`stage2.py`)**:
-  - Applies 2D spatial finite-difference Sobel operators across the elevation array:
-    $$\nabla_x Z = \frac{\partial Z}{\partial x}, \quad \nabla_y Z = \frac{\partial Z}{\partial y}$$
-    $$\theta_{\text{slope}} = \arctan\left(\sqrt{(\nabla_x Z)^2 + (\nabla_y Z)^2}\right) \times \frac{180^\circ}{\pi}$$
-  - Computes non-linear slope cost multipliers $G_{\text{topo}}$ penalizing slopes greater than $8^\circ$, scaling quadratically up to mobility cutoff limits.
-  - Saves `consolidated_slope_angles_deg.npy` and `consolidated_slope_annotated_costmap.npy`.
-
-* **Stage 3 — Surface Hazard Overlays (`stage3.py`)**:
-  - Rasters geological hazard geometries from `Nili.gdb`:
-    - **Aeolian Bedforms (`Aeb` / `SurfaceFeatures`)**: Active trans-crater dune fields and transverse aeolian ridges (TARs) where rover wheels or EVA suits face severe slip. Friction penalty: **$3.0\times$**.
-    - **Isidis Megabreccia Outcrops (`megabreccia_fig2`)**: Boulder fields and jagged shattered rock blocks. Penalty: **$2.0\times$**.
-    - **Low Thermal Inertia Pockets (THEMIS Night IR)**: Pixels with nighttime IR counts below threshold denote uncompacted, sinkable dust traps. Penalty: **$1.5\times$**.
-  - Produces `consolidated_hazard_annotated_costmap.npy`.
-
-* **Stage 4 — Structural Cliff Barriers & Impassable Cutoffs (`stage4.py`)**:
-  - Identifies impassable vertical cliffs where traversal is physically impossible:
-    - Delta front scarps (e.g. Kodiak Butte, Wildcat Ridge, Hawkesbill Gap) exhibiting $20\text{–}60\text{ m}$ sheer drops.
-    - Neretva Vallis canyon gorge walls and Jezero northern rim escarpments.
-  - Sets corresponding fine-grid cells to $\infty$ (`inf`), establishing hard boundaries in the navigation mesh.
-  - Produces the final **Stage 4 Master Preprocessed Grid** (`consolidated_preprocessed_master_grid.npy`).
-
-* **Stage 5 — Waypoints Snapping & Georeferencing (`stage5.py`)**:
-  - Georeferences planetary latitude/longitude coordinates to exact grid coordinates $(r, c)$.
-  - Tests whether a point falls on an impassable obstacle (`inf` cell or slope exceeding threshold).
-  - Automatically searches concentric radii to snap waypoints to the nearest safe, navigable ground cell.
-  - Injects geological unit classifications and elevation $Z$ values, exporting `consolidated_jezero_waypoints.geojson` and `consolidated_waypoints_registry.json`.
-
-* **Stage 6 — Obstacle-Aware All-Pairs 4D Heuristic Tensor (`stage6.py`)**:
-  - Clusters the $6,560 \times 2,950$ fine master grid into **$102 \times 46$ macro-cells** using downsample factor $M = 64$ ($1\text{ macro cell} \approx 1,293.05\text{ m} \times 1,293.05\text{ m}$).
-  - Builds an adjacency network weighted by coarse terrain friction and obstacle cutouts.
-  - Runs parallel multi-source Dijkstra searches across all $4,692$ macro-cells using multiprocessing CPU pools.
-  - Generates a **4-dimensional NumPy array** of shape $(102, 46, 102, 46)$ containing $22,014,336$ Float32 values ($83.98\text{ MB}$):
-    $$\mathcal{H}_{4D}[I_1, J_1, I_2, J_2] = \text{true obstacle-avoiding shortest path distance in meters}$$
-  - Saves `consolidated_all_pairs_4d_matrix.npy`. This precomputed tensor powers sub-millisecond $A^*$ heuristics across the entire crater.
+<video src=".github/assets/videos/media1.mp4" controls width="100%" poster=".github/assets/images/image2.png">
+  <a href=".github/assets/videos/media1.mp4">▶ Click here to view the 2D Tactical Navigation video demo</a>
+</video>
 
 ---
 
-### 2.3 Dynamic Hazard Masking & Static WebGL Export
+### 2. Interactive 3D Topographic Terrain View
+Transforms 2D elevation data into an interactive 3D WebGL terrain mesh, allowing astronauts and mission controllers to inspect elevation profiles, ridges, and valleys from any perspective.
 
-1. **Polygon Contour Extraction ([`scripts/generate_depth_hazard_regions.py`](file:///home/joe/Development/nasa-space-apps-2026/dalil-mars/scripts/generate_depth_hazard_regions.py))**:
-   - Employs a custom 2D marching-squares algorithm over the Stage 1/2/4 raster to trace closed vector polygons enclosing regions of severe slope ($>18^\circ$) and structural scarps.
-   - Smooths contours using a 3x3 valid-aware box filter and exports GeoJSON polygons to `GUI/public/data/depth_hazard_regions.geojson` for real-time Leaflet vector overlay rendering.
-2. **Static WebGL Binary Pipeline ([`scripts/export_static_viewer_data.py`](file:///home/joe/Development/nasa-space-apps-2026/dalil-mars/scripts/export_static_viewer_data.py))**:
-   - Packages preprocessed NumPy elevation matrices and Stage 5 landmarks into gzip-compressed static binary buffers for the zero-dependency Three.js WebGL 3D surface viewer deployed on GitHub Pages.
+<p align="center">
+  <img src=".github/assets/images/image3.png" alt="3D Terrain Elevation Model" width="100%">
+</p>
+
+<video src=".github/assets/videos/media2.mp4" controls width="100%" poster=".github/assets/images/image3.png">
+  <a href=".github/assets/videos/media2.mp4">▶ Click here to view the 3D Terrain Transformation video demo</a>
+</video>
 
 ---
 
-## 3. The Pathfinding & Physics Engine (`engine.py`)
+### 3. Multi-Sensor Satellite Layers
+Switch seamlessly between multiple orbital remote-sensing perspectives: high-resolution photographic Context Camera (CTX), 3D stereoscopic relief (HRSC), and nighttime thermal infrared (THEMIS) that reveals loose dust traps versus solid bedrock.
 
-The heart of Dalil Mars is [`backend/core/engine.py`](file:///home/joe/Development/nasa-space-apps-2026/dalil-mars/backend/core/engine.py). It is implemented as a **zero-dependency, high-performance embedded Python library** (`from backend.core import engine`).
+<p align="center">
+  <img src=".github/assets/images/image4.png" alt="Multi-Sensor Satellite Layers" width="100%">
+</p>
+
+<video src=".github/assets/videos/media3.mp4" controls width="100%" poster=".github/assets/images/image4.png">
+  <a href=".github/assets/videos/media4.mp4">▶ Click here to view the Multi-Sensor Satellite Layers video demo</a>
+</video>
+
+---
+
+### 4. Landmark Dossiers & 360° Mars Panoramas
+Explore key Jezero landmarks with scientific dossiers (mineralogy, rock chemistry from PIXL X-ray analysis, and drill core logs) alongside interactive 360° gigapixel spherical panoramas captured by Perseverance's Mastcam-Z.
+
+<p align="center">
+  <img src=".github/assets/images/image5.png" alt="Landmark Details and 360 Panorama View" width="100%">
+</p>
+
+<video src=".github/assets/videos/media4.mp4" controls width="100%" poster=".github/assets/images/image5.png">
+  <a href=".github/assets/videos/media4.mp4">▶ Click here to view the Landmark Dossier & 360° Panorama video demo</a>
+</video>
+
+---
+
+### 5. Glove-Friendly Tablet Controls & Spacesuit Life-Support HUD
+Tailored for pressurized spacesuit gloves with oversized touch targets (48–56 px), high-contrast styling for sunlight readability through gold-tinted visors, and tactile sliders for oxygen and battery reserves.
+
+| Location Lock & Telemetry | Tactical Battery & O2 Sliders |
+| :---: | :---: |
+| <img src=".github/assets/images/image6.png" alt="Current Location Lock" width="100%"> | <img src=".github/assets/images/image7.png" alt="Battery and O2 Settings" width="100%"> |
+| *Real-time position lock and route telemetry* | *Sub-millisecond arrival projection as reserves are adjusted* |
+
+---
+
+### 6. Emergency Abort Routing & Ground Control Operations
+When severe dust storms or solar radiation events occur, Dalil Mars triggers an emergency abort protocol to the nearest habitat. Ground controllers can monitor telemetry and draw custom hazard exclusion zones in real time.
+
+| Emergency Abort & Safe Retreat Vector | Ground Control Engineering Console |
+| :---: | :---: |
+| <img src=".github/assets/images/image8.png" alt="Emergency Abort Protocol" width="100%"> | <img src=".github/assets/images/image9.png" alt="Ground Control Tactical View" width="100%"> |
+| *Autonomous retreat route under storm conditions* | *Engineering console with live telemetry & hazard drawing* |
+
+---
+
+### 7. Scientist Mode: Full Geological Layers & Hazards
+Geological exploration suite displaying 14 USGS stratigraphic units from SIM 3464, customizable exclusion hazard polygons, and real-time elevation cross-sections along traverse paths.
+
+<p align="center">
+  <img src=".github/assets/images/image10.png" alt="Scientist Mode Full Data Layers" width="100%">
+</p>
+
+<video src=".github/assets/videos/media5.mp4" controls width="100%" poster=".github/assets/images/image10.png">
+  <a href=".github/assets/videos/media5.mp4">▶ Click here to view the Scientist Mode & Hazard Polygons video demo</a>
+</video>
+
+---
+
+### 8. Visor AR HUD: Holographic Spatial Projection
+An augmented reality heads-up display mode projecting navigation waypoints, compass azimuth, and safety telemetry directly into the astronaut's field of view.
+
+<p align="center">
+  <img src=".github/assets/images/image11.png" alt="Visor AR HUD Hologram" width="100%">
+</p>
+
+<video src=".github/assets/videos/media6.mp4" controls width="100%" poster=".github/assets/images/image11.png">
+  <a href=".github/assets/videos/media6.mp4">▶ Click here to view the Visor AR HUD Hologram video demo</a>
+</video>
+
+---
+
+## 4. How It Works: Data, Physics & Pathfinding
+
+### Planetary Data Sourcing (What & Why)
+
+To build a reliable Martian navigation engine, we synthesized authentic datasets from NASA, ESA, and the USGS covering a 60 km × 60 km area of Jezero Crater and Nili Planum:
+
+- **USGS SIM 3464 Geologic Geodatabase (`Nili.gdb`)**:
+  - *Why*: Satellite imagery alone doesn't reveal surface trafficability. We extracted 14 geological units, fault lines, and rock features to map out treacherous sand dunes and deep crustal megabreccia boulder fields.
+- **MRO Context Camera (CTX) Elevation Models (20 m/pixel)**:
+  - *Why*: High-resolution stereo Digital Terrain Models give exact topographic elevations, allowing the engine to calculate slope angles and identify cliff drop-offs.
+- **ESA Mars Express HRSC Topography (75 m/pixel)**:
+  - *Why*: Provides broader regional elevation context across the entire crater basin and surrounding rim peaks.
+- **2001 Mars Odyssey THEMIS Nighttime Thermal Infrared (100 m/pixel)**:
+  - *Why*: Nighttime surface temperature correlates directly with thermal inertia. High thermal inertia indicates solid, load-bearing bedrock; low values indicate deep, loose dust traps that can bog down rovers and astronauts.
+- **NASA Mars 2020 Perseverance Live Data Feeds**:
+  - *Why*: Ground-truth validation using actual rover drive tracks, MEDA atmospheric weather (temperatures, air pressure, dust optical depth), and Mastcam-Z gigapixel panoramic imagery.
+
+---
+
+### The Preprocessing Pipeline
+
+The preprocessing pipeline ([`preprocessing/preprocess.py`](file:///home/joe/Development/nasa-space-apps-2026/dalil-mars/preprocessing/preprocess.py)) converts gigabytes of orbital rasters and vector geodatabases into fast, vectorized NumPy matrices:
+
+1. **Master Elevation Mosaic**: Mosaics and resamples CTX and HRSC elevation grids into an equirectangular coordinate matrix at ~20 meters per pixel.
+2. **Slope Modeling**: Calculates topographic slopes across the terrain, applying quadratic penalties to steep slopes.
+3. **Hazard Overlays**: Integrates active sand dunes (3× friction penalty), boulder fields (2× penalty), and fine dust pockets (1.5× penalty).
+4. **Cliff Barrier Masking**: Marks sheer scarps (such as 20–60m delta drops) as impassable barriers (`inf` cost) so routes never attempt vertical cliff descents.
+5. **Waypoint Snapping**: Automatically snaps any requested coordinates to the nearest safe, navigable bedrock location.
+6. **Macro Heuristic Tensor**: Precomputes an obstacle-avoiding macro distance grid that guides pathfinding across the entire crater in sub-millisecond query times.
+
+---
+
+### Tactical Pathfinding & Survival Engine
+
+The core pathfinding engine ([`backend/core/engine.py`](file:///home/joe/Development/nasa-space-apps-2026/dalil-mars/backend/core/engine.py)) is implemented as a standalone, zero-dependency Python library designed for real-time performance:
+
+- **Hierarchical Corridor A\* (HC-A\*)**: Standard straight-line heuristics fail around canyons because they try to push paths straight into impassable cliff walls. Our two-tier engine uses the precomputed macro tensor to route *around* large geographic obstacles before fine-tuning the 20-meter traversal.
+- **Asymmetric Gravity Work**: Walking uphill on Mars requires mechanical work against gravity ($g_{\text{mars}} = 3.72\text{ m/s}^2$); downhill paths require braking. The cost model penalizes steep ascents based on metabolic expenditure or vehicle motor load.
+- **Solar Position & 3D Terrain Shadows**: Evaluates solar elevation based on Martian Sol and time of day, ray-marching across terrain elevations to detect cold topographic shadows.
+- **437 MHz UHF RF Line-of-Sight**: Checks whether terrain features block the direct Fresnel zone between the explorer and base camp communication towers.
+- **Apollo Rule #1 Walkback Monitoring**: Constantly checks the required return time to base against remaining life-support reserves, enforcing a 20% safety margin.
+
+#### Example Python Usage
+
+The engine can be embedded directly into robotics software, simulation stacks, or scientific scripts:
 
 ```python
 from backend.core import engine
 
+# Initialize the engine
 eng = engine.get_engine()
+
+# Calculate safe traverse route
 route = eng.plan_route(
-    start_coords=(18.444627, 77.450886),  # Octavia E. Butler Landing Site
+    start_coords=(18.444627, 77.450886),  # Hab Alpha / Octavia E. Butler Landing
     target_coords=(18.431200, 77.408500), # Belva Crater Rim
-    mode="astronaut",                     # 'astronaut' (xEMU), 'pack' (heavy), or 'rover'
+    mode="astronaut",                     # 'astronaut', 'pack', or 'rover'
     sol=1133,
     departure_lst=10.5,                   # 10:30 Local Solar Time
-    dust_tau=0.6,                         # Atmospheric optical depth
-    suit_o2_kg=2.4,                       # 100% PLSS Oxygen tank
-    suit_batt_wh=900.0                    # 100% Suit battery
+    dust_tau=0.6,                         # Atmospheric dust opacity
+    suit_o2_kg=2.4,                       # 100% Oxygen capacity
+    suit_batt_wh=900.0                    # 100% Battery capacity
 )
 
-print(f"Traverse Distance : {route['summary']['distance_km']:.2f} km")
-print(f"Elapsed Duration  : {route['summary']['duration_hr']:.2f} hours")
-print(f"Oxygen Consumed   : {route['summary']['total_o2_used_kg']:.3f} kg")
-print(f"Remaining Margin  : {route['summary']['walkback_margin_pct']:.1f}%")
-print(f"Comms Blackout Pct: {route['summary']['rf_blackout_pct']:.1f}%")
+print(f"Distance        : {route['summary']['distance_km']:.2f} km")
+print(f"Estimated Time  : {route['summary']['duration_hr']:.2f} hours")
+print(f"Oxygen Needed   : {route['summary']['total_o2_used_kg']:.3f} kg")
+print(f"Walkback Margin : {route['summary']['walkback_margin_pct']:.1f}%")
+print(f"Comms Blackout  : {route['summary']['rf_blackout_pct']:.1f}%")
 ```
 
----
-
-### 3.1 Coordinate Systems & Martian Geodesy
-
-Martian surface geodesy utilizes a spherical areocentric reference system defined by the IAU/IAG working group:
-
-| Constant | Symbol | Value | Physical Meaning |
-| :--- | :---: | :---: | :--- |
-| **Martian Volumetric Mean Radius** | $R_{\text{mars}}$ | $3,396,190.0\text{ m}$ | Reference datum radius |
-| **Martian Surface Gravity** | $g_{\text{mars}}$ | $3.72076\text{ m/s}^2$ | Standard surface gravitational acceleration ($0.379\text{ g}_\oplus$) |
-| **Solar Constant at Mars** | $I_0$ | $590.0\text{ W/m}^2$ | Mean top-of-atmosphere solar flux |
-| **Martian Diurnal Sol Duration** | $T_{\text{sol}}$ | $88,775.244\text{ s}$ | $24\text{h } 39\text{m } 35.244\text{s}$ (1.02749 Earth solar days) |
-| **Fine Grid Resolution** | $\Delta p$ | $20.203946\text{ m/pixel}$ | Physical raster cell dimension |
-| **Raster Geographic Origin** | $(X_{\text{orig}}, Y_{\text{orig}})$ | $(-6117387.58, 1145171.17)\text{ m}$ | Equirectangular projection origin |
-
-#### Geodesic Forward and Inverse Projections
-
-$$\text{Projected } X = R_{\text{mars}} \cdot \left(\frac{\pi}{180^\circ}\right) \cdot (\lambda - 180.0^\circ)$$
-$$\text{Projected } Y = R_{\text{mars}} \cdot \left(\frac{\pi}{180^\circ}\right) \cdot \phi$$
-
-$$\text{Column } c = \text{round}\left(\frac{X - X_{\text{orig}}}{\Delta p}\right), \quad \text{Row } r = \text{round}\left(\frac{Y_{\text{orig}} - Y}{\Delta p}\right)$$
+> [!NOTE]
+> For the complete mathematical formulation, link-budget physics, and tensor architecture, refer to the [Engineering Manual](file:///home/joe/Development/nasa-space-apps-2026/dalil-mars/docs/ENGINEERING_MANUAL.md).
 
 ---
 
-### 3.2 Hierarchical Corridor A* (HC-A*) & 4D Heuristic Tensor
+## 5. Mission Interfaces
 
-Standard Euclidean $A^*$ fails dramatically in planetary terrain: when facing a $40\text{-meter}$ sheer scarp or a $5\text{-km}$ canyon wall, Euclidean distance directs the search straight into the cliff face, triggering millions of node expansions into blind canyons before discovering the scarp is impassable.
+Dalil Mars provides distinct interfaces tailored to operational roles:
 
-Dalil Mars solves this via **Hierarchical Corridor A* (HC-A*)** backed by the precomputed Stage 6 4D heuristic tensor:
-
-```mermaid
-flowchart LR
-    StartNode["Start Node<br>(r, c)"] --> MacroStart["Macro-Cell Start<br>(I_s, J_s)"]
-    TargetNode["Target Node<br>(r_tgt, c_tgt)"] --> MacroTarget["Macro-Cell Target<br>(I_tgt, J_tgt)"]
-    
-    MacroStart ==>|"Stage 6 4D Precomputed Tensor<br>(Obstacle-Aware Dijkstra Distance)"| MacroTarget
-    
-    MacroStart -.-> Heuristic["Admissible & Dominant Lower Bound:<br>h_HCA*(r, c) = H_4D[I, J, I_tgt, J_tgt] - d_local"]
-    Heuristic ==> FineQueue["Fine Grid Priority Queue<br>(Guides 20m Search Around Canyons)"]
-    FineQueue --> OptimalTraverse["Optimal Surface Traverse<br>(Zero Scarp Collisions)"]
-```
-
-#### Query Lifecycle & Physics Evaluation Flow
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Pilot as Astronaut / Operator
-    participant API as engine.py API
-    participant Macro as Stage 6 4D Tensor
-    participant Queue as Fine Grid Priority Queue
-    participant Physics as Terrain & Physics Solvers
-    participant Mon as Walkback Monitor
-
-    Pilot->>API: plan_route(start, target, mode, sol, LST, O2, batt)
-    API->>Macro: Query macro indices (I_s, J_s) to (I_tgt, J_tgt)
-    Macro-->>API: Obstacle-aware macro distance & corridor bounds
-    API->>Queue: Seed start cell with admissible h = H_4D - d_local
-    
-    loop Fine Grid Expansion (HC-A*)
-        Queue->>Physics: Evaluate candidate neighbor cells (u -> v)
-        Physics->>Physics: Compute slope resistance & asymmetric climb work
-        Physics->>Physics: Ray-march 3D shadows & solar insolation
-        Physics->>Physics: Check 437 MHz UHF RF Line-of-Sight & FSPL
-        Physics-->>Queue: Push traversable cells (prune nodes outside corridor)
-    end
-
-    Queue-->>API: Optimal path reconstructed
-    API->>Mon: Evaluate Apollo/Artemis Rule #1 walkback margins
-    Mon-->>API: Safe arrival margins (or trigger recharging pit-stop)
-    API-->>Pilot: GeoJSON traverse, telemetry summary, and comms profile
-```
-
-#### Mathematical Properties of HC-A*:
-1. **Admissibility**: Because each macro-edge in Stage 6 is calculated as the minimum-friction unblocked traversal between cells, $h_{\text{HCA*}}(n) \le h^*(n)$ unconditionally guarantees optimal path convergence.
-2. **Dominance**: $h_{\text{HCA*}}(n) \ge h_{\text{Euclidean}}(n)$ everywhere. In the presence of canyons and ridges, $h_{\text{HCA*}}$ routes *around* the obstacle at the macro-level before the fine search expands a single invalid node.
-3. **Corridor Bounding**: Nodes whose macro-distance exceeds the optimal macro-budget are pruned immediately, reducing search space by up to $98.4\%$.
-
-#### Asymmetric Gravitational Climb Work
-
-Traversing on Mars is physically asymmetric: walking or driving uphill requires mechanical work against gravity, while descending requires braking. The traversal cost from cell $u$ to adjacent cell $v$ is modeled as:
-
-$$\Delta Z = Z_v - Z_u, \quad \Delta s = \sqrt{(\Delta x)^2 + (\Delta y)^2}$$
-$$\theta = \arctan\left(\frac{\Delta Z}{\Delta s}\right)$$
-
-$$\text{Step Cost } C(u, v) = \Delta s \cdot \mu_{\text{surface}} \cdot \left[ 1.0 + \kappa_{\text{slope}} \cdot \left(\frac{\theta}{\theta_{\text{max}}}\right)^2 \right] + \max(0, \; m_{\text{total}} \cdot g_{\text{mars}} \cdot \Delta Z \cdot \eta_{\text{climb}})$$
-
-Where $\mu_{\text{surface}}$ is the Stage 3 surface friction penalty, $\theta_{\text{max}}$ is the mobility profile slope limit, and $\eta_{\text{climb}}$ is the metabolic or motorized efficiency coefficient.
+- **Astronaut EVA Tablet HUD** (`GUI/src/`): High-contrast, glove-compatible interface featuring large touch targets, simplified telemetry bars, tactile consumable sliders, and one-tap simulation toggles for dust squalls and solar storms.
+- **Ground Control Tactical Station** (`GUI/ground-control/`): Tactical engineering terminal with split-screen telemetry, multi-layer orbital basemaps, real-time elevation transects, and an interactive tool to draw custom exclusion zones around newly discovered hazards.
+- **360° Gigapixel Mars Panoramic Viewer**: Interactive Three.js sphere viewer displaying stitched Mastcam-Z panoramas from Perseverance's journey across Jezero Crater.
+- **Visor AR Mode**: Heads-up display rendering compass heading, pitch/roll, and navigational waypoints directly in the astronaut's field of view.
 
 ---
 
-### 3.3 Topographic Shadows & Solar Ephemeris Physics
+## 6. Planetary Data Attributions
 
-Solar illumination directly dictates EVA spacesuit thermal survivability and robotic rover solar power generation. The engine's `SolarPhysics` module calculates real-time solar elevation and 3D ray-marched terrain shadows:
-
-1. **Allison-McEwen Solar Ephemeris**:
-   - Calculates solar declination $\delta_{\odot}$, solar hour angle $H$, and solar zenith angle $\theta_z$ as a function of Martian Sol and Local Solar Time (LST):
-     $$\cos \theta_z = \sin \phi \sin \delta_{\odot} + \cos \phi \cos \delta_{\odot} \cos H$$
-     $$\alpha_{\odot} = 90^\circ - \theta_z \quad (\text{Solar Elevation})$$
-2. **3D Ray-Marching Topographic Shadows**:
-   - Casts a 3D ray from the query coordinates $(r, c, Z)$ toward the solar azimuth vector $[\cos \psi_{\odot}, \sin \psi_{\odot}, \tan \alpha_{\odot}]$.
-   - Steps along the Stage 1 elevation matrix at $\Delta s = 20\text{ m}$ intervals out to a horizon limit of $15\text{ km}$.
-   - If any intermediate terrain cell elevation exceeds the ray altitude ($Z_{\text{terrain}} > Z_{\text{ray}}$), the coordinate is flagged as **Occluded / Topographic Shadow**.
-3. **Atmospheric Dust Extinction (Beer-Lambert Law)**:
-   - Total incident surface insolation $I_{\text{surface}}$ accounts for direct beam extinction and diffuse atmospheric scattering as reported by Perseverance's MEDA sensor:
-     $$I_{\text{direct}} = I_0 \cdot \exp\left(-\frac{\tau}{\cos \theta_z}\right) \cdot \cos \theta_z$$
-     $$I_{\text{diffuse}} = 0.15 \cdot I_0 \cdot \cos \theta_z \cdot \left[1.0 - \exp\left(-\frac{\tau}{\cos \theta_z}\right)\right]$$
-     $$I_{\text{surface}} = (1 - S_{\text{shadow}}) \cdot I_{\text{direct}} + I_{\text{diffuse}}$$
-   - Where $\tau$ is the atmospheric dust optical depth measured by MEDA (nominal $\tau \approx 0.4\text{–}0.6$; severe dust storms $\tau \ge 2.5$).
-
----
-
-### 3.4 437 MHz UHF RF Line-of-Sight & FSPL Comms Model
-
-Astronauts and rovers rely on $437\text{ MHz}$ ultra-high-frequency (UHF) transceivers to communicate with base camp habitats, orbital relay orbiters (MRO / Odyssey / TGO), or high-gain communication towers. 
-
-The `CommsPhysics` module evaluates line-of-sight (LOS) propagation over authentic topography:
-
-1. **Terrain Ray-Marching**:
-   - Casts a direct 3D vector between the transmitter $(x_1, y_1, Z_1 + h_{\text{ant}})$ and receiver $(x_2, y_2, Z_2 + h_{\text{base}})$.
-   - Evaluates terrain clearance against the first **Fresnel Zone Radius**:
-     $$R_{F1} = \sqrt{\frac{c \cdot d_1 \cdot d_2}{f_{\text{RF}} \cdot (d_1 + d_2)}} = \sqrt{\frac{0.686 \cdot d_1 \cdot d_2}{d_1 + d_2}}$$
-   - If terrain intrudes into $>40\%$ of $R_{F1}$, signal diffraction loss is triggered; if the direct line intersects bedrock, a **LOS Blackout Alert** is flagged.
-2. **Free-Space Path Loss (FSPL) & Link Budget**:
-   $$\text{FSPL (dB)} = 20 \log_{10}(d) + 20 \log_{10}(f) + 20 \log_{10}\left(\frac{4\pi}{c}\right) = 20 \log_{10}(d_{\text{km}}) + 85.25\text{ dB}$$
-   $$\text{RSSI (dBm)} = P_{\text{tx}} + G_{\text{tx}} + G_{\text{rx}} - \text{FSPL} - L_{\text{terrain}}$$
-   - Detects comms dead-zones behind crater walls and deep in Neretva Vallis canyon corridors.
-
----
-
-### 3.5 Multi-Agent Mobility & Life-Support Equilibrium
-
-The pathfinder supports three operational profiles with distinct physics characteristics:
-
-| Mobility Profile | Vehicle / Suit | Speed ($v$) | Max Slope | Energy / Metabolic Draw | Life-Support Payload |
-| :--- | :--- | :---: | :---: | :--- | :--- |
-| **`astronaut`** | xEMU EVA Suit | $3.2\text{ km/h}$ | $18.0^\circ$ | Metabolic: $350\text{–}750\text{ W}$ depending on slope | $2.4\text{ kg } O_2$, $900\text{ Wh}$ battery |
-| **`pack`** | Heavy Science Kit | $2.1\text{ km/h}$ | $14.0^\circ$ | Metabolic: $500\text{–}980\text{ W}$ (heavy sample gear) | $2.4\text{ kg } O_2$, $900\text{ Wh}$ battery |
-| **`rover`** | Rocker-Bogie Mule | $6.5\text{ km/h}$ | $22.0^\circ$ | Electrical: $250\text{ W}$ idle $+ 180\text{ W/m/s}$ climb | $4,800\text{ Wh}$ battery + Solar Array |
-
-#### Apollo/Artemis Rule #1: Walkback Horizon Monitoring
-For human crewed exploration, the engine continuously calculates the **walkback horizon**:
-$$T_{\text{walkback}}(n) = \frac{\mathcal{H}_{4D}(n, \text{Hab Alpha})}{v_{\text{walk}}} \times 1.20 \quad (\text{includes } 20\% \text{ safety contingency})$$
-If the estimated time to return exceeds remaining PLSS $O_2$ or battery life, the system triggers a **CRITICAL RETREAT VECTOR**, preventing the astronaut from advancing beyond safe operational boundaries.
-
-```mermaid
-stateDiagram-v2
-    [*] --> NominalEVA : EVA Hatch Egress
-
-    state NominalEVA {
-        [*] --> SteadyPacing
-        SteadyPacing --> HighMetabolicWork : Steep Grade (>10°) or Heavy Kit
-        HighMetabolicWork --> SteadyPacing : Grade Flattens
-    }
-
-    NominalEVA --> EnvironmentalWarning : Dust Storm (τ > 1.5) or High SPE
-    EnvironmentalWarning --> NominalEVA : Environmental Conditions Clear
-
-    NominalEVA --> PitStopRequired : Battery or O2 Arrival Margin < 15%
-    PitStopRequired --> RechargingAtStation : Route Through Jezero Power Node
-    RechargingAtStation --> NominalEVA : Reserves Replenished
-
-    NominalEVA --> CriticalWalkbackExceeded : Walkback Time > Remaining PLSS
-    EnvironmentalWarning --> EmergencyAbort : Severe SPE Flare (8.4 mSv/h)
-    CriticalWalkbackExceeded --> EmergencyAbort : Apollo/Artemis Rule #1 Triggered
-
-    state EmergencyAbort {
-        [*] --> CalculateFastestRetreat
-        CalculateFastestRetreat --> MaximumVelocityTraverse : Direct Safe Vector to Habitat
-    }
-
-    EmergencyAbort --> HabIngress : Arrived at Airlock
-    HabIngress --> [*]
-```
-
----
-
-### 3.6 Core Python Library API Reference
-
-The library exposes the following high-level routines:
-
-```python
-# 1. Slope-aware point-to-point pathfinding
-plan_route(start_coords, target_coords, mode="astronaut", sol=1133, departure_lst=10.5, ...)
-
-# 2. Fastest emergency abort route to closest habitat/pressurized rover
-plan_emergency_abort(current_coords, suit_o2_kg, suit_batt_wh, mode="astronaut", ...)
-
-# 3. Multi-stop science tour optimization (Branch-and-Bound TSP / Orienteering)
-plan_science_tour(start_coords, stop_coords_list, max_duration_hr=6.0, mode="rover", ...)
-
-# 4. Diurnal departure optimization sweep (24 LST steps to find peak solar / lowest stress)
-find_optimal_departure(start_coords, target_coords, sol=1133, mode="rover", ...)
-
-# 5. In-situ RF Line-of-Sight and signal strength check
-evaluate_rf_comms(location, observer_coords=None, mode="rover")
-
-# 6. Wearable field computer telemetry ingestion & real-time walkback horizon prediction
-predict(current_coords, target_coords, o2_rate_kg_h=0.32, batt_rate_w=180.0, ...)
-
-# 7. Planetary catalogs & telemetry feeds
-get_waypoints()          # Returns 11 verified Jezero landmarks & science stations
-get_charging_stations()  # Returns available habitat power nodes
-get_weather(sol=1133)    # Returns MEDA atmospheric observations
-get_engine_status()      # Diagnostics, raster shapes, and cache metrics
-```
-
----
-
-## 4. User Interface & Mission Environments
-
-The frontend application (`GUI/`) is an aerospace-grade mission terminal engineered for two distinct operational environments:
-
-### 4.1 Astronaut EVA Tablet Navigation Terminal
-- **Ergonomically Designed for Pressurized EVA Gloves**: All primary controls feature large touch targets ($\ge 48\text{ px}$ to $56\text{ px}$) and high contrast for viewing through gold-tinted extravehicular visors in bright Martian sunlight.
-- **Top Telemetry HUD**: Displays real-time mission constants (`SOL 1133 | 11:45 LST | -24.7 °C | τ = 0.58`) with zero decorative header clutter.
-- **Tactile Fill-Gauge Sliders**: Aerospace progress bars for PLSS $O_2$ and battery reserves that dynamically light up in emerald green (`#22c55e`) or hazard crimson (`#ef4444`) with sub-millisecond route recomputation via LRU memoization (`legCache`).
-- **Tactical Simulation Drawer**: Instant toggles for environmental conditions:
-  - *Nominal Sol*: Baseline clear conditions.
-  - *Dust Squall*: Optical depth $\tau = 2.4$, $-39.5^\circ\text{C}$ temperature drop, and $1.35\times$ energy drain.
-  - *Solar Particle Event (SPE)*: High-energy cosmic radiation alert ($8.4\text{ mSv/h}$ dose rate, abort protocol).
-
-### 4.2 Ground Control Tactical Station
-- **Multi-Sensor Planetary Basemap Switcher**:
-  - **MRO CTX Satellite**: $6\text{ m/px}$ true photographic context orthomosaic.
-  - **ESA HRSC Relief**: 3D shaded relief highlighting scarps, crater terraces, and ridges.
-  - **Hypsometric DTM**: Color-coded elevation model.
-  - **THEMIS Nighttime IR**: Surface thermal inertia mapping regolith density and bedrock cohesion.
-- **Operator-Drawn Hazard Exclusion Polygons**: Ground controllers can draw arbitrary spatial exclusion zones (radiation leaks, boulder clusters, steep sand dunes) on the map; the $A^*$ engine instantly recalculates unblocked corridors around them.
-- **Elevation Transect Profiler**: Real-time cross-sectional elevation graphs along any planned traverse vector with slope grade classification.
-
-### 4.3 360° Gigapixel Mars Panoramic Viewer
-- Full-sphere interactive Three.js panoramic viewer displaying authentic Mars 2020 Mastcam-Z gigapixel mosaics:
-  - *Octavia E. Butler Landing Site* (Sol 3, 142 stitched frames)
-  - *Van Zyl Overlook / Ingenuity Airfield* (Sol 68, 110mm telephoto)
-  - *Belva Crater Rim & Ancient Delta Basin* (Sol 772)
-  - *Mount Kodiak Delta Scarp Remnant* (Sol 114)
-  - *Wildcat Ridge Fine Mudstone Sampling Site* (Sol 518)
-  - *South Séítah Dune Corridor Wheel Tracks* (Sol 548)
-- Complete scientific dossier drawer for 11 Jezero landmarks including PIXL XRF major oxide rock chemistry ($\text{SiO}_2$, $\text{FeO}$, $\text{Al}_2\text{O}_3$, $\text{MgO}$, $\text{CaO}$, $\text{SO}_3$) and Perseverance cored drill sample logs.
-
----
-
-## 5. Complete Inventory of Data Sources
-
-### 5.1 Direct Official Data Sources (Referenced in Project)
-
-The following datasets and endpoints are directly ingested, processed, or linked inside the Dalil Mars project files:
-
-| Dataset / Resource | Mission / Agency | Ingested Form | Official URL / DOI |
+| Dataset / Layer | Agency / Instrument | Role in Dalil Mars | Reference |
 | :--- | :--- | :--- | :--- |
-| **USGS SIM 3464 Geologic Map** | USGS / NASA JPL | `Nili.gdb` (13 vector layers) | [USGS Publication SIM 3464](https://pubs.usgs.gov/publication/sim3464) • [USGS Map Portal](https://www.usgs.gov/maps/geologic-map-jezero-crater-and-nili-planum-region-mars) • [DOI: 10.3133/sim3464](https://doi.org/10.3133/sim3464) |
-| **Mars 2020 Raw Surface Images** | NASA / JPL-Caltech | Live REST API & Photojournal | [NASA Mars 2020 Raw Images](https://mars.nasa.gov/mars2020/multimedia/raw-images/) • [API Endpoint](https://mars.nasa.gov/rss/api/?feed=raw_images&category=mars2020&feedtype=json) |
-| **Mars 2020 Perseverance Waypoints** | NASA MMGIS / JPL | GeoJSON coordinates & tilt | [NASA MMGIS Waypoints API](https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_waypoints.json) |
-| **Mars 2020 Perseverance Traverse Track**| NASA MMGIS / JPL | GeoJSON drive segments | [NASA MMGIS Traverse API](https://mars.nasa.gov/mmgis-maps/M20/Layers/json/M20_traverse.json) |
-| **MEDA In-Situ Atmospheric Weather** | NASA / CAB / JPL | Sol-by-Sol weather JSON | [NASA M20 MEDA Weather Feed](https://mars.nasa.gov/rss/api/?feed=weather&category=mars2020&feedtype=json) |
-| **HiRISE Jezero 25cm RGB Mosaic** | NASA / JPL / U. of Arizona | High-resolution basemap tiles | [NASA MMGIS HiRISE Mosaic](https://mars.nasa.gov/mmgis-maps/M20/Layers/M20_HiRISE_RGB_mosaic_25cm_v4p2/{z}/{x}/{-y}.png) |
-| **Context Camera (CTX) Stereo DTMs** | NASA / USGS Astrogeology | 20m GeoTIFF rasters | `USGS_CTX_Stereo_DTMs` (Orbits B17/B18/J03) |
-| **Context Camera (CTX) Controlled Mosaic**| Caltech Murray Lab | 6m GeoTIFF orthomosaic | `Caltech_CTX_mosaic_feb2018` |
-| **HRSC Topography & Shaded Relief** | ESA / DLR / FU Berlin | 75m GeoTIFF DTM & Hillshade | `HRSC/h0988_0000.da4.53.tif` |
-| **THEMIS Controlled IR Mosaics** | NASA / ASU / USGS | 100m Day & Night IR GeoTIFFs | `USGS_THEMIS_IR_controlled_mosaic_oct2018` |
-| **OpenPlanetaryMap Mars Basemap** | OpenPlanetary | CartoCDN global tiles | `https://cartocdn-gusc.global.ssl.fastly.net/opmbuilder/api/v1/map/` |
+| **USGS SIM 3464 Geologic Map** | USGS / NASA JPL | Stratigraphic units, sand dunes, and boulder hazard polygons | [DOI: 10.3133/sim3464](https://doi.org/10.3133/sim3464) |
+| **MRO CTX Stereo DTMs & Mosaic** | NASA / JPL / Caltech Murray Lab | 20m high-resolution elevation and orbital photographic context | [Caltech Murray Lab CTX](http://murray-lab.caltech.edu/CTX/) |
+| **ESA Mars Express HRSC** | ESA / DLR / Freie Univ. Berlin | Regional 75m terrain elevation and shaded relief | [ESA Planetary Science Archive](https://archives.esac.esa.int/psa/) |
+| **2001 Mars Odyssey THEMIS** | NASA / ASU / USGS | Nighttime thermal inertia to identify loose dust vs. bedrock | [ASU THEMIS Portal](https://astrogeology.usgs.gov/) |
+| **Perseverance MMGIS & MEDA** | NASA / JPL-Caltech | Live rover waypoints, sol-by-sol weather, and atmospheric opacity | [NASA Mars 2020 Telemetry](https://mars.nasa.gov/mars2020/) |
+| **Mastcam-Z Gigapixel Panoramas** | NASA / JPL-Caltech / MSSS | Authentic 360° surface panoramas of key exploration landmarks | [NASA JPL Photojournal](https://photojournal.jpl.nasa.gov/) |
 
 ---
 
-### 5.2 Foundational Mars Science Sources (External & Complementary)
+## 7. Quick Start & Launcher Scripts Guide
 
-Beyond the datasets directly bundled in this repository, planetary geologists, flight controllers, and automated surface missions rely on the following essential Mars science data archives:
-
-* **NASA Planetary Data System (PDS) Geosciences Node**  
-  *URL:* [https://pds-geosciences.wustl.edu/missions/mars2020/](https://pds-geosciences.wustl.edu/missions/mars2020/)  
-  *Role:* The primary planetary science repository (Washington University in St. Louis) hosting peer-reviewed, calibrated science data archives for the Mars 2020 Perseverance instrument suite (RIMFAX, PIXL, SHERLOC, SuperCam, and MEDA).
-
-* **NASA PDS Cartography and Imaging Sciences Node (IMG)**  
-  *URL:* [https://pds-imaging.jpl.nasa.gov/](https://pds-imaging.jpl.nasa.gov/)  
-  *Role:* Jointly operated by USGS Astrogeology and NASA JPL; curates raw and calibrated imaging products, camera calibration targets, and the central PDS Image Atlas for all Martian landed and orbital missions.
-
-* **NASA Mars Orbital Data Explorer (ODE)**  
-  *URL:* [https://oderest.rsl.wustl.edu/](https://oderest.rsl.wustl.edu/)  
-  *Role:* High-performance spatial search engine enabling cross-mission coordinate-based queries for orbital data across MRO (CRISM, HiRISE, CTX, SHARAD), 2001 Mars Odyssey (THEMIS), Mars Express (HRSC, OMEGA), and Mars Global Surveyor (MOLA).
-
-* **NASA Solar System Treks (Mars Trek)**  
-  *URL:* [https://trek.nasa.gov/mars/](https://trek.nasa.gov/mars/)  
-  *Role:* NASA JPL's interactive web-based 2D/3D GIS portal providing global and localized map layers, digital elevation models, slope aspect shaders, and 3D printing terrain export models for landing sites.
-
-* **NASA Mars Orbiter Laser Altimeter (MOLA) MEGDR Global Topography**  
-  *URL:* [https://pds-geosciences.wustl.edu/mgs/mgs-m-mola-5-megdr-l3-v1/mgsl_300x/](https://pds-geosciences.wustl.edu/mgs/mgs-m-mola-5-megdr-l3-v1/mgsl_300x/)  
-  *Role:* Mission Experiment Gridded Data Record from Mars Global Surveyor, establishing the zero-elevation reference aeroid (Martian geoid) and global elevation datum used across all planetary coordinate reference systems.
-
-* **Compact Reconnaissance Imaging Spectrometer for Mars (CRISM) PDS Archive**  
-  *URL:* [https://crism.jhuapl.edu/](https://crism.jhuapl.edu/)  
-  *Role:* Hyperspectral visible/near-infrared imaging cubes ($0.36\text{–}3.92\text{ }\mu\text{m}$) from Johns Hopkins APL, crucial for identifying smectite clay minerals, magnesium-iron carbonates, olivine, and hydrated silica across Jezero's delta and crater floor.
-
-* **NASA RIMFAX (Radar Imager for Mars' Subsurface Experiment) PDS Archive**  
-  *URL:* [https://pds-geosciences.wustl.edu/missions/mars2020/urn-nasa-pds-mars2020_rimfax/](https://pds-geosciences.wustl.edu/missions/mars2020/urn-nasa-pds-mars2020_rimfax/)  
-  *Role:* Ground-penetrating radar soundings probing up to $10+\text{ meters}$ beneath Jezero Crater's surface, mapping buried paleolake floor interfaces, lava flow strata, and dielectric permittivity.
-
-* **ESA Planetary Science Archive (PSA)**  
-  *URL:* [https://archives.esac.esa.int/psa/](https://archives.esac.esa.int/psa/)  
-  *Role:* European Space Agency's official planetary archive hosting raw, calibrated, and high-level science products from Mars Express (HRSC, OMEGA, MARSIS) and the ExoMars Trace Gas Orbiter (CaSSIS, FREND).
-
-* **NASA JPL Horizons On-Line Solar System Ephemeris System**  
-  *URL:* [https://ssd.jpl.nasa.gov/horizons/](https://ssd.jpl.nasa.gov/horizons/)  
-  *Role:* Generates high-accuracy orbital ephemerides, solar sub-point coordinates, and Martian heliocentric distance ($R_{\text{helio}}$) used to calibrate solar insolation and diurnal solar geometry.
-
-* **Mars Climate Database (MCD)**  
-  *URL:* [http://www-mars.lmd.jussieu.fr/](http://www-mars.lmd.jussieu.fr/)  
-  *Role:* Derived from Laboratoire de Météorologie Dynamique (CNES / ESA) global circulation simulations, providing predicted profiles of atmospheric density, dust optical depth scenarios, and boundary layer wind stress across Martian seasons ($L_s$).
-
-* **IAU Gazetteer of Planetary Nomenclature**  
-  *URL:* [https://planetarynames.wr.usgs.gov/](https://planetarynames.wr.usgs.gov/)  
-  *Role:* International Astronomical Union (IAU) official register maintained by USGS Astrogeology, defining recognized nomenclature, feature classifications, and boundaries for Martian landforms (e.g. Jezero, Neretva Vallis, Belva).
-
-* **USGS Planetary Image LOcator Tool (PILOT) & AstroMat**  
-  *URL:* [https://pilot.wr.usgs.gov/](https://pilot.wr.usgs.gov/) • [https://astrogeology.usgs.gov/search/](https://astrogeology.usgs.gov/search/)  
-  *Role:* Faceted search catalog for single-frame planetary observations, calibration files, and ISIS3/ISIS4 cartographic processing workflows.
-
----
-
-## 6. Repository Structure & Quick Start Guide
-
-### 6.1 Project Directory Layout
-
-```
-dalil-mars/
-├── README.md                      # Primary project documentation & mission specification
-├── preprocess                     # Master preprocessing executable shell script
-├── start.sh                       # One-command unified launcher (FastAPI backend + Vite GUI)
-├── start-backend.sh               # Backend FastAPI launcher
-├── start-gui.sh                   # GUI Vite dev server launcher
-├── start-website.sh               # Static website server launcher
-├── start-viewer.sh                # 3D stage visualizer launcher
-│
-├── backend/                       # Python Geospatial & Pathfinding Server
-│   ├── main.py                    # FastAPI application entrypoint & static routes
-│   ├── requirements.txt           # Python dependencies (fastapi, uvicorn, numpy)
-│   ├── core/
-│   │   └── engine.py              # Zero-dependency Dalil-Mars Tactical Pathfinding Engine
-│   ├── routers/                   # Modular API routers (engine_api, routing, elevation, hazards, layers)
-│   └── utils/                     # Geodatabase reader, elevation queries, and hazard buffers
-│
-├── GUI/                           # Astronaut EVA Tablet, AR Visor & Ground Control Frontend
-│   ├── .oxlintrc.json             # Frontend linter configuration
-│   ├── ground-control/            # Standalone Ground Control tactical terminal
-│   │   └── index.html             # Tactical operator map with polygon drawing & transect tools
-│   ├── src/
-│   │   ├── components/            # JezeroTacticalMap, VisorHudPage, MarsPanoramaViewer, LandmarkDrawer
-│   │   ├── data/                  # In-situ landmarks, MEDA weather, waypoints, panoramas
-│   │   ├── utils/                 # Pathfinding bridge, engineApi client, and visor state sync
-│   │   └── App.jsx                # Main HUD layout with drawer and fill-gauge controllers
-│   └── public/                    # Basemap assets, 360° panoramas, and landmark photography
-│
-├── preprocessing/                 # Scientific Data Consolidation Pipeline
-│   ├── preprocess.py              # Stages 1 to 6 orchestrator
-│   ├── stage1.py - stage6.py      # Individual modular pipeline stages
-│   ├── visualizer.py              # Data inspector & 2D/3D matrix validation tools
-│   ├── sim3464_JezeroNili/        # Authentic USGS SIM 3464 rasters & Nili.gdb geodatabase
-│   └── output/                    # Preprocessed master matrices (Stages 1 through 6)
-│
-├── scripts/                       # Planetary automation scripts
-│   ├── fetch_nasa_data.py         # NASA M20 live waypoint & weather harvester
-│   ├── download_curated_panoramas.py # Mastcam-Z gigapixel panoramic fetcher
-│   ├── generate_depth_hazard_regions.py # Marching-squares hazard polygon generator
-│   └── export_static_viewer_data.py    # Static binary buffer exporter for WebGL
-│
-└── docs/                          # Comprehensive technical documentation
-    ├── ENGINEERING_MANUAL.md      # 1,100+ line technical manual for engine.py
-    └── NILI_GDB_COMPLETE_RESEARCH_ANALYSIS.md # Geological study of USGS SIM 3464
-```
-
----
-
-### 6.2 Quick Start Instructions
-
-#### Prerequisites
+### Prerequisites
 - **Node.js**: `v18.0.0` or higher
 - **Python**: `v3.10` or higher
 - **Git**
 
-#### Option A: Unified One-Click Launcher (Recommended)
-Launch both the Python FastAPI engine backend and the React Vite GUI simultaneously:
+Dalil Mars provides modular launch scripts (`start*.sh`) with automatic environment provisioning:
+
+| Script | Purpose | Default Port | Description |
+| :--- | :--- | :---: | :--- |
+| **`./start.sh`** | **Unified All-in-One** | `8000` & `5173` | Sets up Python venv + npm dependencies, launches both backend & GUI, and shuts both down cleanly on `Ctrl+C`. |
+| **`./start-backend.sh`** | **FastAPI Engine API** | `8000` | Provisions virtual environment and runs the FastAPI pathfinding engine with Swagger docs at `/docs`. |
+| **`./start-gui.sh`** | **React / Vite GUI** | `5173` | Installs packages if needed and launches the astronaut EVA terminal and Ground Control UI. |
+| **`./start-viewer.sh`** | **3D Stage Visualizer** | `8050` | Launches the scientific 2D/3D matrix inspector to validate elevation models and hazard costmaps. |
+| **`./start-website.sh`** | **Static Website** | `8080` | Serves the project landing website via Python HTTP server. |
+
+---
+
+### 1. Unified Launcher (Recommended)
+The fastest way to launch the full mission environment. It checks for a Python virtualenv in `backend/.venv`, installs requirements, checks `GUI/node_modules`, launches the engine, verifies backend health, and starts the Vite GUI:
 
 ```bash
-# Clone the repository
 git clone https://github.com/jsyph/dalil-mars.git
 cd dalil-mars
 
-# Make start script executable and launch
-chmod +x start.sh
+chmod +x start*.sh
 ./start.sh
 ```
-- **Astronaut EVA Tablet GUI**: Open [`http://localhost:5173`](http://localhost:5173)
-- **FastAPI Engine REST API**: Online at [`http://localhost:8000`](http://localhost:8000)
-- **Interactive Swagger Docs**: View at [`http://localhost:8000/docs`](http://localhost:8000/docs)
 
-#### Option B: Standalone Frontend Development
-Run the Vite development server independently:
+- **Astronaut EVA Tablet HUD**: [`http://localhost:5173`](http://localhost:5173)
+- **Ground Control Tactical Console**: [`http://localhost:5173/ground-control/`](http://localhost:5173/ground-control/)
+- **FastAPI Engine REST API**: [`http://localhost:8000`](http://localhost:8000)
+- **Interactive Swagger Docs**: [`http://localhost:8000/docs`](http://localhost:8000/docs)
 
+*Press `Ctrl+C` in your terminal to gracefully shut down both services.*
+
+---
+
+### 2. Standalone Service Launchers
+
+If you prefer to run services in separate terminal tabs or modify code with specific reload options:
+
+#### Backend Only (`./start-backend.sh`)
+Launches the FastAPI pathfinding engine independently. Extra arguments are forwarded directly to `uvicorn`:
 ```bash
-npm install
-npm run dev
+# Standard launch
+./start-backend.sh
+
+# With automatic hot-reload for API development
+./start-backend.sh --reload
 ```
 
-#### Option C: Running the Data Preprocessing Pipeline
-To rebuild the master elevation and 4D heuristic matrices from source rasters:
+#### Frontend Only (`./start-gui.sh`)
+Launches Vite development server independently. Extra arguments are forwarded to `npm run dev`:
+```bash
+./start-gui.sh
+```
+
+#### 3D Stage Visualizer (`./start-viewer.sh`)
+Starts the interactive Dash/Plotly data inspector (`preprocessing/visualizer.py`) for inspecting preprocessed elevation grids, slope layers, and obstacle cutouts:
+```bash
+./start-viewer.sh
+```
+Open [`http://localhost:8050`](http://localhost:8050) to explore 2D slices and 3D surface meshes of Jezero Crater.
+
+#### Static Website (`./start-website.sh`)
+Serves the project presentation site (`website/`):
+```bash
+./start-website.sh
+```
+Open [`http://localhost:8080`](http://localhost:8080).
+
+---
+
+### 3. Custom Ports & Hosts (Environment Variables)
+
+All `start*.sh` scripts support custom port and host bindings via environment variables:
+
+```bash
+# Example: Run backend on port 9000 and GUI on port 3000
+BACKEND_PORT=9000 GUI_PORT=3000 ./start.sh
+
+# Example: Run viewer on port 8888
+VIEWER_PORT=8888 ./start-viewer.sh
+
+# Example: Bind website to localhost only
+WEBSITE_HOST=127.0.0.1 WEBSITE_PORT=8081 ./start-website.sh
+```
+
+---
+
+### 4. Running the Preprocessing Pipeline
+To regenerate the master elevation grids and 4D heuristic matrices from raw USGS/ESA/NASA source rasters:
 
 ```bash
 chmod +x preprocess
 ./preprocess
 ```
-Or run individual stages:
-```bash
-python3 preprocessing/stage1.py
-python3 preprocessing/stage2.py
-python3 preprocessing/stage6.py
-```
-
-#### Option D: Embedded Python Library (`import engine`)
-You can embed the pathfinding engine directly into any Python robotics stack, ROS 2 Nav2 node, or scientific notebook without running a web server:
-
-```python
-import engine
-
-# Instantiate engine (loads Stage 1, 2, 4, 6 preprocessed matrices)
-eng = engine.get_engine()
-
-# Plan optimal EVA route
-route = eng.plan_route(
-    start_coords=(18.444627, 77.450886),   # Hab Alpha / Butler Landing
-    target_coords=(18.423000, 77.412000),  # Kodiak Butte Delta Scarp
-    mode="astronaut",
-    sol=1133,
-    departure_lst=11.0
-)
-
-# Output summary telemetry
-print(f"Status: {route['status']}")
-print(f"Path Waypoints: {len(route['path'])}")
-print(f"Total Work: {route['summary']['total_work_joules']:.1f} J")
-```
 
 ---
 
-## 7. License & Acknowledgements
+## 8. Team & License
 
-- **Challenge**: Developed for the **2026 NASA Space Apps Challenge** under the challenge theme *Interplanetary Survival Guide: Martian Map*.
-- **Team**: **Team Mahatet Mars** (*Alexandria, Egypt Local Event*).
-- **Cartographic Attributions**:
-  - U.S. Geological Survey Astrogeology Science Center & NASA Jet Propulsion Laboratory for USGS Scientific Investigations Map 3464.
-  - NASA / JPL-Caltech / MSSS / University of Arizona for Mars Reconnaissance Orbiter (CTX, HiRISE) and Mars 2020 Perseverance surface assets.
-  - European Space Agency (ESA) / DLR / Freie Universität Berlin for Mars Express HRSC topography.
-  - Arizona State University for 2001 Mars Odyssey THEMIS infrared data.
-- **License**: MIT License. Open-source for planetary exploration, educational research, and interplanetary survival.
+- **Challenge**: **2026 NASA Space Apps Challenge**
+- **Challenge Track**: *Interplanetary Survival Guide: Martian Map*
+- **Team**: **Team Mahatet Mars** (*Alexandria, Egypt Local Event*)
+- **License**: MIT License — open-source for planetary exploration, educational research, and interplanetary survival.
