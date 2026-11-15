@@ -75,7 +75,12 @@ import {
   planRouteApi,
   predictTelemetryApi,
 } from './utils/engineApi';
-import { publishVisorState, subscribeVisorCommands } from './utils/visorSync';
+import {
+  publishVisorState,
+  publishVisorHeartbeat,
+  publishTabletOffline,
+  subscribeVisorCommands,
+} from './utils/visorSync';
 
 function formatLst(totalMinutes) {
   const wrapped = ((Math.round(totalMinutes) % 1440) + 1440) % 1440;
@@ -1376,10 +1381,11 @@ export default function App() {
     });
   };
 
+  const latestVisorSnapshotRef = useRef(null);
+
   // Broadcast live EVA state to standalone Visor HUD (?mode=visor)
   useEffect(() => {
-    const weatherCondition = WEATHER_CONDITIONS[weatherKey] || WEATHER_CONDITIONS.nominal;
-    publishVisorState({
+    const snap = {
       navPlaying,
       navSpeed,
       weatherKey,
@@ -1393,7 +1399,9 @@ export default function App() {
       loadout,
       latestMeda,
       routePathCoords: routeResult?.pathCoords || [],
-    });
+    };
+    latestVisorSnapshotRef.current = snap;
+    publishVisorState(snap);
   }, [
     navPlaying,
     navSpeed,
@@ -1421,9 +1429,26 @@ export default function App() {
     triggerShelterDivert,
   };
 
+  // Heartbeat so Visor HUD detects immediately when EVA Tablet goes offline
+  useEffect(() => {
+    publishVisorHeartbeat();
+    const hb = setInterval(() => publishVisorHeartbeat(), 2000);
+    const onUnload = () => publishTabletOffline();
+    window.addEventListener('beforeunload', onUnload);
+    return () => {
+      clearInterval(hb);
+      window.removeEventListener('beforeunload', onUnload);
+    };
+  }, []);
+
   useEffect(() => {
     return subscribeVisorCommands((command, data) => {
-      if (command === 'SHELTER_DIVERT') {
+      if (command === 'VISOR_PING') {
+        publishVisorHeartbeat();
+        if (latestVisorSnapshotRef.current) {
+          publishVisorState(latestVisorSnapshotRef.current);
+        }
+      } else if (command === 'SHELTER_DIVERT') {
         visorCmdCtxRef.current.triggerShelterDivert?.();
       } else if (command === 'TOGGLE_PLAY') {
         setNavPlaying((prev) => {
