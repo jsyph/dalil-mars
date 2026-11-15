@@ -1,0 +1,6887 @@
+{
+  "WP-00_WP-01": {
+    "reachable": true,
+    "from": {
+      "id": "WP-00",
+      "name": "Octavia E. Butler Landing (Base Camp)",
+      "col": 1921,
+      "row": 2567
+    },
+    "to": {
+      "id": "WP-01",
+      "name": "Kodiak Butte & Delta Front Clays",
+      "col": 1892,
+      "row": 2546
+    },
+    "heuristic_distance_m": 1829.0,
+    "heuristic_distance_km": 1.83,
+    "euclidean_distance_m": 723.4,
+    "euclidean_distance_km": 0.72,
+    "detour_pct": 152.8,
+    "steps_count": 2,
+    "macro_steps": 2,
+    "path": [
+      {
+        "col": 1921.0,
+        "row": 2567.0,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1892,
+        "row": 2546,
+        "z": -2556.3,
+        "coarse": [
+          39,
+          29
+        ]
+      }
+    ]
+  },
+  "WP-00_WP-02": {
+    "reachable": true,
+    "from": {
+      "id": "WP-00",
+      "name": "Octavia E. Butler Landing (Base Camp)",
+      "col": 1921,
+      "row": 2567
+    },
+    "to": {
+      "id": "WP-02",
+      "name": "Hawksbill Gap & Delta Topset Conglomerates",
+      "col": 1866,
+      "row": 2528
+    },
+    "heuristic_distance_m": 1829.0,
+    "heuristic_distance_km": 1.83,
+    "euclidean_distance_m": 1362.2,
+    "euclidean_distance_km": 1.36,
+    "detour_pct": 34.3,
+    "steps_count": 4,
+    "macro_steps": 2,
+    "path": [
+      {
+        "col": 1921.0,
+        "row": 2567.0,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1902.7,
+        "row": 2554.0,
+        "z": -2560.6,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1884.3,
+        "row": 2541.0,
+        "z": -2550.4,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1866,
+        "row": 2528,
+        "z": -2547.6,
+        "coarse": [
+          39,
+          29
+        ]
+      }
+    ]
+  },
+  "WP-00_WP-03": {
+    "reachable": true,
+    "from": {
+      "id": "WP-00",
+      "name": "Octavia E. Butler Landing (Base Camp)",
+      "col": 1921,
+      "row": 2567
+    },
+    "to": {
+      "id": "WP-03",
+      "name": "Margin Carbonate Unit (Ancient Shoreline)",
+      "col": 1816,
+      "row": 2519
+    },
+    "heuristic_distance_m": 3265.2,
+    "heuristic_distance_km": 3.27,
+    "euclidean_distance_m": 2332.6,
+    "euclidean_distance_km": 2.33,
+    "detour_pct": 40.0,
+    "steps_count": 6,
+    "macro_steps": 3,
+    "path": [
+      {
+        "col": 1921.0,
+        "row": 2567.0,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1904.5,
+        "row": 2547.5,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1888.0,
+        "row": 2528.0,
+        "z": -2549.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1864.0,
+        "row": 2525.0,
+        "z": -2543.8,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1840.0,
+        "row": 2522.0,
+        "z": -2533.0,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1816,
+        "row": 2519,
+        "z": -2475.2,
+        "coarse": [
+          39,
+          28
+        ]
+      }
+    ]
+  },
+  "WP-00_WP-04": {
+    "reachable": true,
+    "from": {
+      "id": "WP-00",
+      "name": "Octavia E. Butler Landing (Base Camp)",
+      "col": 1921,
+      "row": 2567
+    },
+    "to": {
+      "id": "WP-04",
+      "name": "S\u00e9\u00edtah Formation & Dune Corridor",
+      "col": 1954,
+      "row": 2604
+    },
+    "heuristic_distance_m": 1001.7,
+    "heuristic_distance_km": 1.0,
+    "euclidean_distance_m": 1001.7,
+    "euclidean_distance_km": 1.0,
+    "detour_pct": 0.0,
+    "steps_count": 1,
+    "macro_steps": 1,
+    "path": [
+      {
+        "col": 1921,
+        "row": 2567,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      }
+    ]
+  },
+  "WP-00_WP-05": {
+    "reachable": true,
+    "from": {
+      "id": "WP-00",
+      "name": "Octavia E. Butler Landing (Base Camp)",
+      "col": 1921,
+      "row": 2567
+    },
+    "to": {
+      "id": "WP-05",
+      "name": "Neretva Vallis River Inlet Breach Canyon",
+      "col": 1156,
+      "row": 2141
+    },
+    "heuristic_distance_m": 22599.5,
+    "heuristic_distance_km": 22.6,
+    "euclidean_distance_m": 17690.9,
+    "euclidean_distance_km": 17.69,
+    "detour_pct": 27.7,
+    "steps_count": 43,
+    "macro_steps": 13,
+    "path": [
+      {
+        "col": 1921.0,
+        "row": 2567.0,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1904.5,
+        "row": 2547.5,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1888.0,
+        "row": 2528.0,
+        "z": -2549.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1872.0,
+        "row": 2512.0,
+        "z": -2539.1,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1856.0,
+        "row": 2496.0,
+        "z": -2529.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1840.0,
+        "row": 2480.0,
+        "z": -2458.5,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2464.0,
+        "z": -2465.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1808.0,
+        "row": 2448.0,
+        "z": -2442.6,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1792.0,
+        "row": 2432.0,
+        "z": -2431.0,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1776.0,
+        "row": 2416.0,
+        "z": -2428.6,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1760.0,
+        "row": 2400.0,
+        "z": -2419.8,
+        "coarse": [
+          37,
+          27
+        ]
+      },
+      {
+        "col": 1738.7,
+        "row": 2400.0,
+        "z": -2411.5,
+        "coarse": [
+          37,
+          27
+        ]
+      },
+      {
+        "col": 1717.3,
+        "row": 2400.0,
+        "z": -2409.3,
+        "coarse": [
+          37,
+          27
+        ]
+      },
+      {
+        "col": 1696.0,
+        "row": 2400.0,
+        "z": -2405.2,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1674.7,
+        "row": 2400.0,
+        "z": -2397.2,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1653.3,
+        "row": 2400.0,
+        "z": -2387.5,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1632.0,
+        "row": 2400.0,
+        "z": -2406.2,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1610.7,
+        "row": 2400.0,
+        "z": -2408.6,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1589.3,
+        "row": 2400.0,
+        "z": -2405.7,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1568.0,
+        "row": 2400.0,
+        "z": -2391.8,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1552.0,
+        "row": 2384.0,
+        "z": -2355.8,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1536.0,
+        "row": 2368.0,
+        "z": -2329.4,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1520.0,
+        "row": 2352.0,
+        "z": -2282.4,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1504.0,
+        "row": 2336.0,
+        "z": -2181.2,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1488.0,
+        "row": 2320.0,
+        "z": -2054.3,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1472.0,
+        "row": 2304.0,
+        "z": -1951.9,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1456.0,
+        "row": 2288.0,
+        "z": -1913.4,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1440.0,
+        "row": 2272.0,
+        "z": -1955.7,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1424.0,
+        "row": 2256.0,
+        "z": -1978.0,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1408.0,
+        "row": 2240.0,
+        "z": -2027.5,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1392.0,
+        "row": 2224.0,
+        "z": -2077.5,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1376.0,
+        "row": 2208.0,
+        "z": -2171.9,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1354.7,
+        "row": 2208.0,
+        "z": -2213.6,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1333.3,
+        "row": 2208.0,
+        "z": -2194.8,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1312.0,
+        "row": 2208.0,
+        "z": -2114.9,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1296.0,
+        "row": 2192.0,
+        "z": -2089.2,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1280.0,
+        "row": 2176.0,
+        "z": -2098.6,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1264.0,
+        "row": 2160.0,
+        "z": -2274.0,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1248.0,
+        "row": 2144.0,
+        "z": -2251.3,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1225.0,
+        "row": 2143.2,
+        "z": -2198.2,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1202.0,
+        "row": 2142.5,
+        "z": -2107.4,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1179.0,
+        "row": 2141.8,
+        "z": -2183.7,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1156,
+        "row": 2141,
+        "z": -2186.2,
+        "coarse": [
+          33,
+          18
+        ]
+      }
+    ]
+  },
+  "WP-00_WP-06": {
+    "reachable": true,
+    "from": {
+      "id": "WP-00",
+      "name": "Octavia E. Butler Landing (Base Camp)",
+      "col": 1921,
+      "row": 2567
+    },
+    "to": {
+      "id": "WP-06",
+      "name": "Belva Crater Rim & Shock Megabreccia",
+      "col": 1737,
+      "row": 2449
+    },
+    "heuristic_distance_m": 5144.8,
+    "heuristic_distance_km": 5.14,
+    "euclidean_distance_m": 4416.3,
+    "euclidean_distance_km": 4.42,
+    "detour_pct": 16.5,
+    "steps_count": 11,
+    "macro_steps": 4,
+    "path": [
+      {
+        "col": 1921.0,
+        "row": 2567.0,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1904.5,
+        "row": 2547.5,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1888.0,
+        "row": 2528.0,
+        "z": -2549.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1872.0,
+        "row": 2512.0,
+        "z": -2539.1,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1856.0,
+        "row": 2496.0,
+        "z": -2529.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1840.0,
+        "row": 2480.0,
+        "z": -2458.5,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2464.0,
+        "z": -2465.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1802.2,
+        "row": 2460.2,
+        "z": -2443.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1780.5,
+        "row": 2456.5,
+        "z": -2442.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1758.8,
+        "row": 2452.8,
+        "z": -2439.5,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1737,
+        "row": 2449,
+        "z": -2433.3,
+        "coarse": [
+          38,
+          27
+        ]
+      }
+    ]
+  },
+  "WP-01_WP-00": {
+    "reachable": true,
+    "from": {
+      "id": "WP-01",
+      "name": "Kodiak Butte & Delta Front Clays",
+      "col": 1892,
+      "row": 2546
+    },
+    "to": {
+      "id": "WP-00",
+      "name": "Octavia E. Butler Landing (Base Camp)",
+      "col": 1921,
+      "row": 2567
+    },
+    "heuristic_distance_m": 1829.0,
+    "heuristic_distance_km": 1.83,
+    "euclidean_distance_m": 723.4,
+    "euclidean_distance_km": 0.72,
+    "detour_pct": 152.8,
+    "steps_count": 2,
+    "macro_steps": 2,
+    "path": [
+      {
+        "col": 1892.0,
+        "row": 2546.0,
+        "z": -2556.3,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1921,
+        "row": 2567,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      }
+    ]
+  },
+  "WP-01_WP-02": {
+    "reachable": true,
+    "from": {
+      "id": "WP-01",
+      "name": "Kodiak Butte & Delta Front Clays",
+      "col": 1892,
+      "row": 2546
+    },
+    "to": {
+      "id": "WP-02",
+      "name": "Hawksbill Gap & Delta Topset Conglomerates",
+      "col": 1866,
+      "row": 2528
+    },
+    "heuristic_distance_m": 638.9,
+    "heuristic_distance_km": 0.64,
+    "euclidean_distance_m": 638.9,
+    "euclidean_distance_km": 0.64,
+    "detour_pct": 0.0,
+    "steps_count": 1,
+    "macro_steps": 1,
+    "path": [
+      {
+        "col": 1892,
+        "row": 2546,
+        "z": -2556.3,
+        "coarse": [
+          39,
+          29
+        ]
+      }
+    ]
+  },
+  "WP-01_WP-03": {
+    "reachable": true,
+    "from": {
+      "id": "WP-01",
+      "name": "Kodiak Butte & Delta Front Clays",
+      "col": 1892,
+      "row": 2546
+    },
+    "to": {
+      "id": "WP-03",
+      "name": "Margin Carbonate Unit (Ancient Shoreline)",
+      "col": 1816,
+      "row": 2519
+    },
+    "heuristic_distance_m": 1436.2,
+    "heuristic_distance_km": 1.44,
+    "euclidean_distance_m": 1629.5,
+    "euclidean_distance_km": 1.63,
+    "detour_pct": 0.0,
+    "steps_count": 4,
+    "macro_steps": 2,
+    "path": [
+      {
+        "col": 1892.0,
+        "row": 2546.0,
+        "z": -2556.3,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1866.7,
+        "row": 2537.0,
+        "z": -2551.4,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1841.3,
+        "row": 2528.0,
+        "z": -2538.1,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1816,
+        "row": 2519,
+        "z": -2475.2,
+        "coarse": [
+          39,
+          28
+        ]
+      }
+    ]
+  },
+  "WP-01_WP-04": {
+    "reachable": true,
+    "from": {
+      "id": "WP-01",
+      "name": "Kodiak Butte & Delta Front Clays",
+      "col": 1892,
+      "row": 2546
+    },
+    "to": {
+      "id": "WP-04",
+      "name": "S\u00e9\u00edtah Formation & Dune Corridor",
+      "col": 1954,
+      "row": 2604
+    },
+    "heuristic_distance_m": 1829.0,
+    "heuristic_distance_km": 1.83,
+    "euclidean_distance_m": 1715.3,
+    "euclidean_distance_km": 1.72,
+    "detour_pct": 6.6,
+    "steps_count": 5,
+    "macro_steps": 2,
+    "path": [
+      {
+        "col": 1892.0,
+        "row": 2546.0,
+        "z": -2556.3,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1907.5,
+        "row": 2560.5,
+        "z": -2564.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1923.0,
+        "row": 2575.0,
+        "z": -2564.5,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1938.5,
+        "row": 2589.5,
+        "z": -2570.1,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1954,
+        "row": 2604,
+        "z": -2580.8,
+        "coarse": [
+          40,
+          30
+        ]
+      }
+    ]
+  },
+  "WP-01_WP-05": {
+    "reachable": true,
+    "from": {
+      "id": "WP-01",
+      "name": "Kodiak Butte & Delta Front Clays",
+      "col": 1892,
+      "row": 2546
+    },
+    "to": {
+      "id": "WP-05",
+      "name": "Neretva Vallis River Inlet Breach Canyon",
+      "col": 1156,
+      "row": 2141
+    },
+    "heuristic_distance_m": 20783.4,
+    "heuristic_distance_km": 20.78,
+    "euclidean_distance_m": 16972.8,
+    "euclidean_distance_km": 16.97,
+    "detour_pct": 22.5,
+    "steps_count": 41,
+    "macro_steps": 12,
+    "path": [
+      {
+        "col": 1892.0,
+        "row": 2546.0,
+        "z": -2556.3,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1875.0,
+        "row": 2525.5,
+        "z": -2549.1,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1858.0,
+        "row": 2505.0,
+        "z": -2536.4,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1841.0,
+        "row": 2484.5,
+        "z": -2457.5,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2464.0,
+        "z": -2465.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1808.0,
+        "row": 2448.0,
+        "z": -2442.6,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1792.0,
+        "row": 2432.0,
+        "z": -2431.0,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1776.0,
+        "row": 2416.0,
+        "z": -2428.6,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1760.0,
+        "row": 2400.0,
+        "z": -2419.8,
+        "coarse": [
+          37,
+          27
+        ]
+      },
+      {
+        "col": 1738.7,
+        "row": 2400.0,
+        "z": -2411.5,
+        "coarse": [
+          37,
+          27
+        ]
+      },
+      {
+        "col": 1717.3,
+        "row": 2400.0,
+        "z": -2409.3,
+        "coarse": [
+          37,
+          27
+        ]
+      },
+      {
+        "col": 1696.0,
+        "row": 2400.0,
+        "z": -2405.2,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1674.7,
+        "row": 2400.0,
+        "z": -2397.2,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1653.3,
+        "row": 2400.0,
+        "z": -2387.5,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1632.0,
+        "row": 2400.0,
+        "z": -2406.2,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1610.7,
+        "row": 2400.0,
+        "z": -2408.6,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1589.3,
+        "row": 2400.0,
+        "z": -2405.7,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1568.0,
+        "row": 2400.0,
+        "z": -2391.8,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1552.0,
+        "row": 2384.0,
+        "z": -2355.8,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1536.0,
+        "row": 2368.0,
+        "z": -2329.4,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1520.0,
+        "row": 2352.0,
+        "z": -2282.4,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1504.0,
+        "row": 2336.0,
+        "z": -2181.2,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1488.0,
+        "row": 2320.0,
+        "z": -2054.3,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1472.0,
+        "row": 2304.0,
+        "z": -1951.9,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1456.0,
+        "row": 2288.0,
+        "z": -1913.4,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1440.0,
+        "row": 2272.0,
+        "z": -1955.7,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1424.0,
+        "row": 2256.0,
+        "z": -1978.0,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1408.0,
+        "row": 2240.0,
+        "z": -2027.5,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1392.0,
+        "row": 2224.0,
+        "z": -2077.5,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1376.0,
+        "row": 2208.0,
+        "z": -2171.9,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1354.7,
+        "row": 2208.0,
+        "z": -2213.6,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1333.3,
+        "row": 2208.0,
+        "z": -2194.8,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1312.0,
+        "row": 2208.0,
+        "z": -2114.9,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1296.0,
+        "row": 2192.0,
+        "z": -2089.2,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1280.0,
+        "row": 2176.0,
+        "z": -2098.6,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1264.0,
+        "row": 2160.0,
+        "z": -2274.0,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1248.0,
+        "row": 2144.0,
+        "z": -2251.3,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1225.0,
+        "row": 2143.2,
+        "z": -2198.2,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1202.0,
+        "row": 2142.5,
+        "z": -2107.4,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1179.0,
+        "row": 2141.8,
+        "z": -2183.7,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1156,
+        "row": 2141,
+        "z": -2186.2,
+        "coarse": [
+          33,
+          18
+        ]
+      }
+    ]
+  },
+  "WP-01_WP-06": {
+    "reachable": true,
+    "from": {
+      "id": "WP-01",
+      "name": "Kodiak Butte & Delta Front Clays",
+      "col": 1892,
+      "row": 2546
+    },
+    "to": {
+      "id": "WP-06",
+      "name": "Belva Crater Rim & Shock Megabreccia",
+      "col": 1737,
+      "row": 2449
+    },
+    "heuristic_distance_m": 3315.8,
+    "heuristic_distance_km": 3.32,
+    "euclidean_distance_m": 3694.3,
+    "euclidean_distance_km": 3.69,
+    "detour_pct": 0.0,
+    "steps_count": 9,
+    "macro_steps": 3,
+    "path": [
+      {
+        "col": 1892.0,
+        "row": 2546.0,
+        "z": -2556.3,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1875.0,
+        "row": 2525.5,
+        "z": -2549.1,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1858.0,
+        "row": 2505.0,
+        "z": -2536.4,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1841.0,
+        "row": 2484.5,
+        "z": -2457.5,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2464.0,
+        "z": -2465.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1802.2,
+        "row": 2460.2,
+        "z": -2443.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1780.5,
+        "row": 2456.5,
+        "z": -2442.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1758.8,
+        "row": 2452.8,
+        "z": -2439.5,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1737,
+        "row": 2449,
+        "z": -2433.3,
+        "coarse": [
+          38,
+          27
+        ]
+      }
+    ]
+  },
+  "WP-02_WP-00": {
+    "reachable": true,
+    "from": {
+      "id": "WP-02",
+      "name": "Hawksbill Gap & Delta Topset Conglomerates",
+      "col": 1866,
+      "row": 2528
+    },
+    "to": {
+      "id": "WP-00",
+      "name": "Octavia E. Butler Landing (Base Camp)",
+      "col": 1921,
+      "row": 2567
+    },
+    "heuristic_distance_m": 1829.0,
+    "heuristic_distance_km": 1.83,
+    "euclidean_distance_m": 1362.2,
+    "euclidean_distance_km": 1.36,
+    "detour_pct": 34.3,
+    "steps_count": 4,
+    "macro_steps": 2,
+    "path": [
+      {
+        "col": 1866.0,
+        "row": 2528.0,
+        "z": -2547.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1884.3,
+        "row": 2541.0,
+        "z": -2550.4,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1902.7,
+        "row": 2554.0,
+        "z": -2560.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1921,
+        "row": 2567,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      }
+    ]
+  },
+  "WP-02_WP-01": {
+    "reachable": true,
+    "from": {
+      "id": "WP-02",
+      "name": "Hawksbill Gap & Delta Topset Conglomerates",
+      "col": 1866,
+      "row": 2528
+    },
+    "to": {
+      "id": "WP-01",
+      "name": "Kodiak Butte & Delta Front Clays",
+      "col": 1892,
+      "row": 2546
+    },
+    "heuristic_distance_m": 638.9,
+    "heuristic_distance_km": 0.64,
+    "euclidean_distance_m": 638.9,
+    "euclidean_distance_km": 0.64,
+    "detour_pct": 0.0,
+    "steps_count": 1,
+    "macro_steps": 1,
+    "path": [
+      {
+        "col": 1866,
+        "row": 2528,
+        "z": -2547.6,
+        "coarse": [
+          39,
+          29
+        ]
+      }
+    ]
+  },
+  "WP-02_WP-03": {
+    "reachable": true,
+    "from": {
+      "id": "WP-02",
+      "name": "Hawksbill Gap & Delta Topset Conglomerates",
+      "col": 1866,
+      "row": 2528
+    },
+    "to": {
+      "id": "WP-03",
+      "name": "Margin Carbonate Unit (Ancient Shoreline)",
+      "col": 1816,
+      "row": 2519
+    },
+    "heuristic_distance_m": 1436.2,
+    "heuristic_distance_km": 1.44,
+    "euclidean_distance_m": 1026.4,
+    "euclidean_distance_km": 1.03,
+    "detour_pct": 39.9,
+    "steps_count": 3,
+    "macro_steps": 2,
+    "path": [
+      {
+        "col": 1866.0,
+        "row": 2528.0,
+        "z": -2547.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1841.0,
+        "row": 2523.5,
+        "z": -2536.0,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1816,
+        "row": 2519,
+        "z": -2475.2,
+        "coarse": [
+          39,
+          28
+        ]
+      }
+    ]
+  },
+  "WP-02_WP-04": {
+    "reachable": true,
+    "from": {
+      "id": "WP-02",
+      "name": "Hawksbill Gap & Delta Topset Conglomerates",
+      "col": 1866,
+      "row": 2528
+    },
+    "to": {
+      "id": "WP-04",
+      "name": "S\u00e9\u00edtah Formation & Dune Corridor",
+      "col": 1954,
+      "row": 2604
+    },
+    "heuristic_distance_m": 1829.0,
+    "heuristic_distance_km": 1.83,
+    "euclidean_distance_m": 2349.2,
+    "euclidean_distance_km": 2.35,
+    "detour_pct": 0.0,
+    "steps_count": 6,
+    "macro_steps": 2,
+    "path": [
+      {
+        "col": 1866.0,
+        "row": 2528.0,
+        "z": -2547.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1883.6,
+        "row": 2543.2,
+        "z": -2552.3,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1901.2,
+        "row": 2558.4,
+        "z": -2557.0,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1918.8,
+        "row": 2573.6,
+        "z": -2561.0,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1936.4,
+        "row": 2588.8,
+        "z": -2568.3,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1954,
+        "row": 2604,
+        "z": -2580.8,
+        "coarse": [
+          40,
+          30
+        ]
+      }
+    ]
+  },
+  "WP-02_WP-05": {
+    "reachable": true,
+    "from": {
+      "id": "WP-02",
+      "name": "Hawksbill Gap & Delta Topset Conglomerates",
+      "col": 1866,
+      "row": 2528
+    },
+    "to": {
+      "id": "WP-05",
+      "name": "Neretva Vallis River Inlet Breach Canyon",
+      "col": 1156,
+      "row": 2141
+    },
+    "heuristic_distance_m": 20783.4,
+    "heuristic_distance_km": 20.78,
+    "euclidean_distance_m": 16337.3,
+    "euclidean_distance_km": 16.34,
+    "detour_pct": 27.2,
+    "steps_count": 40,
+    "macro_steps": 12,
+    "path": [
+      {
+        "col": 1866.0,
+        "row": 2528.0,
+        "z": -2547.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1852.0,
+        "row": 2506.7,
+        "z": -2534.3,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1838.0,
+        "row": 2485.3,
+        "z": -2456.0,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2464.0,
+        "z": -2465.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1808.0,
+        "row": 2448.0,
+        "z": -2442.6,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1792.0,
+        "row": 2432.0,
+        "z": -2431.0,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1776.0,
+        "row": 2416.0,
+        "z": -2428.6,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1760.0,
+        "row": 2400.0,
+        "z": -2419.8,
+        "coarse": [
+          37,
+          27
+        ]
+      },
+      {
+        "col": 1738.7,
+        "row": 2400.0,
+        "z": -2411.5,
+        "coarse": [
+          37,
+          27
+        ]
+      },
+      {
+        "col": 1717.3,
+        "row": 2400.0,
+        "z": -2409.3,
+        "coarse": [
+          37,
+          27
+        ]
+      },
+      {
+        "col": 1696.0,
+        "row": 2400.0,
+        "z": -2405.2,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1674.7,
+        "row": 2400.0,
+        "z": -2397.2,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1653.3,
+        "row": 2400.0,
+        "z": -2387.5,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1632.0,
+        "row": 2400.0,
+        "z": -2406.2,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1610.7,
+        "row": 2400.0,
+        "z": -2408.6,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1589.3,
+        "row": 2400.0,
+        "z": -2405.7,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1568.0,
+        "row": 2400.0,
+        "z": -2391.8,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1552.0,
+        "row": 2384.0,
+        "z": -2355.8,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1536.0,
+        "row": 2368.0,
+        "z": -2329.4,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1520.0,
+        "row": 2352.0,
+        "z": -2282.4,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1504.0,
+        "row": 2336.0,
+        "z": -2181.2,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1488.0,
+        "row": 2320.0,
+        "z": -2054.3,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1472.0,
+        "row": 2304.0,
+        "z": -1951.9,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1456.0,
+        "row": 2288.0,
+        "z": -1913.4,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1440.0,
+        "row": 2272.0,
+        "z": -1955.7,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1424.0,
+        "row": 2256.0,
+        "z": -1978.0,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1408.0,
+        "row": 2240.0,
+        "z": -2027.5,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1392.0,
+        "row": 2224.0,
+        "z": -2077.5,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1376.0,
+        "row": 2208.0,
+        "z": -2171.9,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1354.7,
+        "row": 2208.0,
+        "z": -2213.6,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1333.3,
+        "row": 2208.0,
+        "z": -2194.8,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1312.0,
+        "row": 2208.0,
+        "z": -2114.9,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1296.0,
+        "row": 2192.0,
+        "z": -2089.2,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1280.0,
+        "row": 2176.0,
+        "z": -2098.6,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1264.0,
+        "row": 2160.0,
+        "z": -2274.0,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1248.0,
+        "row": 2144.0,
+        "z": -2251.3,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1225.0,
+        "row": 2143.2,
+        "z": -2198.2,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1202.0,
+        "row": 2142.5,
+        "z": -2107.4,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1179.0,
+        "row": 2141.8,
+        "z": -2183.7,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1156,
+        "row": 2141,
+        "z": -2186.2,
+        "coarse": [
+          33,
+          18
+        ]
+      }
+    ]
+  },
+  "WP-02_WP-06": {
+    "reachable": true,
+    "from": {
+      "id": "WP-02",
+      "name": "Hawksbill Gap & Delta Topset Conglomerates",
+      "col": 1866,
+      "row": 2528
+    },
+    "to": {
+      "id": "WP-06",
+      "name": "Belva Crater Rim & Shock Megabreccia",
+      "col": 1737,
+      "row": 2449
+    },
+    "heuristic_distance_m": 3315.8,
+    "heuristic_distance_km": 3.32,
+    "euclidean_distance_m": 3056.2,
+    "euclidean_distance_km": 3.06,
+    "detour_pct": 8.5,
+    "steps_count": 8,
+    "macro_steps": 3,
+    "path": [
+      {
+        "col": 1866.0,
+        "row": 2528.0,
+        "z": -2547.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1852.0,
+        "row": 2506.7,
+        "z": -2534.3,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1838.0,
+        "row": 2485.3,
+        "z": -2456.0,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2464.0,
+        "z": -2465.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1802.2,
+        "row": 2460.2,
+        "z": -2443.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1780.5,
+        "row": 2456.5,
+        "z": -2442.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1758.8,
+        "row": 2452.8,
+        "z": -2439.5,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1737,
+        "row": 2449,
+        "z": -2433.3,
+        "coarse": [
+          38,
+          27
+        ]
+      }
+    ]
+  },
+  "WP-03_WP-00": {
+    "reachable": true,
+    "from": {
+      "id": "WP-03",
+      "name": "Margin Carbonate Unit (Ancient Shoreline)",
+      "col": 1816,
+      "row": 2519
+    },
+    "to": {
+      "id": "WP-00",
+      "name": "Octavia E. Butler Landing (Base Camp)",
+      "col": 1921,
+      "row": 2567
+    },
+    "heuristic_distance_m": 3265.2,
+    "heuristic_distance_km": 3.27,
+    "euclidean_distance_m": 2332.6,
+    "euclidean_distance_km": 2.33,
+    "detour_pct": 40.0,
+    "steps_count": 7,
+    "macro_steps": 3,
+    "path": [
+      {
+        "col": 1816.0,
+        "row": 2519.0,
+        "z": -2475.2,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1834.0,
+        "row": 2537.2,
+        "z": -2542.1,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1852.0,
+        "row": 2555.5,
+        "z": -2550.6,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1870.0,
+        "row": 2573.8,
+        "z": -2555.7,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1888.0,
+        "row": 2592.0,
+        "z": -2563.9,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1904.5,
+        "row": 2579.5,
+        "z": -2561.4,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1921,
+        "row": 2567,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      }
+    ]
+  },
+  "WP-03_WP-01": {
+    "reachable": true,
+    "from": {
+      "id": "WP-03",
+      "name": "Margin Carbonate Unit (Ancient Shoreline)",
+      "col": 1816,
+      "row": 2519
+    },
+    "to": {
+      "id": "WP-01",
+      "name": "Kodiak Butte & Delta Front Clays",
+      "col": 1892,
+      "row": 2546
+    },
+    "heuristic_distance_m": 1436.2,
+    "heuristic_distance_km": 1.44,
+    "euclidean_distance_m": 1629.5,
+    "euclidean_distance_km": 1.63,
+    "detour_pct": 0.0,
+    "steps_count": 4,
+    "macro_steps": 2,
+    "path": [
+      {
+        "col": 1816.0,
+        "row": 2519.0,
+        "z": -2475.2,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1841.3,
+        "row": 2528.0,
+        "z": -2538.1,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1866.7,
+        "row": 2537.0,
+        "z": -2551.4,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1892,
+        "row": 2546,
+        "z": -2556.3,
+        "coarse": [
+          39,
+          29
+        ]
+      }
+    ]
+  },
+  "WP-03_WP-02": {
+    "reachable": true,
+    "from": {
+      "id": "WP-03",
+      "name": "Margin Carbonate Unit (Ancient Shoreline)",
+      "col": 1816,
+      "row": 2519
+    },
+    "to": {
+      "id": "WP-02",
+      "name": "Hawksbill Gap & Delta Topset Conglomerates",
+      "col": 1866,
+      "row": 2528
+    },
+    "heuristic_distance_m": 1436.2,
+    "heuristic_distance_km": 1.44,
+    "euclidean_distance_m": 1026.4,
+    "euclidean_distance_km": 1.03,
+    "detour_pct": 39.9,
+    "steps_count": 3,
+    "macro_steps": 2,
+    "path": [
+      {
+        "col": 1816.0,
+        "row": 2519.0,
+        "z": -2475.2,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1841.0,
+        "row": 2523.5,
+        "z": -2536.0,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1866,
+        "row": 2528,
+        "z": -2547.6,
+        "coarse": [
+          39,
+          29
+        ]
+      }
+    ]
+  },
+  "WP-03_WP-04": {
+    "reachable": true,
+    "from": {
+      "id": "WP-03",
+      "name": "Margin Carbonate Unit (Ancient Shoreline)",
+      "col": 1816,
+      "row": 2519
+    },
+    "to": {
+      "id": "WP-04",
+      "name": "S\u00e9\u00edtah Formation & Dune Corridor",
+      "col": 1954,
+      "row": 2604
+    },
+    "heuristic_distance_m": 3265.2,
+    "heuristic_distance_km": 3.27,
+    "euclidean_distance_m": 3274.6,
+    "euclidean_distance_km": 3.27,
+    "detour_pct": 0.0,
+    "steps_count": 8,
+    "macro_steps": 3,
+    "path": [
+      {
+        "col": 1816.0,
+        "row": 2519.0,
+        "z": -2475.2,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1834.0,
+        "row": 2537.2,
+        "z": -2542.1,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1852.0,
+        "row": 2555.5,
+        "z": -2550.6,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1870.0,
+        "row": 2573.8,
+        "z": -2555.7,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1888.0,
+        "row": 2592.0,
+        "z": -2563.9,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1910.0,
+        "row": 2596.0,
+        "z": -2565.8,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1932.0,
+        "row": 2600.0,
+        "z": -2573.1,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1954,
+        "row": 2604,
+        "z": -2580.8,
+        "coarse": [
+          40,
+          30
+        ]
+      }
+    ]
+  },
+  "WP-03_WP-05": {
+    "reachable": true,
+    "from": {
+      "id": "WP-03",
+      "name": "Margin Carbonate Unit (Ancient Shoreline)",
+      "col": 1816,
+      "row": 2519
+    },
+    "to": {
+      "id": "WP-05",
+      "name": "Neretva Vallis River Inlet Breach Canyon",
+      "col": 1156,
+      "row": 2141
+    },
+    "heuristic_distance_m": 19501.5,
+    "heuristic_distance_km": 19.5,
+    "euclidean_distance_m": 15366.7,
+    "euclidean_distance_km": 15.37,
+    "detour_pct": 26.9,
+    "steps_count": 37,
+    "macro_steps": 11,
+    "path": [
+      {
+        "col": 1816.0,
+        "row": 2519.0,
+        "z": -2475.2,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1797.3,
+        "row": 2500.7,
+        "z": -2460.2,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1778.7,
+        "row": 2482.3,
+        "z": -2459.9,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1760.0,
+        "row": 2464.0,
+        "z": -2444.9,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1744.0,
+        "row": 2448.0,
+        "z": -2437.9,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1728.0,
+        "row": 2432.0,
+        "z": -2423.1,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1712.0,
+        "row": 2416.0,
+        "z": -2407.9,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1696.0,
+        "row": 2400.0,
+        "z": -2405.2,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1674.7,
+        "row": 2400.0,
+        "z": -2397.2,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1653.3,
+        "row": 2400.0,
+        "z": -2387.5,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1632.0,
+        "row": 2400.0,
+        "z": -2406.2,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1610.7,
+        "row": 2400.0,
+        "z": -2408.6,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1589.3,
+        "row": 2400.0,
+        "z": -2405.7,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1568.0,
+        "row": 2400.0,
+        "z": -2391.8,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1552.0,
+        "row": 2384.0,
+        "z": -2355.8,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1536.0,
+        "row": 2368.0,
+        "z": -2329.4,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1520.0,
+        "row": 2352.0,
+        "z": -2282.4,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1504.0,
+        "row": 2336.0,
+        "z": -2181.2,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1488.0,
+        "row": 2320.0,
+        "z": -2054.3,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1472.0,
+        "row": 2304.0,
+        "z": -1951.9,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1456.0,
+        "row": 2288.0,
+        "z": -1913.4,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1440.0,
+        "row": 2272.0,
+        "z": -1955.7,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1424.0,
+        "row": 2256.0,
+        "z": -1978.0,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1408.0,
+        "row": 2240.0,
+        "z": -2027.5,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1392.0,
+        "row": 2224.0,
+        "z": -2077.5,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1376.0,
+        "row": 2208.0,
+        "z": -2171.9,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1354.7,
+        "row": 2208.0,
+        "z": -2213.6,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1333.3,
+        "row": 2208.0,
+        "z": -2194.8,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1312.0,
+        "row": 2208.0,
+        "z": -2114.9,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1296.0,
+        "row": 2192.0,
+        "z": -2089.2,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1280.0,
+        "row": 2176.0,
+        "z": -2098.6,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1264.0,
+        "row": 2160.0,
+        "z": -2274.0,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1248.0,
+        "row": 2144.0,
+        "z": -2251.3,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1225.0,
+        "row": 2143.2,
+        "z": -2198.2,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1202.0,
+        "row": 2142.5,
+        "z": -2107.4,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1179.0,
+        "row": 2141.8,
+        "z": -2183.7,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1156,
+        "row": 2141,
+        "z": -2186.2,
+        "coarse": [
+          33,
+          18
+        ]
+      }
+    ]
+  },
+  "WP-03_WP-06": {
+    "reachable": true,
+    "from": {
+      "id": "WP-03",
+      "name": "Margin Carbonate Unit (Ancient Shoreline)",
+      "col": 1816,
+      "row": 2519
+    },
+    "to": {
+      "id": "WP-06",
+      "name": "Belva Crater Rim & Shock Megabreccia",
+      "col": 1737,
+      "row": 2449
+    },
+    "heuristic_distance_m": 2033.8,
+    "heuristic_distance_km": 2.03,
+    "euclidean_distance_m": 2132.5,
+    "euclidean_distance_km": 2.13,
+    "detour_pct": 0.0,
+    "steps_count": 5,
+    "macro_steps": 2,
+    "path": [
+      {
+        "col": 1816.0,
+        "row": 2519.0,
+        "z": -2475.2,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1796.2,
+        "row": 2501.5,
+        "z": -2459.4,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1776.5,
+        "row": 2484.0,
+        "z": -2467.9,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1756.8,
+        "row": 2466.5,
+        "z": -2446.5,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1737,
+        "row": 2449,
+        "z": -2433.3,
+        "coarse": [
+          38,
+          27
+        ]
+      }
+    ]
+  },
+  "WP-04_WP-00": {
+    "reachable": true,
+    "from": {
+      "id": "WP-04",
+      "name": "S\u00e9\u00edtah Formation & Dune Corridor",
+      "col": 1954,
+      "row": 2604
+    },
+    "to": {
+      "id": "WP-00",
+      "name": "Octavia E. Butler Landing (Base Camp)",
+      "col": 1921,
+      "row": 2567
+    },
+    "heuristic_distance_m": 1001.7,
+    "heuristic_distance_km": 1.0,
+    "euclidean_distance_m": 1001.7,
+    "euclidean_distance_km": 1.0,
+    "detour_pct": 0.0,
+    "steps_count": 1,
+    "macro_steps": 1,
+    "path": [
+      {
+        "col": 1954,
+        "row": 2604,
+        "z": -2580.8,
+        "coarse": [
+          40,
+          30
+        ]
+      }
+    ]
+  },
+  "WP-04_WP-01": {
+    "reachable": true,
+    "from": {
+      "id": "WP-04",
+      "name": "S\u00e9\u00edtah Formation & Dune Corridor",
+      "col": 1954,
+      "row": 2604
+    },
+    "to": {
+      "id": "WP-01",
+      "name": "Kodiak Butte & Delta Front Clays",
+      "col": 1892,
+      "row": 2546
+    },
+    "heuristic_distance_m": 1829.0,
+    "heuristic_distance_km": 1.83,
+    "euclidean_distance_m": 1715.3,
+    "euclidean_distance_km": 1.72,
+    "detour_pct": 6.6,
+    "steps_count": 5,
+    "macro_steps": 2,
+    "path": [
+      {
+        "col": 1954.0,
+        "row": 2604.0,
+        "z": -2580.8,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1938.5,
+        "row": 2589.5,
+        "z": -2570.1,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1923.0,
+        "row": 2575.0,
+        "z": -2564.5,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1907.5,
+        "row": 2560.5,
+        "z": -2564.6,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1892,
+        "row": 2546,
+        "z": -2556.3,
+        "coarse": [
+          39,
+          29
+        ]
+      }
+    ]
+  },
+  "WP-04_WP-02": {
+    "reachable": true,
+    "from": {
+      "id": "WP-04",
+      "name": "S\u00e9\u00edtah Formation & Dune Corridor",
+      "col": 1954,
+      "row": 2604
+    },
+    "to": {
+      "id": "WP-02",
+      "name": "Hawksbill Gap & Delta Topset Conglomerates",
+      "col": 1866,
+      "row": 2528
+    },
+    "heuristic_distance_m": 1829.0,
+    "heuristic_distance_km": 1.83,
+    "euclidean_distance_m": 2349.2,
+    "euclidean_distance_km": 2.35,
+    "detour_pct": 0.0,
+    "steps_count": 6,
+    "macro_steps": 2,
+    "path": [
+      {
+        "col": 1954.0,
+        "row": 2604.0,
+        "z": -2580.8,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1936.4,
+        "row": 2588.8,
+        "z": -2568.3,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1918.8,
+        "row": 2573.6,
+        "z": -2561.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1901.2,
+        "row": 2558.4,
+        "z": -2557.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1883.6,
+        "row": 2543.2,
+        "z": -2552.3,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1866,
+        "row": 2528,
+        "z": -2547.6,
+        "coarse": [
+          39,
+          29
+        ]
+      }
+    ]
+  },
+  "WP-04_WP-03": {
+    "reachable": true,
+    "from": {
+      "id": "WP-04",
+      "name": "S\u00e9\u00edtah Formation & Dune Corridor",
+      "col": 1954,
+      "row": 2604
+    },
+    "to": {
+      "id": "WP-03",
+      "name": "Margin Carbonate Unit (Ancient Shoreline)",
+      "col": 1816,
+      "row": 2519
+    },
+    "heuristic_distance_m": 3265.2,
+    "heuristic_distance_km": 3.27,
+    "euclidean_distance_m": 3274.6,
+    "euclidean_distance_km": 3.27,
+    "detour_pct": 0.0,
+    "steps_count": 8,
+    "macro_steps": 3,
+    "path": [
+      {
+        "col": 1954.0,
+        "row": 2604.0,
+        "z": -2580.8,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1937.5,
+        "row": 2585.0,
+        "z": -2568.1,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1921.0,
+        "row": 2566.0,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1904.5,
+        "row": 2547.0,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1888.0,
+        "row": 2528.0,
+        "z": -2549.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1864.0,
+        "row": 2525.0,
+        "z": -2543.8,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1840.0,
+        "row": 2522.0,
+        "z": -2533.0,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1816,
+        "row": 2519,
+        "z": -2475.2,
+        "coarse": [
+          39,
+          28
+        ]
+      }
+    ]
+  },
+  "WP-04_WP-05": {
+    "reachable": true,
+    "from": {
+      "id": "WP-04",
+      "name": "S\u00e9\u00edtah Formation & Dune Corridor",
+      "col": 1954,
+      "row": 2604
+    },
+    "to": {
+      "id": "WP-05",
+      "name": "Neretva Vallis River Inlet Breach Canyon",
+      "col": 1156,
+      "row": 2141
+    },
+    "heuristic_distance_m": 22599.5,
+    "heuristic_distance_km": 22.6,
+    "euclidean_distance_m": 18640.0,
+    "euclidean_distance_km": 18.64,
+    "detour_pct": 21.2,
+    "steps_count": 45,
+    "macro_steps": 13,
+    "path": [
+      {
+        "col": 1954.0,
+        "row": 2604.0,
+        "z": -2580.8,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1937.5,
+        "row": 2585.0,
+        "z": -2568.1,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1921.0,
+        "row": 2566.0,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1904.5,
+        "row": 2547.0,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1888.0,
+        "row": 2528.0,
+        "z": -2549.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1872.0,
+        "row": 2512.0,
+        "z": -2539.1,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1856.0,
+        "row": 2496.0,
+        "z": -2529.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1840.0,
+        "row": 2480.0,
+        "z": -2458.5,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2464.0,
+        "z": -2465.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1808.0,
+        "row": 2448.0,
+        "z": -2442.6,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1792.0,
+        "row": 2432.0,
+        "z": -2431.0,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1776.0,
+        "row": 2416.0,
+        "z": -2428.6,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1760.0,
+        "row": 2400.0,
+        "z": -2419.8,
+        "coarse": [
+          37,
+          27
+        ]
+      },
+      {
+        "col": 1738.7,
+        "row": 2400.0,
+        "z": -2411.5,
+        "coarse": [
+          37,
+          27
+        ]
+      },
+      {
+        "col": 1717.3,
+        "row": 2400.0,
+        "z": -2409.3,
+        "coarse": [
+          37,
+          27
+        ]
+      },
+      {
+        "col": 1696.0,
+        "row": 2400.0,
+        "z": -2405.2,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1674.7,
+        "row": 2400.0,
+        "z": -2397.2,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1653.3,
+        "row": 2400.0,
+        "z": -2387.5,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1632.0,
+        "row": 2400.0,
+        "z": -2406.2,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1610.7,
+        "row": 2400.0,
+        "z": -2408.6,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1589.3,
+        "row": 2400.0,
+        "z": -2405.7,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1568.0,
+        "row": 2400.0,
+        "z": -2391.8,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1552.0,
+        "row": 2384.0,
+        "z": -2355.8,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1536.0,
+        "row": 2368.0,
+        "z": -2329.4,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1520.0,
+        "row": 2352.0,
+        "z": -2282.4,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1504.0,
+        "row": 2336.0,
+        "z": -2181.2,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1488.0,
+        "row": 2320.0,
+        "z": -2054.3,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1472.0,
+        "row": 2304.0,
+        "z": -1951.9,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1456.0,
+        "row": 2288.0,
+        "z": -1913.4,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1440.0,
+        "row": 2272.0,
+        "z": -1955.7,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1424.0,
+        "row": 2256.0,
+        "z": -1978.0,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1408.0,
+        "row": 2240.0,
+        "z": -2027.5,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1392.0,
+        "row": 2224.0,
+        "z": -2077.5,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1376.0,
+        "row": 2208.0,
+        "z": -2171.9,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1354.7,
+        "row": 2208.0,
+        "z": -2213.6,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1333.3,
+        "row": 2208.0,
+        "z": -2194.8,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1312.0,
+        "row": 2208.0,
+        "z": -2114.9,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1296.0,
+        "row": 2192.0,
+        "z": -2089.2,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1280.0,
+        "row": 2176.0,
+        "z": -2098.6,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1264.0,
+        "row": 2160.0,
+        "z": -2274.0,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1248.0,
+        "row": 2144.0,
+        "z": -2251.3,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1225.0,
+        "row": 2143.2,
+        "z": -2198.2,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1202.0,
+        "row": 2142.5,
+        "z": -2107.4,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1179.0,
+        "row": 2141.8,
+        "z": -2183.7,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1156,
+        "row": 2141,
+        "z": -2186.2,
+        "coarse": [
+          33,
+          18
+        ]
+      }
+    ]
+  },
+  "WP-04_WP-06": {
+    "reachable": true,
+    "from": {
+      "id": "WP-04",
+      "name": "S\u00e9\u00edtah Formation & Dune Corridor",
+      "col": 1954,
+      "row": 2604
+    },
+    "to": {
+      "id": "WP-06",
+      "name": "Belva Crater Rim & Shock Megabreccia",
+      "col": 1737,
+      "row": 2449
+    },
+    "heuristic_distance_m": 5144.8,
+    "heuristic_distance_km": 5.14,
+    "euclidean_distance_m": 5387.8,
+    "euclidean_distance_km": 5.39,
+    "detour_pct": 0.0,
+    "steps_count": 13,
+    "macro_steps": 4,
+    "path": [
+      {
+        "col": 1954.0,
+        "row": 2604.0,
+        "z": -2580.8,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1937.5,
+        "row": 2585.0,
+        "z": -2568.1,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1921.0,
+        "row": 2566.0,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1904.5,
+        "row": 2547.0,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      },
+      {
+        "col": 1888.0,
+        "row": 2528.0,
+        "z": -2549.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1872.0,
+        "row": 2512.0,
+        "z": -2539.1,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1856.0,
+        "row": 2496.0,
+        "z": -2529.6,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1840.0,
+        "row": 2480.0,
+        "z": -2458.5,
+        "coarse": [
+          39,
+          29
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2464.0,
+        "z": -2465.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1802.2,
+        "row": 2460.2,
+        "z": -2443.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1780.5,
+        "row": 2456.5,
+        "z": -2442.4,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1758.8,
+        "row": 2452.8,
+        "z": -2439.5,
+        "coarse": [
+          38,
+          28
+        ]
+      },
+      {
+        "col": 1737,
+        "row": 2449,
+        "z": -2433.3,
+        "coarse": [
+          38,
+          27
+        ]
+      }
+    ]
+  },
+  "WP-05_WP-00": {
+    "reachable": true,
+    "from": {
+      "id": "WP-05",
+      "name": "Neretva Vallis River Inlet Breach Canyon",
+      "col": 1156,
+      "row": 2141
+    },
+    "to": {
+      "id": "WP-00",
+      "name": "Octavia E. Butler Landing (Base Camp)",
+      "col": 1921,
+      "row": 2567
+    },
+    "heuristic_distance_m": 22599.5,
+    "heuristic_distance_km": 22.6,
+    "euclidean_distance_m": 17690.9,
+    "euclidean_distance_km": 17.69,
+    "detour_pct": 27.7,
+    "steps_count": 44,
+    "macro_steps": 13,
+    "path": [
+      {
+        "col": 1156.0,
+        "row": 2141.0,
+        "z": -2186.2,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1174.4,
+        "row": 2154.4,
+        "z": -2191.2,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1192.8,
+        "row": 2167.8,
+        "z": -2205.0,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1211.2,
+        "row": 2181.2,
+        "z": -2222.9,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1229.6,
+        "row": 2194.6,
+        "z": -2125.5,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1248.0,
+        "row": 2208.0,
+        "z": -2078.1,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1264.0,
+        "row": 2224.0,
+        "z": -2065.8,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1280.0,
+        "row": 2240.0,
+        "z": -2075.5,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1296.0,
+        "row": 2256.0,
+        "z": -2180.0,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1312.0,
+        "row": 2272.0,
+        "z": -2200.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1328.0,
+        "row": 2288.0,
+        "z": -2212.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1344.0,
+        "row": 2304.0,
+        "z": -2224.7,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1360.0,
+        "row": 2320.0,
+        "z": -2198.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1376.0,
+        "row": 2336.0,
+        "z": -2143.5,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1392.0,
+        "row": 2352.0,
+        "z": -2133.4,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1408.0,
+        "row": 2368.0,
+        "z": -2137.3,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1424.0,
+        "row": 2384.0,
+        "z": -2154.8,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1440.0,
+        "row": 2400.0,
+        "z": -2237.9,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1456.0,
+        "row": 2416.0,
+        "z": -2325.8,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1472.0,
+        "row": 2432.0,
+        "z": -2326.5,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1488.0,
+        "row": 2448.0,
+        "z": -2265.7,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1504.0,
+        "row": 2464.0,
+        "z": -2272.8,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1520.0,
+        "row": 2480.0,
+        "z": -2285.1,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1536.0,
+        "row": 2496.0,
+        "z": -2299.1,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1552.0,
+        "row": 2512.0,
+        "z": -2313.8,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1568.0,
+        "row": 2528.0,
+        "z": -2347.7,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1584.0,
+        "row": 2544.0,
+        "z": -2376.0,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1600.0,
+        "row": 2560.0,
+        "z": -2387.8,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1616.0,
+        "row": 2576.0,
+        "z": -2427.4,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1632.0,
+        "row": 2592.0,
+        "z": -2450.3,
+        "coarse": [
+          40,
+          25
+        ]
+      },
+      {
+        "col": 1653.3,
+        "row": 2592.0,
+        "z": -2461.8,
+        "coarse": [
+          40,
+          25
+        ]
+      },
+      {
+        "col": 1674.7,
+        "row": 2592.0,
+        "z": -2464.4,
+        "coarse": [
+          40,
+          25
+        ]
+      },
+      {
+        "col": 1696.0,
+        "row": 2592.0,
+        "z": -2463.9,
+        "coarse": [
+          40,
+          26
+        ]
+      },
+      {
+        "col": 1717.3,
+        "row": 2592.0,
+        "z": -2485.4,
+        "coarse": [
+          40,
+          26
+        ]
+      },
+      {
+        "col": 1738.7,
+        "row": 2592.0,
+        "z": -2490.4,
+        "coarse": [
+          40,
+          26
+        ]
+      },
+      {
+        "col": 1760.0,
+        "row": 2592.0,
+        "z": -2502.9,
+        "coarse": [
+          40,
+          27
+        ]
+      },
+      {
+        "col": 1781.3,
+        "row": 2592.0,
+        "z": -2530.3,
+        "coarse": [
+          40,
+          27
+        ]
+      },
+      {
+        "col": 1802.7,
+        "row": 2592.0,
+        "z": -2535.4,
+        "coarse": [
+          40,
+          27
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2592.0,
+        "z": -2547.2,
+        "coarse": [
+          40,
+          28
+        ]
+      },
+      {
+        "col": 1845.3,
+        "row": 2592.0,
+        "z": -2530.2,
+        "coarse": [
+          40,
+          28
+        ]
+      },
+      {
+        "col": 1866.7,
+        "row": 2592.0,
+        "z": -2558.5,
+        "coarse": [
+          40,
+          28
+        ]
+      },
+      {
+        "col": 1888.0,
+        "row": 2592.0,
+        "z": -2563.9,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1904.5,
+        "row": 2579.5,
+        "z": -2561.4,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1921,
+        "row": 2567,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      }
+    ]
+  },
+  "WP-05_WP-01": {
+    "reachable": true,
+    "from": {
+      "id": "WP-05",
+      "name": "Neretva Vallis River Inlet Breach Canyon",
+      "col": 1156,
+      "row": 2141
+    },
+    "to": {
+      "id": "WP-01",
+      "name": "Kodiak Butte & Delta Front Clays",
+      "col": 1892,
+      "row": 2546
+    },
+    "heuristic_distance_m": 20783.4,
+    "heuristic_distance_km": 20.78,
+    "euclidean_distance_m": 16972.8,
+    "euclidean_distance_km": 16.97,
+    "detour_pct": 22.5,
+    "steps_count": 41,
+    "macro_steps": 12,
+    "path": [
+      {
+        "col": 1156.0,
+        "row": 2141.0,
+        "z": -2186.2,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1174.4,
+        "row": 2154.4,
+        "z": -2191.2,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1192.8,
+        "row": 2167.8,
+        "z": -2205.0,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1211.2,
+        "row": 2181.2,
+        "z": -2222.9,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1229.6,
+        "row": 2194.6,
+        "z": -2125.5,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1248.0,
+        "row": 2208.0,
+        "z": -2078.1,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1264.0,
+        "row": 2224.0,
+        "z": -2065.8,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1280.0,
+        "row": 2240.0,
+        "z": -2075.5,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1296.0,
+        "row": 2256.0,
+        "z": -2180.0,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1312.0,
+        "row": 2272.0,
+        "z": -2200.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1328.0,
+        "row": 2288.0,
+        "z": -2212.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1344.0,
+        "row": 2304.0,
+        "z": -2224.7,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1360.0,
+        "row": 2320.0,
+        "z": -2198.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1376.0,
+        "row": 2336.0,
+        "z": -2143.5,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1392.0,
+        "row": 2352.0,
+        "z": -2133.4,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1408.0,
+        "row": 2368.0,
+        "z": -2137.3,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1424.0,
+        "row": 2384.0,
+        "z": -2154.8,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1440.0,
+        "row": 2400.0,
+        "z": -2237.9,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1456.0,
+        "row": 2416.0,
+        "z": -2325.8,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1472.0,
+        "row": 2432.0,
+        "z": -2326.5,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1488.0,
+        "row": 2448.0,
+        "z": -2265.7,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1504.0,
+        "row": 2464.0,
+        "z": -2272.8,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1520.0,
+        "row": 2480.0,
+        "z": -2285.1,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1536.0,
+        "row": 2496.0,
+        "z": -2299.1,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1552.0,
+        "row": 2512.0,
+        "z": -2313.8,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1568.0,
+        "row": 2528.0,
+        "z": -2347.7,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1589.3,
+        "row": 2528.0,
+        "z": -2385.7,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1610.7,
+        "row": 2528.0,
+        "z": -2406.4,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1632.0,
+        "row": 2528.0,
+        "z": -2410.0,
+        "coarse": [
+          39,
+          25
+        ]
+      },
+      {
+        "col": 1653.3,
+        "row": 2528.0,
+        "z": -2415.7,
+        "coarse": [
+          39,
+          25
+        ]
+      },
+      {
+        "col": 1674.7,
+        "row": 2528.0,
+        "z": -2436.9,
+        "coarse": [
+          39,
+          25
+        ]
+      },
+      {
+        "col": 1696.0,
+        "row": 2528.0,
+        "z": -2443.5,
+        "coarse": [
+          39,
+          26
+        ]
+      },
+      {
+        "col": 1717.3,
+        "row": 2528.0,
+        "z": -2478.3,
+        "coarse": [
+          39,
+          26
+        ]
+      },
+      {
+        "col": 1738.7,
+        "row": 2528.0,
+        "z": -2492.0,
+        "coarse": [
+          39,
+          26
+        ]
+      },
+      {
+        "col": 1760.0,
+        "row": 2528.0,
+        "z": -2448.6,
+        "coarse": [
+          39,
+          27
+        ]
+      },
+      {
+        "col": 1781.3,
+        "row": 2528.0,
+        "z": -2501.3,
+        "coarse": [
+          39,
+          27
+        ]
+      },
+      {
+        "col": 1802.7,
+        "row": 2528.0,
+        "z": -2503.1,
+        "coarse": [
+          39,
+          27
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2528.0,
+        "z": -2505.7,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1846.7,
+        "row": 2534.0,
+        "z": -2541.4,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1869.3,
+        "row": 2540.0,
+        "z": -2553.4,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1892,
+        "row": 2546,
+        "z": -2556.3,
+        "coarse": [
+          39,
+          29
+        ]
+      }
+    ]
+  },
+  "WP-05_WP-02": {
+    "reachable": true,
+    "from": {
+      "id": "WP-05",
+      "name": "Neretva Vallis River Inlet Breach Canyon",
+      "col": 1156,
+      "row": 2141
+    },
+    "to": {
+      "id": "WP-02",
+      "name": "Hawksbill Gap & Delta Topset Conglomerates",
+      "col": 1866,
+      "row": 2528
+    },
+    "heuristic_distance_m": 20783.4,
+    "heuristic_distance_km": 20.78,
+    "euclidean_distance_m": 16337.3,
+    "euclidean_distance_km": 16.34,
+    "detour_pct": 27.2,
+    "steps_count": 40,
+    "macro_steps": 12,
+    "path": [
+      {
+        "col": 1156.0,
+        "row": 2141.0,
+        "z": -2186.2,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1174.4,
+        "row": 2154.4,
+        "z": -2191.2,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1192.8,
+        "row": 2167.8,
+        "z": -2205.0,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1211.2,
+        "row": 2181.2,
+        "z": -2222.9,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1229.6,
+        "row": 2194.6,
+        "z": -2125.5,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1248.0,
+        "row": 2208.0,
+        "z": -2078.1,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1264.0,
+        "row": 2224.0,
+        "z": -2065.8,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1280.0,
+        "row": 2240.0,
+        "z": -2075.5,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1296.0,
+        "row": 2256.0,
+        "z": -2180.0,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1312.0,
+        "row": 2272.0,
+        "z": -2200.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1328.0,
+        "row": 2288.0,
+        "z": -2212.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1344.0,
+        "row": 2304.0,
+        "z": -2224.7,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1360.0,
+        "row": 2320.0,
+        "z": -2198.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1376.0,
+        "row": 2336.0,
+        "z": -2143.5,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1392.0,
+        "row": 2352.0,
+        "z": -2133.4,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1408.0,
+        "row": 2368.0,
+        "z": -2137.3,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1424.0,
+        "row": 2384.0,
+        "z": -2154.8,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1440.0,
+        "row": 2400.0,
+        "z": -2237.9,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1456.0,
+        "row": 2416.0,
+        "z": -2325.8,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1472.0,
+        "row": 2432.0,
+        "z": -2326.5,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1488.0,
+        "row": 2448.0,
+        "z": -2265.7,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1504.0,
+        "row": 2464.0,
+        "z": -2272.8,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1520.0,
+        "row": 2480.0,
+        "z": -2285.1,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1536.0,
+        "row": 2496.0,
+        "z": -2299.1,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1552.0,
+        "row": 2512.0,
+        "z": -2313.8,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1568.0,
+        "row": 2528.0,
+        "z": -2347.7,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1589.3,
+        "row": 2528.0,
+        "z": -2385.7,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1610.7,
+        "row": 2528.0,
+        "z": -2406.4,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1632.0,
+        "row": 2528.0,
+        "z": -2410.0,
+        "coarse": [
+          39,
+          25
+        ]
+      },
+      {
+        "col": 1653.3,
+        "row": 2528.0,
+        "z": -2415.7,
+        "coarse": [
+          39,
+          25
+        ]
+      },
+      {
+        "col": 1674.7,
+        "row": 2528.0,
+        "z": -2436.9,
+        "coarse": [
+          39,
+          25
+        ]
+      },
+      {
+        "col": 1696.0,
+        "row": 2528.0,
+        "z": -2443.5,
+        "coarse": [
+          39,
+          26
+        ]
+      },
+      {
+        "col": 1717.3,
+        "row": 2528.0,
+        "z": -2478.3,
+        "coarse": [
+          39,
+          26
+        ]
+      },
+      {
+        "col": 1738.7,
+        "row": 2528.0,
+        "z": -2492.0,
+        "coarse": [
+          39,
+          26
+        ]
+      },
+      {
+        "col": 1760.0,
+        "row": 2528.0,
+        "z": -2448.6,
+        "coarse": [
+          39,
+          27
+        ]
+      },
+      {
+        "col": 1781.3,
+        "row": 2528.0,
+        "z": -2501.3,
+        "coarse": [
+          39,
+          27
+        ]
+      },
+      {
+        "col": 1802.7,
+        "row": 2528.0,
+        "z": -2503.1,
+        "coarse": [
+          39,
+          27
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2528.0,
+        "z": -2505.7,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1845.0,
+        "row": 2528.0,
+        "z": -2540.3,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1866,
+        "row": 2528,
+        "z": -2547.6,
+        "coarse": [
+          39,
+          29
+        ]
+      }
+    ]
+  },
+  "WP-05_WP-03": {
+    "reachable": true,
+    "from": {
+      "id": "WP-05",
+      "name": "Neretva Vallis River Inlet Breach Canyon",
+      "col": 1156,
+      "row": 2141
+    },
+    "to": {
+      "id": "WP-03",
+      "name": "Margin Carbonate Unit (Ancient Shoreline)",
+      "col": 1816,
+      "row": 2519
+    },
+    "heuristic_distance_m": 19501.5,
+    "heuristic_distance_km": 19.5,
+    "euclidean_distance_m": 15366.7,
+    "euclidean_distance_km": 15.37,
+    "detour_pct": 26.9,
+    "steps_count": 37,
+    "macro_steps": 11,
+    "path": [
+      {
+        "col": 1156.0,
+        "row": 2141.0,
+        "z": -2186.2,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1174.4,
+        "row": 2154.4,
+        "z": -2191.2,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1192.8,
+        "row": 2167.8,
+        "z": -2205.0,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1211.2,
+        "row": 2181.2,
+        "z": -2222.9,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1229.6,
+        "row": 2194.6,
+        "z": -2125.5,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1248.0,
+        "row": 2208.0,
+        "z": -2078.1,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1264.0,
+        "row": 2224.0,
+        "z": -2065.8,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1280.0,
+        "row": 2240.0,
+        "z": -2075.5,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1296.0,
+        "row": 2256.0,
+        "z": -2180.0,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1312.0,
+        "row": 2272.0,
+        "z": -2200.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1328.0,
+        "row": 2288.0,
+        "z": -2212.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1344.0,
+        "row": 2304.0,
+        "z": -2224.7,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1360.0,
+        "row": 2320.0,
+        "z": -2198.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1376.0,
+        "row": 2336.0,
+        "z": -2143.5,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1392.0,
+        "row": 2352.0,
+        "z": -2133.4,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1408.0,
+        "row": 2368.0,
+        "z": -2137.3,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1424.0,
+        "row": 2384.0,
+        "z": -2154.8,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1440.0,
+        "row": 2400.0,
+        "z": -2237.9,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1456.0,
+        "row": 2416.0,
+        "z": -2325.8,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1472.0,
+        "row": 2432.0,
+        "z": -2326.5,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1488.0,
+        "row": 2448.0,
+        "z": -2265.7,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1504.0,
+        "row": 2464.0,
+        "z": -2272.8,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1520.0,
+        "row": 2480.0,
+        "z": -2285.1,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1536.0,
+        "row": 2496.0,
+        "z": -2299.1,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1552.0,
+        "row": 2512.0,
+        "z": -2313.8,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1568.0,
+        "row": 2528.0,
+        "z": -2347.7,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1589.3,
+        "row": 2528.0,
+        "z": -2385.7,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1610.7,
+        "row": 2528.0,
+        "z": -2406.4,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1632.0,
+        "row": 2528.0,
+        "z": -2410.0,
+        "coarse": [
+          39,
+          25
+        ]
+      },
+      {
+        "col": 1653.3,
+        "row": 2528.0,
+        "z": -2415.7,
+        "coarse": [
+          39,
+          25
+        ]
+      },
+      {
+        "col": 1674.7,
+        "row": 2528.0,
+        "z": -2436.9,
+        "coarse": [
+          39,
+          25
+        ]
+      },
+      {
+        "col": 1696.0,
+        "row": 2528.0,
+        "z": -2443.5,
+        "coarse": [
+          39,
+          26
+        ]
+      },
+      {
+        "col": 1717.3,
+        "row": 2528.0,
+        "z": -2478.3,
+        "coarse": [
+          39,
+          26
+        ]
+      },
+      {
+        "col": 1738.7,
+        "row": 2528.0,
+        "z": -2492.0,
+        "coarse": [
+          39,
+          26
+        ]
+      },
+      {
+        "col": 1760.0,
+        "row": 2528.0,
+        "z": -2448.6,
+        "coarse": [
+          39,
+          27
+        ]
+      },
+      {
+        "col": 1788.0,
+        "row": 2523.5,
+        "z": -2494.4,
+        "coarse": [
+          39,
+          27
+        ]
+      },
+      {
+        "col": 1816,
+        "row": 2519,
+        "z": -2475.2,
+        "coarse": [
+          39,
+          28
+        ]
+      }
+    ]
+  },
+  "WP-05_WP-04": {
+    "reachable": true,
+    "from": {
+      "id": "WP-05",
+      "name": "Neretva Vallis River Inlet Breach Canyon",
+      "col": 1156,
+      "row": 2141
+    },
+    "to": {
+      "id": "WP-04",
+      "name": "S\u00e9\u00edtah Formation & Dune Corridor",
+      "col": 1954,
+      "row": 2604
+    },
+    "heuristic_distance_m": 22599.5,
+    "heuristic_distance_km": 22.6,
+    "euclidean_distance_m": 18640.0,
+    "euclidean_distance_km": 18.64,
+    "detour_pct": 21.2,
+    "steps_count": 45,
+    "macro_steps": 13,
+    "path": [
+      {
+        "col": 1156.0,
+        "row": 2141.0,
+        "z": -2186.2,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1174.4,
+        "row": 2154.4,
+        "z": -2191.2,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1192.8,
+        "row": 2167.8,
+        "z": -2205.0,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1211.2,
+        "row": 2181.2,
+        "z": -2222.9,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1229.6,
+        "row": 2194.6,
+        "z": -2125.5,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1248.0,
+        "row": 2208.0,
+        "z": -2078.1,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1264.0,
+        "row": 2224.0,
+        "z": -2065.8,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1280.0,
+        "row": 2240.0,
+        "z": -2075.5,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1296.0,
+        "row": 2256.0,
+        "z": -2180.0,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1312.0,
+        "row": 2272.0,
+        "z": -2200.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1328.0,
+        "row": 2288.0,
+        "z": -2212.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1344.0,
+        "row": 2304.0,
+        "z": -2224.7,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1360.0,
+        "row": 2320.0,
+        "z": -2198.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1376.0,
+        "row": 2336.0,
+        "z": -2143.5,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1392.0,
+        "row": 2352.0,
+        "z": -2133.4,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1408.0,
+        "row": 2368.0,
+        "z": -2137.3,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1424.0,
+        "row": 2384.0,
+        "z": -2154.8,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1440.0,
+        "row": 2400.0,
+        "z": -2237.9,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1456.0,
+        "row": 2416.0,
+        "z": -2325.8,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1472.0,
+        "row": 2432.0,
+        "z": -2326.5,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1488.0,
+        "row": 2448.0,
+        "z": -2265.7,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1504.0,
+        "row": 2464.0,
+        "z": -2272.8,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1520.0,
+        "row": 2480.0,
+        "z": -2285.1,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1536.0,
+        "row": 2496.0,
+        "z": -2299.1,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1552.0,
+        "row": 2512.0,
+        "z": -2313.8,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1568.0,
+        "row": 2528.0,
+        "z": -2347.7,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1584.0,
+        "row": 2544.0,
+        "z": -2376.0,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1600.0,
+        "row": 2560.0,
+        "z": -2387.8,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1616.0,
+        "row": 2576.0,
+        "z": -2427.4,
+        "coarse": [
+          39,
+          24
+        ]
+      },
+      {
+        "col": 1632.0,
+        "row": 2592.0,
+        "z": -2450.3,
+        "coarse": [
+          40,
+          25
+        ]
+      },
+      {
+        "col": 1653.3,
+        "row": 2592.0,
+        "z": -2461.8,
+        "coarse": [
+          40,
+          25
+        ]
+      },
+      {
+        "col": 1674.7,
+        "row": 2592.0,
+        "z": -2464.4,
+        "coarse": [
+          40,
+          25
+        ]
+      },
+      {
+        "col": 1696.0,
+        "row": 2592.0,
+        "z": -2463.9,
+        "coarse": [
+          40,
+          26
+        ]
+      },
+      {
+        "col": 1717.3,
+        "row": 2592.0,
+        "z": -2485.4,
+        "coarse": [
+          40,
+          26
+        ]
+      },
+      {
+        "col": 1738.7,
+        "row": 2592.0,
+        "z": -2490.4,
+        "coarse": [
+          40,
+          26
+        ]
+      },
+      {
+        "col": 1760.0,
+        "row": 2592.0,
+        "z": -2502.9,
+        "coarse": [
+          40,
+          27
+        ]
+      },
+      {
+        "col": 1781.3,
+        "row": 2592.0,
+        "z": -2530.3,
+        "coarse": [
+          40,
+          27
+        ]
+      },
+      {
+        "col": 1802.7,
+        "row": 2592.0,
+        "z": -2535.4,
+        "coarse": [
+          40,
+          27
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2592.0,
+        "z": -2547.2,
+        "coarse": [
+          40,
+          28
+        ]
+      },
+      {
+        "col": 1845.3,
+        "row": 2592.0,
+        "z": -2530.2,
+        "coarse": [
+          40,
+          28
+        ]
+      },
+      {
+        "col": 1866.7,
+        "row": 2592.0,
+        "z": -2558.5,
+        "coarse": [
+          40,
+          28
+        ]
+      },
+      {
+        "col": 1888.0,
+        "row": 2592.0,
+        "z": -2563.9,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1910.0,
+        "row": 2596.0,
+        "z": -2565.8,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1932.0,
+        "row": 2600.0,
+        "z": -2573.1,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1954,
+        "row": 2604,
+        "z": -2580.8,
+        "coarse": [
+          40,
+          30
+        ]
+      }
+    ]
+  },
+  "WP-05_WP-06": {
+    "reachable": true,
+    "from": {
+      "id": "WP-05",
+      "name": "Neretva Vallis River Inlet Breach Canyon",
+      "col": 1156,
+      "row": 2141
+    },
+    "to": {
+      "id": "WP-06",
+      "name": "Belva Crater Rim & Shock Megabreccia",
+      "col": 1737,
+      "row": 2449
+    },
+    "heuristic_distance_m": 17467.6,
+    "heuristic_distance_km": 17.47,
+    "euclidean_distance_m": 13285.9,
+    "euclidean_distance_km": 13.29,
+    "detour_pct": 31.5,
+    "steps_count": 33,
+    "macro_steps": 10,
+    "path": [
+      {
+        "col": 1156.0,
+        "row": 2141.0,
+        "z": -2186.2,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1174.4,
+        "row": 2154.4,
+        "z": -2191.2,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1192.8,
+        "row": 2167.8,
+        "z": -2205.0,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1211.2,
+        "row": 2181.2,
+        "z": -2222.9,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1229.6,
+        "row": 2194.6,
+        "z": -2125.5,
+        "coarse": [
+          33,
+          18
+        ]
+      },
+      {
+        "col": 1248.0,
+        "row": 2208.0,
+        "z": -2078.1,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1264.0,
+        "row": 2224.0,
+        "z": -2065.8,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1280.0,
+        "row": 2240.0,
+        "z": -2075.5,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1296.0,
+        "row": 2256.0,
+        "z": -2180.0,
+        "coarse": [
+          34,
+          19
+        ]
+      },
+      {
+        "col": 1312.0,
+        "row": 2272.0,
+        "z": -2200.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1328.0,
+        "row": 2288.0,
+        "z": -2212.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1344.0,
+        "row": 2304.0,
+        "z": -2224.7,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1360.0,
+        "row": 2320.0,
+        "z": -2198.3,
+        "coarse": [
+          35,
+          20
+        ]
+      },
+      {
+        "col": 1376.0,
+        "row": 2336.0,
+        "z": -2143.5,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1392.0,
+        "row": 2352.0,
+        "z": -2133.4,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1408.0,
+        "row": 2368.0,
+        "z": -2137.3,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1424.0,
+        "row": 2384.0,
+        "z": -2154.8,
+        "coarse": [
+          36,
+          21
+        ]
+      },
+      {
+        "col": 1440.0,
+        "row": 2400.0,
+        "z": -2237.9,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1456.0,
+        "row": 2416.0,
+        "z": -2325.8,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1472.0,
+        "row": 2432.0,
+        "z": -2326.5,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1488.0,
+        "row": 2448.0,
+        "z": -2265.7,
+        "coarse": [
+          37,
+          22
+        ]
+      },
+      {
+        "col": 1504.0,
+        "row": 2464.0,
+        "z": -2272.8,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1525.3,
+        "row": 2464.0,
+        "z": -2312.8,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1546.7,
+        "row": 2464.0,
+        "z": -2329.3,
+        "coarse": [
+          38,
+          23
+        ]
+      },
+      {
+        "col": 1568.0,
+        "row": 2464.0,
+        "z": -2346.4,
+        "coarse": [
+          38,
+          24
+        ]
+      },
+      {
+        "col": 1589.3,
+        "row": 2464.0,
+        "z": -2373.5,
+        "coarse": [
+          38,
+          24
+        ]
+      },
+      {
+        "col": 1610.7,
+        "row": 2464.0,
+        "z": -2401.0,
+        "coarse": [
+          38,
+          24
+        ]
+      },
+      {
+        "col": 1632.0,
+        "row": 2464.0,
+        "z": -2401.2,
+        "coarse": [
+          38,
+          25
+        ]
+      },
+      {
+        "col": 1653.3,
+        "row": 2464.0,
+        "z": -2408.7,
+        "coarse": [
+          38,
+          25
+        ]
+      },
+      {
+        "col": 1674.7,
+        "row": 2464.0,
+        "z": -2405.5,
+        "coarse": [
+          38,
+          25
+        ]
+      },
+      {
+        "col": 1696.0,
+        "row": 2464.0,
+        "z": -2453.6,
+        "coarse": [
+          38,
+          26
+        ]
+      },
+      {
+        "col": 1716.5,
+        "row": 2456.5,
+        "z": -2477.4,
+        "coarse": [
+          38,
+          26
+        ]
+      },
+      {
+        "col": 1737,
+        "row": 2449,
+        "z": -2433.3,
+        "coarse": [
+          38,
+          27
+        ]
+      }
+    ]
+  },
+  "WP-06_WP-00": {
+    "reachable": true,
+    "from": {
+      "id": "WP-06",
+      "name": "Belva Crater Rim & Shock Megabreccia",
+      "col": 1737,
+      "row": 2449
+    },
+    "to": {
+      "id": "WP-00",
+      "name": "Octavia E. Butler Landing (Base Camp)",
+      "col": 1921,
+      "row": 2567
+    },
+    "heuristic_distance_m": 5144.8,
+    "heuristic_distance_km": 5.14,
+    "euclidean_distance_m": 4416.3,
+    "euclidean_distance_km": 4.42,
+    "detour_pct": 16.5,
+    "steps_count": 12,
+    "macro_steps": 4,
+    "path": [
+      {
+        "col": 1737.0,
+        "row": 2449.0,
+        "z": -2433.3,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1754.4,
+        "row": 2464.8,
+        "z": -2447.6,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1771.8,
+        "row": 2480.6,
+        "z": -2472.6,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1789.2,
+        "row": 2496.4,
+        "z": -2474.3,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1806.6,
+        "row": 2512.2,
+        "z": -2476.6,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2528.0,
+        "z": -2505.7,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1840.0,
+        "row": 2544.0,
+        "z": -2546.1,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1856.0,
+        "row": 2560.0,
+        "z": -2549.4,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1872.0,
+        "row": 2576.0,
+        "z": -2556.1,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1888.0,
+        "row": 2592.0,
+        "z": -2563.9,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1904.5,
+        "row": 2579.5,
+        "z": -2561.4,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1921,
+        "row": 2567,
+        "z": -2563.0,
+        "coarse": [
+          40,
+          30
+        ]
+      }
+    ]
+  },
+  "WP-06_WP-01": {
+    "reachable": true,
+    "from": {
+      "id": "WP-06",
+      "name": "Belva Crater Rim & Shock Megabreccia",
+      "col": 1737,
+      "row": 2449
+    },
+    "to": {
+      "id": "WP-01",
+      "name": "Kodiak Butte & Delta Front Clays",
+      "col": 1892,
+      "row": 2546
+    },
+    "heuristic_distance_m": 3315.8,
+    "heuristic_distance_km": 3.32,
+    "euclidean_distance_m": 3694.3,
+    "euclidean_distance_km": 3.69,
+    "detour_pct": 0.0,
+    "steps_count": 9,
+    "macro_steps": 3,
+    "path": [
+      {
+        "col": 1737.0,
+        "row": 2449.0,
+        "z": -2433.3,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1754.4,
+        "row": 2464.8,
+        "z": -2447.6,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1771.8,
+        "row": 2480.6,
+        "z": -2472.6,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1789.2,
+        "row": 2496.4,
+        "z": -2474.3,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1806.6,
+        "row": 2512.2,
+        "z": -2476.6,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2528.0,
+        "z": -2505.7,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1846.7,
+        "row": 2534.0,
+        "z": -2541.4,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1869.3,
+        "row": 2540.0,
+        "z": -2553.4,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1892,
+        "row": 2546,
+        "z": -2556.3,
+        "coarse": [
+          39,
+          29
+        ]
+      }
+    ]
+  },
+  "WP-06_WP-02": {
+    "reachable": true,
+    "from": {
+      "id": "WP-06",
+      "name": "Belva Crater Rim & Shock Megabreccia",
+      "col": 1737,
+      "row": 2449
+    },
+    "to": {
+      "id": "WP-02",
+      "name": "Hawksbill Gap & Delta Topset Conglomerates",
+      "col": 1866,
+      "row": 2528
+    },
+    "heuristic_distance_m": 3315.8,
+    "heuristic_distance_km": 3.32,
+    "euclidean_distance_m": 3056.2,
+    "euclidean_distance_km": 3.06,
+    "detour_pct": 8.5,
+    "steps_count": 8,
+    "macro_steps": 3,
+    "path": [
+      {
+        "col": 1737.0,
+        "row": 2449.0,
+        "z": -2433.3,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1754.4,
+        "row": 2464.8,
+        "z": -2447.6,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1771.8,
+        "row": 2480.6,
+        "z": -2472.6,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1789.2,
+        "row": 2496.4,
+        "z": -2474.3,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1806.6,
+        "row": 2512.2,
+        "z": -2476.6,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2528.0,
+        "z": -2505.7,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1845.0,
+        "row": 2528.0,
+        "z": -2540.3,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1866,
+        "row": 2528,
+        "z": -2547.6,
+        "coarse": [
+          39,
+          29
+        ]
+      }
+    ]
+  },
+  "WP-06_WP-03": {
+    "reachable": true,
+    "from": {
+      "id": "WP-06",
+      "name": "Belva Crater Rim & Shock Megabreccia",
+      "col": 1737,
+      "row": 2449
+    },
+    "to": {
+      "id": "WP-03",
+      "name": "Margin Carbonate Unit (Ancient Shoreline)",
+      "col": 1816,
+      "row": 2519
+    },
+    "heuristic_distance_m": 2033.8,
+    "heuristic_distance_km": 2.03,
+    "euclidean_distance_m": 2132.5,
+    "euclidean_distance_km": 2.13,
+    "detour_pct": 0.0,
+    "steps_count": 5,
+    "macro_steps": 2,
+    "path": [
+      {
+        "col": 1737.0,
+        "row": 2449.0,
+        "z": -2433.3,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1756.8,
+        "row": 2466.5,
+        "z": -2446.5,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1776.5,
+        "row": 2484.0,
+        "z": -2467.9,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1796.2,
+        "row": 2501.5,
+        "z": -2459.4,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1816,
+        "row": 2519,
+        "z": -2475.2,
+        "coarse": [
+          39,
+          28
+        ]
+      }
+    ]
+  },
+  "WP-06_WP-04": {
+    "reachable": true,
+    "from": {
+      "id": "WP-06",
+      "name": "Belva Crater Rim & Shock Megabreccia",
+      "col": 1737,
+      "row": 2449
+    },
+    "to": {
+      "id": "WP-04",
+      "name": "S\u00e9\u00edtah Formation & Dune Corridor",
+      "col": 1954,
+      "row": 2604
+    },
+    "heuristic_distance_m": 5144.8,
+    "heuristic_distance_km": 5.14,
+    "euclidean_distance_m": 5387.8,
+    "euclidean_distance_km": 5.39,
+    "detour_pct": 0.0,
+    "steps_count": 13,
+    "macro_steps": 4,
+    "path": [
+      {
+        "col": 1737.0,
+        "row": 2449.0,
+        "z": -2433.3,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1754.4,
+        "row": 2464.8,
+        "z": -2447.6,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1771.8,
+        "row": 2480.6,
+        "z": -2472.6,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1789.2,
+        "row": 2496.4,
+        "z": -2474.3,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1806.6,
+        "row": 2512.2,
+        "z": -2476.6,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1824.0,
+        "row": 2528.0,
+        "z": -2505.7,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1840.0,
+        "row": 2544.0,
+        "z": -2546.1,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1856.0,
+        "row": 2560.0,
+        "z": -2549.4,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1872.0,
+        "row": 2576.0,
+        "z": -2556.1,
+        "coarse": [
+          39,
+          28
+        ]
+      },
+      {
+        "col": 1888.0,
+        "row": 2592.0,
+        "z": -2563.9,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1910.0,
+        "row": 2596.0,
+        "z": -2565.8,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1932.0,
+        "row": 2600.0,
+        "z": -2573.1,
+        "coarse": [
+          40,
+          29
+        ]
+      },
+      {
+        "col": 1954,
+        "row": 2604,
+        "z": -2580.8,
+        "coarse": [
+          40,
+          30
+        ]
+      }
+    ]
+  },
+  "WP-06_WP-05": {
+    "reachable": true,
+    "from": {
+      "id": "WP-06",
+      "name": "Belva Crater Rim & Shock Megabreccia",
+      "col": 1737,
+      "row": 2449
+    },
+    "to": {
+      "id": "WP-05",
+      "name": "Neretva Vallis River Inlet Breach Canyon",
+      "col": 1156,
+      "row": 2141
+    },
+    "heuristic_distance_m": 17467.6,
+    "heuristic_distance_km": 17.47,
+    "euclidean_distance_m": 13285.9,
+    "euclidean_distance_km": 13.29,
+    "detour_pct": 31.5,
+    "steps_count": 33,
+    "macro_steps": 10,
+    "path": [
+      {
+        "col": 1737.0,
+        "row": 2449.0,
+        "z": -2433.3,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1723.3,
+        "row": 2432.7,
+        "z": -2418.4,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1709.7,
+        "row": 2416.3,
+        "z": -2408.8,
+        "coarse": [
+          38,
+          27
+        ]
+      },
+      {
+        "col": 1696.0,
+        "row": 2400.0,
+        "z": -2405.2,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1674.7,
+        "row": 2400.0,
+        "z": -2397.2,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1653.3,
+        "row": 2400.0,
+        "z": -2387.5,
+        "coarse": [
+          37,
+          26
+        ]
+      },
+      {
+        "col": 1632.0,
+        "row": 2400.0,
+        "z": -2406.2,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1610.7,
+        "row": 2400.0,
+        "z": -2408.6,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1589.3,
+        "row": 2400.0,
+        "z": -2405.7,
+        "coarse": [
+          37,
+          25
+        ]
+      },
+      {
+        "col": 1568.0,
+        "row": 2400.0,
+        "z": -2391.8,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1552.0,
+        "row": 2384.0,
+        "z": -2355.8,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1536.0,
+        "row": 2368.0,
+        "z": -2329.4,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1520.0,
+        "row": 2352.0,
+        "z": -2282.4,
+        "coarse": [
+          37,
+          24
+        ]
+      },
+      {
+        "col": 1504.0,
+        "row": 2336.0,
+        "z": -2181.2,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1488.0,
+        "row": 2320.0,
+        "z": -2054.3,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1472.0,
+        "row": 2304.0,
+        "z": -1951.9,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1456.0,
+        "row": 2288.0,
+        "z": -1913.4,
+        "coarse": [
+          36,
+          23
+        ]
+      },
+      {
+        "col": 1440.0,
+        "row": 2272.0,
+        "z": -1955.7,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1424.0,
+        "row": 2256.0,
+        "z": -1978.0,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1408.0,
+        "row": 2240.0,
+        "z": -2027.5,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1392.0,
+        "row": 2224.0,
+        "z": -2077.5,
+        "coarse": [
+          35,
+          22
+        ]
+      },
+      {
+        "col": 1376.0,
+        "row": 2208.0,
+        "z": -2171.9,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1354.7,
+        "row": 2208.0,
+        "z": -2213.6,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1333.3,
+        "row": 2208.0,
+        "z": -2194.8,
+        "coarse": [
+          34,
+          21
+        ]
+      },
+      {
+        "col": 1312.0,
+        "row": 2208.0,
+        "z": -2114.9,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1296.0,
+        "row": 2192.0,
+        "z": -2089.2,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1280.0,
+        "row": 2176.0,
+        "z": -2098.6,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1264.0,
+        "row": 2160.0,
+        "z": -2274.0,
+        "coarse": [
+          34,
+          20
+        ]
+      },
+      {
+        "col": 1248.0,
+        "row": 2144.0,
+        "z": -2251.3,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1225.0,
+        "row": 2143.2,
+        "z": -2198.2,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1202.0,
+        "row": 2142.5,
+        "z": -2107.4,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1179.0,
+        "row": 2141.8,
+        "z": -2183.7,
+        "coarse": [
+          33,
+          19
+        ]
+      },
+      {
+        "col": 1156,
+        "row": 2141,
+        "z": -2186.2,
+        "coarse": [
+          33,
+          18
+        ]
+      }
+    ]
+  }
+}

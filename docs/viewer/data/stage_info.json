@@ -1,0 +1,198 @@
+{
+  "stage_1_consolidated": {
+    "id": "stage_1_consolidated",
+    "name": "Stage 1 (Consolidated)",
+    "path": "/home/joe/Development/nasa-space-apps-2026/dalil-mars/preprocessing/output/stage_1_consolidated",
+    "has_elevation": true,
+    "has_costmap": false,
+    "has_slopes": false,
+    "has_heuristics": false,
+    "metadata": {
+      "stage": 1,
+      "description": "Consolidated multi-DTM elevation grid with VRT on-the-fly CRS alignment",
+      "source_rasters": [
+        "sim3464_JezeroNili/Rasters/USGS_CTX_Stereo_DTMs/B18_016575_1978_B17_016219_1978_20m_DTM.tif",
+        "sim3464_JezeroNili/Rasters/USGS_CTX_Stereo_DTMs/J03_045994_1986_J03_046060_1986_20m_DTM.tif",
+        "sim3464_JezeroNili/Rasters/HRSC/nili_h0988_0000_da4_clip.tif"
+      ],
+      "grid_shape": [
+        6560,
+        2950
+      ],
+      "transform": [
+        20.203946064176,
+        0.0,
+        -6117387.581178606,
+        0.0,
+        -20.203946064176,
+        1145171.1668435,
+        0.0,
+        0.0,
+        1.0
+      ],
+      "elevation_range_m": [
+        -3155.71630859375,
+        -1371.84521484375
+      ],
+      "mosaic_geotiff": "consolidated_dtm_mosaic.tif"
+    },
+    "files": [
+      "consolidated_grid_metadata.json",
+      "consolidated_elevation_matrix.npy",
+      "consolidated_dtm_mosaic.tif"
+    ],
+    "description": "Consolidated multi-DTM elevation grid with VRT on-the-fly CRS alignment"
+  },
+  "stage_2_consolidated": {
+    "id": "stage_2_consolidated",
+    "name": "Stage 2 (Consolidated)",
+    "path": "/home/joe/Development/nasa-space-apps-2026/dalil-mars/preprocessing/output/stage_2_consolidated",
+    "has_elevation": true,
+    "has_costmap": true,
+    "has_slopes": true,
+    "has_heuristics": false,
+    "metadata": {
+      "stage": 2,
+      "description": "Consolidated topographic slope gradient mask layer",
+      "pixel_resolution_m": 20.0,
+      "grid_shape": [
+        6560,
+        2950
+      ],
+      "slope_stats": {
+        "min_slope_deg": 0.0,
+        "max_slope_deg": 70.48439025878906,
+        "safe_pct": 93.36507818802862,
+        "caution_pct": 3.657430754231772,
+        "blocked_pct": 2.8446636017693847
+      }
+    },
+    "files": [
+      "consolidated_slope_annotated_costmap.npy",
+      "consolidated_slope_angles_deg.npy",
+      "consolidated_stage2_metadata.json"
+    ],
+    "description": "Consolidated topographic slope gradient mask layer"
+  },
+  "stage_3_consolidated": {
+    "id": "stage_3_consolidated",
+    "name": "Stage 3 (Consolidated)",
+    "path": "/home/joe/Development/nasa-space-apps-2026/dalil-mars/preprocessing/output/stage_3_consolidated",
+    "has_elevation": true,
+    "has_costmap": true,
+    "has_slopes": true,
+    "has_heuristics": false,
+    "metadata": {
+      "stage": 3,
+      "description": "Consolidated Surface Hazard Overlays (Sand Dunes & Megabreccia Boulders)",
+      "grid_shape": [
+        6560,
+        2950
+      ],
+      "hazard_multipliers": {
+        "sand_dunes_aeb_tars": 3.0,
+        "megabreccia_boulder_fields": 2.0,
+        "fine_dust_low_thermal_inertia": 1.5
+      },
+      "hazard_counts": {
+        "dune_nodes_affected": 774080,
+        "boulder_nodes_affected": 774080
+      }
+    },
+    "files": [
+      "consolidated_stage3_metadata.json",
+      "consolidated_hazard_annotated_costmap.npy"
+    ],
+    "description": "Consolidated Surface Hazard Overlays (Sand Dunes & Megabreccia Boulders)"
+  },
+  "stage_4_consolidated": {
+    "id": "stage_4_consolidated",
+    "name": "Stage 4 (Consolidated)",
+    "path": "/home/joe/Development/nasa-space-apps-2026/dalil-mars/preprocessing/output/stage_4_consolidated",
+    "has_elevation": true,
+    "has_costmap": true,
+    "has_slopes": true,
+    "has_heuristics": false,
+    "metadata": {
+      "stage": 4,
+      "description": "Consolidated Structural Barriers & Cliff Drop-Offs (Final Preprocessed Master Grid)",
+      "grid_shape": [
+        6560,
+        2950
+      ],
+      "impassable_value": "inf"
+    },
+    "files": [
+      "consolidated_stage4_metadata.json",
+      "consolidated_preprocessed_master_grid.npy"
+    ],
+    "description": "Consolidated Structural Barriers & Cliff Drop-Offs (Final Preprocessed Master Grid)"
+  },
+  "stage_5_consolidated": {
+    "id": "stage_5_consolidated",
+    "name": "Stage 5 (Consolidated)",
+    "path": "/home/joe/Development/nasa-space-apps-2026/dalil-mars/preprocessing/output/stage_5_consolidated",
+    "has_elevation": true,
+    "has_costmap": true,
+    "has_slopes": true,
+    "has_heuristics": false,
+    "metadata": {
+      "stage": 5,
+      "description": "Consolidated Mission Waypoints Registry & Grid Snapping Module",
+      "total_waypoints": 7,
+      "base_camp_id": "WP-00",
+      "science_stations_count": 5,
+      "landmarks_count": 1,
+      "all_points_safe": true
+    },
+    "files": [
+      "consolidated_jezero_waypoints.geojson",
+      "consolidated_stage5_metadata.json",
+      "consolidated_waypoints_registry.json"
+    ],
+    "description": "Consolidated Mission Waypoints Registry & Grid Snapping Module"
+  },
+  "stage_6_consolidated": {
+    "id": "stage_6_consolidated",
+    "name": "Stage 6 (Consolidated)",
+    "path": "/home/joe/Development/nasa-space-apps-2026/dalil-mars/preprocessing/output/stage_6_consolidated",
+    "has_elevation": true,
+    "has_costmap": true,
+    "has_slopes": true,
+    "has_heuristics": true,
+    "metadata": {
+      "stage": 6,
+      "description": "Precomputed All-Pairs Obstacle-Aware Heuristic Distance Fields",
+      "downsample_factor": 64,
+      "fine_grid_shape": [
+        6560,
+        2950
+      ],
+      "coarse_grid_shape": [
+        102,
+        46
+      ],
+      "macro_cells_count": 4692,
+      "traversable_cells_count": 3247,
+      "macro_cell_resolution_m": 1293.05,
+      "all_pairs_matrix_shape": [
+        102,
+        46,
+        102,
+        46
+      ],
+      "matrix_ram_mb": 83.98,
+      "npz_disk_mb": 35.9,
+      "total_precompute_time_s": 22.98
+    },
+    "files": [
+      "consolidated_all_pairs_4d_matrix.npy",
+      "consolidated_stage6_metadata.json",
+      "consolidated_heuristics_maps.npz",
+      "consolidated_heuristics_tensor.npy",
+      "consolidated_all_pairs_heuristic_matrix.npz",
+      "consolidated_coarse_costmap.npy"
+    ],
+    "description": "Precomputed All-Pairs Obstacle-Aware Heuristic Distance Fields"
+  }
+}

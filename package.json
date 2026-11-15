@@ -9,6 +9,9 @@
   "scripts": {
     "dev": "npm --prefix GUI run dev --",
     "build": "npm --prefix GUI run build",
-    "preview": "npm --prefix GUI run preview"
+    "preview": "npm --prefix GUI run preview",
+    "pages:serve": "python3 -m http.server 8080 --directory docs",
+    "pages:server": "python3 -m http.server 8080 --directory docs",
+    "pages:export-data": "python3 scripts/export_static_viewer_data.py"
   }
 }
